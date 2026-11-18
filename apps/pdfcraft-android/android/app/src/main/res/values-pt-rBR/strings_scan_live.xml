@@ -5,7 +5,7 @@
     <string name="scan_live_light">Precisa de mais luz</string>
     <string name="scan_live_fit">Enquadre a página inteira</string>
     <string name="scan_live_closer">Chegue mais perto</string>
-    <string name="scan_live_flatter">Segure o celular mais paralelo à página</string>
+    <string name="scan_live_flatter">Segure o dispositivo mais paralelo à página</string>
     <string name="scan_live_still">Fique parado</string>
     <string name="scan_live_ready">Pronto</string>
     <string name="scan_live_setting">Contorno da página na câmera</string>

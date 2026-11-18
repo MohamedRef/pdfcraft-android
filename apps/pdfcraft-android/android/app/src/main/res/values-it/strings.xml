@@ -94,7 +94,7 @@
     <string name="home_clear_recent">Cancella recenti</string>
     <string name="home_sort_by_name">Ordina per nome</string>
     <string name="home_sort_by_date">Ordina per data</string>
-    <string name="home_other_files">Altri file su questo telefono</string>
+    <string name="home_other_files">Altri file su questo dispositivo</string>
     <string name="home_open_file">Apri file</string>
     <string name="home_new_scan">Nuova scansione</string>
 
@@ -132,7 +132,7 @@
         <item quantity="one">Eliminare %d file?</item>
         <item quantity="other">Eliminare %d file?</item>
     </plurals>
-    <string name="home_delete_files_body">I file verranno rimossi da questo telefono.</string>
+    <string name="home_delete_files_body">I file verranno rimossi da questo dispositivo.</string>
     <string name="home_clear_recent_title">Cancellare i file recenti?</string>
     <string name="home_clear_recent_body">L\'elenco dei file recenti verrà cancellato. I file originali rimarranno nelle rispettive posizioni.</string>
 
@@ -185,7 +185,7 @@
     <!-- Scheda Ricerca -->
 
     <string name="home_search_your_files">Cerca nei tuoi file</string>
-    <string name="home_search_empty_body">Trova i PDF presenti su questo telefono cercandoli per nome.</string>
+    <string name="home_search_empty_body">Trova i PDF presenti su questo dispositivo cercandoli per nome.</string>
     <string name="home_recent_searches">Ricerche recenti</string>
     <string name="home_remove_search">Rimuovi %1$s</string>
     <plurals name="home_search_results">
@@ -1167,7 +1167,7 @@
 
     <!-- Errori Android -->
 
-    <string name="main_error_no_app">Nessuna app su questo telefono può eseguire questa operazione.</string>
+    <string name="main_error_no_app">Nessuna app su questo dispositivo può eseguire questa operazione.</string>
     <string name="main_error_not_allowed">Android non ha consentito questa operazione.</string>
     <string name="main_error_print_not_allowed">La stampa non è consentita per questo documento.</string>
 
@@ -1603,7 +1603,7 @@
     <string name="comments_loading">Caricamento commenti…</string>
     <string name="compact_previews">Usa meno memoria per le anteprime delle pagine</string>
     <string name="compact_previews_body">Riduce la precisione del colore per le pagine intere. I dettagli ingranditi mantengono la qualità piena. Si applica alla riapertura del documento.</string>
-    <string name="updater_other_build">Gli aggiornamenti nell\'app sono solo per la versione ufficiale per telefoni ARM64. Aggiorna questa copia da dove l\'hai installata.</string>
+    <string name="updater_other_build">Gli aggiornamenti nell\'app sono solo per la versione ufficiale per dispositivi ARM64. Aggiorna questa copia da dove l\'hai installata.</string>
     <string name="viewer_read_only_notice">Le modifiche non possono essere salvate nell\'originale. Restano in PdfCraft finché non salvi una copia.</string>
     <string name="root_keep_editing">Continua a modificare</string>
     <string name="root_discard_title">Ignorare le modifiche a %1$s?</string>
@@ -1692,7 +1692,7 @@
     <string name="updater_err_wrong_build">Il file scaricato non è l\'aggiornamento di PdfCraft previsto.</string>
     <string name="updater_err_certificate">L\'aggiornamento scaricato non è firmato da PdfCraft, quindi non può sostituire l\'app installata.</string>
     <string name="updater_err_android_version">Questo aggiornamento richiede una versione di Android più recente.</string>
-    <string name="updater_err_abi">Questo aggiornamento non è fatto per il processore del tuo telefono.</string>
+    <string name="updater_err_abi">Questo aggiornamento non è fatto per il processore del tuo dispositivo.</string>
     <string name="updater_err_storage">Impossibile salvare l\'aggiornamento su questo dispositivo. Libera spazio e riprova.</string>
     <string name="updater_err_untrusted">Il link di aggiornamento non proviene dalle release GitHub ufficiali di PdfCraft, quindi è stato rifiutato.</string>
     <string name="updater_err_server">Il server di download ha inviato una risposta imprevista. Riprova più tardi o scarica dal browser.</string>
@@ -1913,7 +1913,7 @@
     <string name="focus_work_started">Torna a concentrarti</string>
     <string name="study_section">Statistiche di studio</string>
     <string name="study_clear_stats">Elimina statistiche di studio</string>
-    <string name="study_stats_body">Il tempo di lettura conta solo con un documento aperto in primo piano e se hai toccato lo schermo negli ultimi 2 minuti. Nella Home, Continua a studiare conta solo i documenti in Studio. Resta su questo telefono.</string>
+    <string name="study_stats_body">Il tempo di lettura conta solo con un documento aperto in primo piano e se hai toccato lo schermo negli ultimi 2 minuti. Nella Home, Continua a studiare conta solo i documenti in Studio. Resta su questo dispositivo.</string>
     <string name="study_stats_cleared">Statistiche di studio eliminate</string>
     <string name="study_continue">Continua a studiare</string>
     <string name="study_week_minutes">Questa settimana %1$d h %2$d min</string>
@@ -1938,7 +1938,7 @@
     <string name="library_delete_collection">Elimina raccolta</string>
     <string name="library_delete_collection_body">Vengono eliminate la raccolta e quelle al suo interno. I file non vengono eliminati.</string>
     <string name="library_index_switch">Cerca nei documenti</string>
-    <string name="library_index_body">Crea un indice di ricerca di testo, segnalibri e commenti dei file, uno alla volta con nessun documento aperto. Batteria minima se non in carica: 20%. Resta su questo telefono.</string>
+    <string name="library_index_body">Crea un indice di ricerca di testo, segnalibri e commenti dei file, uno alla volta con nessun documento aperto. Batteria minima se non in carica: 20%. Resta su questo dispositivo.</string>
     <string name="library_wipe_index">Elimina indice di ricerca</string>
     <string name="library_index_wiped">Indice di ricerca eliminato</string>
     <string name="library_unavailable">Non disponibile: file spostato o accesso revocato</string>
@@ -2079,7 +2079,7 @@
     <string name="lecture_back_10">Indietro di 10 secondi</string>
     <string name="lecture_forward_10">Avanti di 10 secondi</string>
     <string name="lecture_close_player">Chiudi il lettore della lezione</string>
-    <string name="lecture_body">Durante la registrazione, ogni commento che scrivi ricorda quando. Riproduci una registrazione e tocca un commento per sentire cosa si diceva mentre lo scrivevi. Le registrazioni restano su questo telefono, in PdfCraft.</string>
+    <string name="lecture_body">Durante la registrazione, ogni commento che scrivi ricorda quando. Riproduci una registrazione e tocca un commento per sentire cosa si diceva mentre lo scrivevi. Le registrazioni restano su questo dispositivo, in PdfCraft.</string>
     <string name="lecture_delete_title">Eliminare questa registrazione?</string>
     <string name="lecture_needs_saved">Salva prima questo documento per registrare accanto</string>
     <string name="lecture_cannot_record">Impossibile effettuare la registrazione</string>

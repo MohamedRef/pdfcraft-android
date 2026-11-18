@@ -12,7 +12,7 @@
     <string name="scan_recent_delete_title">¿Eliminar este escaneo?</string>
     <string name="scan_recent_delete_body">Sus fotos se quitan de la app. El PDF que guardaste se queda.</string>
     <string name="settings_scan_recent">Guardar escaneos recientes para editarlos</string>
-    <string name="settings_scan_recent_body">Los últimos 10 escaneos que guardes conservan sus fotos en la app para cambiar sus bordes y aspecto más tarde. Las fotos se quedan en este teléfono hasta que las elimines.</string>
+    <string name="settings_scan_recent_body">Los últimos 10 escaneos que guardes conservan sus fotos en la app para cambiar sus bordes y aspecto más tarde. Las fotos se quedan en este dispositivo hasta que las elimines.</string>
     <string name="settings_scan_recent_delete">Eliminar escaneos recientes</string>
     <string name="settings_scan_recent_none">No hay escaneos recientes</string>
     <plurals name="scan_recent_missing">

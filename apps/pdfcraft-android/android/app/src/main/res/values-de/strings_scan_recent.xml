@@ -12,7 +12,7 @@
     <string name="scan_recent_delete_title">Diesen Scan löschen?</string>
     <string name="scan_recent_delete_body">Seine Fotos werden aus der App entfernt. Das gespeicherte PDF bleibt.</string>
     <string name="settings_scan_recent">Letzte Scans zum Bearbeiten behalten</string>
-    <string name="settings_scan_recent_body">Die letzten 10 gespeicherten Scans behalten ihre Fotos in der App, damit du Ränder und Aussehen später ändern kannst. Die Fotos bleiben auf diesem Telefon, bis du sie löschst.</string>
+    <string name="settings_scan_recent_body">Die letzten 10 gespeicherten Scans behalten ihre Fotos in der App, damit du Ränder und Aussehen später ändern kannst. Die Fotos bleiben auf diesem Gerät, bis du sie löschst.</string>
     <string name="settings_scan_recent_delete">Letzte Scans löschen</string>
     <string name="settings_scan_recent_none">Keine letzten Scans</string>
     <plurals name="scan_recent_missing">

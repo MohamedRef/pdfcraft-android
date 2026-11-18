@@ -103,7 +103,7 @@
     <string name="home_clear_recent">Clear recent</string>
     <string name="home_sort_by_name">Sort by name</string>
     <string name="home_sort_by_date">Sort by date</string>
-    <string name="home_other_files">Other files on this phone</string>
+    <string name="home_other_files">Other files on this device</string>
     <string name="home_open_file">Open file</string>
     <string name="home_new_scan">New scan</string>
 
@@ -142,7 +142,7 @@
         <item quantity="one">Delete %d file?</item>
         <item quantity="other">Delete %d files?</item>
     </plurals>
-    <string name="home_delete_files_body">They are removed from this phone.</string>
+    <string name="home_delete_files_body">They are removed from this device.</string>
     <string name="home_clear_recent_title">Clear recent files?</string>
     <string name="home_clear_recent_body">The list of recent files is cleared. The files themselves stay where they are.</string>
 
@@ -204,7 +204,7 @@
 
     <!-- Search tab -->
     <string name="home_search_your_files">Search your files</string>
-    <string name="home_search_empty_body">Find PDFs on this phone by name.</string>
+    <string name="home_search_empty_body">Find PDFs on this device by name.</string>
     <string name="home_recent_searches">Recent searches</string>
     <!-- Accessibility label; %1$s is a past search -->
     <string name="home_remove_search">Remove %1$s</string>
@@ -555,7 +555,7 @@
     <string name="viewer_reading_no_text">No text on this page to reflow.</string>
 
     <!-- Read Aloud: the player -->
-    <string name="read_aloud_no_voice">Read aloud needs a text-to-speech voice on this phone.</string>
+    <string name="read_aloud_no_voice">Read aloud needs a text-to-speech voice on this device.</string>
     <string name="read_aloud_open_player">Open the player</string>
     <string name="read_aloud_close_player">Close the player</string>
     <string name="read_aloud_read_again">Read again</string>
@@ -1542,7 +1542,7 @@
     <string name="files_bookmark_page">Page %1$d</string>
 
     <!-- Main: messages when Android can't do what was asked -->
-    <string name="main_error_no_app">No app on this phone can do that.</string>
+    <string name="main_error_no_app">No app on this device can do that.</string>
     <string name="main_error_not_allowed">Android didn\'t allow that.</string>
     <string name="main_error_print_not_allowed">Printing isn\'t allowed for this document.</string>
 
@@ -1792,7 +1792,7 @@
     <string name="updater_title">App updates</string>
     <string name="updater_description">Download updates from published GitHub Releases. Interrupted downloads can resume.</string>
     <string name="updater_no_updates">You\'re up to date.</string>
-    <string name="updater_other_build">In-app updates are only for the official release for ARM64 phones. Update this copy from where you installed it.</string>
+    <string name="updater_other_build">In-app updates are only for the official release for ARM64 devices. Update this copy from where you installed it.</string>
     <string name="updater_check_error">Unable to check GitHub Releases. Check your connection and retry.</string>
     <string name="updater_checking">Checking for updates…</string>
     <string name="updater_check">Check for updates</string>
@@ -1988,7 +1988,7 @@
     <string name="updater_err_wrong_build">The downloaded file isn\'t the expected PdfCraft update.</string>
     <string name="updater_err_certificate">The downloaded update isn\'t signed by PdfCraft, so it can\'t replace the installed app.</string>
     <string name="updater_err_android_version">This update needs a newer Android version.</string>
-    <string name="updater_err_abi">This update isn\'t built for your phone\'s processor.</string>
+    <string name="updater_err_abi">This update isn\'t built for this device\'s processor.</string>
     <string name="updater_err_storage">The update couldn\'t be saved on this device. Free up some space and try again.</string>
     <string name="updater_err_untrusted">The update link isn\'t from PdfCraft\'s official GitHub Releases, so it was refused.</string>
     <string name="updater_err_server">The download server sent an unexpected response. Try again later or download in the browser.</string>
@@ -2320,7 +2320,7 @@
     <!-- Translator note: Study statistics: how much the user has studied, read and reviewed. -->
     <string name="study_section">Study statistics</string>
     <string name="study_clear_stats">Delete study statistics</string>
-    <string name="study_stats_body">Counts while a document is open in front and you touched the screen in the last 2 minutes. Study time on Home covers Study documents only. Kept on this phone.</string>
+    <string name="study_stats_body">Counts while a document is open in front and you touched the screen in the last 2 minutes. Study time on Home covers Study documents only. Kept on this device.</string>
     <string name="study_stats_cleared">Study statistics deleted</string>
     <string name="study_continue">Continue studying</string>
     <string name="study_week_minutes">This week %1$d h %2$d min</string>
@@ -2400,7 +2400,7 @@
     <string name="library_delete_collection">Delete collection</string>
     <string name="library_delete_collection_body">The collection and the collections inside it are deleted. The files are not deleted.</string>
     <string name="library_index_switch">Search inside documents</string>
-    <string name="library_index_body">Indexes the text, bookmarks and comments of library files while no document is open, and not below 20% battery unless charging. It stays on this phone.</string>
+    <string name="library_index_body">Indexes the text, bookmarks and comments of library files while no document is open, and not below 20% battery unless charging. It stays on this device.</string>
     <string name="library_wipe_index">Delete search index</string>
     <string name="library_index_wiped">Search index deleted</string>
     <string name="library_unavailable">Unavailable: the file was moved or access was removed</string>
@@ -2750,7 +2750,7 @@
     <string name="lecture_back_10">Back 10 seconds</string>
     <string name="lecture_forward_10">Forward 10 seconds</string>
     <string name="lecture_close_player">Close the lecture player</string>
-    <string name="lecture_body">While recording, each comment you write remembers when. Tap a comment during playback to hear what was said then. Recordings stay on this phone.</string>
+    <string name="lecture_body">While recording, each comment you write remembers when. Tap a comment during playback to hear what was said then. Recordings stay on this device.</string>
     <string name="lecture_delete_title">Delete this recording?</string>
     <string name="lecture_needs_saved">Save this document first to record beside it</string>
     <string name="lecture_cannot_record">The recording could not be made</string>

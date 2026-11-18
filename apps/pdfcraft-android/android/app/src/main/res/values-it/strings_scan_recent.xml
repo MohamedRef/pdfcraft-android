@@ -12,7 +12,7 @@
     <string name="scan_recent_delete_title">Eliminare questa scansione?</string>
     <string name="scan_recent_delete_body">Le sue foto vengono rimosse dall’app. Il PDF salvato resta.</string>
     <string name="settings_scan_recent">Conserva le scansioni recenti per modificarle</string>
-    <string name="settings_scan_recent_body">Le ultime 10 scansioni salvate conservano le foto nell’app, così puoi cambiarne bordi e aspetto in seguito. Le foto restano su questo telefono finché non le elimini.</string>
+    <string name="settings_scan_recent_body">Le ultime 10 scansioni salvate conservano le foto nell’app, così puoi cambiarne bordi e aspetto in seguito. Le foto restano su questo dispositivo finché non le elimini.</string>
     <string name="settings_scan_recent_delete">Elimina scansioni recenti</string>
     <string name="settings_scan_recent_none">Nessuna scansione recente</string>
     <plurals name="scan_recent_missing">

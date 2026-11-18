@@ -78,7 +78,7 @@
     <string name="home_clear_recent">Vider les récents</string>
     <string name="home_sort_by_name">Trier par nom</string>
     <string name="home_sort_by_date">Trier par date</string>
-    <string name="home_other_files">Autres fichiers sur ce téléphone</string>
+    <string name="home_other_files">Autres fichiers sur cet appareil</string>
     <string name="home_open_file">Ouvrir un fichier</string>
     <string name="home_new_scan">Nouvelle numérisation</string>
 
@@ -117,7 +117,7 @@
         <item quantity="one">Supprimer %d fichier ?</item>
         <item quantity="other">Supprimer %d fichiers ?</item>
     </plurals>
-    <string name="home_delete_files_body">Ils sont supprimés de ce téléphone.</string>
+    <string name="home_delete_files_body">Ils sont supprimés de cet appareil.</string>
     <string name="home_clear_recent_title">Vider les fichiers récents ?</string>
     <string name="home_clear_recent_body">La liste des fichiers récents est vidée. Les fichiers eux-mêmes ne bougent pas.</string>
 
@@ -177,7 +177,7 @@
 
     <!-- Search tab -->
     <string name="home_search_your_files">Rechercher dans vos fichiers</string>
-    <string name="home_search_empty_body">Trouvez des PDF sur ce téléphone par leur nom.</string>
+    <string name="home_search_empty_body">Trouvez des PDF sur cet appareil par leur nom.</string>
     <string name="home_recent_searches">Recherches récentes</string>
     <!-- Accessibility label; %1$s is a past search -->
     <string name="home_remove_search">Retirer %1$s</string>
@@ -463,7 +463,7 @@
     <string name="viewer_reading_no_text">Aucun texte à réorganiser sur cette page.</string>
 
     <!-- Read Aloud: the player -->
-    <string name="read_aloud_no_voice">La lecture à voix haute nécessite une voix de synthèse vocale sur ce téléphone.</string>
+    <string name="read_aloud_no_voice">La lecture à voix haute nécessite une voix de synthèse vocale sur cet appareil.</string>
     <string name="read_aloud_open_player">Ouvrir le lecteur</string>
     <string name="read_aloud_close_player">Fermer le lecteur</string>
     <string name="read_aloud_read_again">Relire</string>
@@ -1061,7 +1061,7 @@
     <string name="files_bookmark_page">Page %1$d</string>
 
     <!-- Main: messages when Android can't do what was asked -->
-    <string name="main_error_no_app">Aucune application sur ce téléphone ne peut faire cela.</string>
+    <string name="main_error_no_app">Aucune application sur cet appareil ne peut faire cela.</string>
     <string name="main_error_not_allowed">Android ne l\'a pas autorisé.</string>
     <string name="main_error_print_not_allowed">L\'impression n\'est pas autorisée pour ce document.</string>
 
@@ -1493,7 +1493,7 @@
     <string name="comments_loading">Chargement des commentaires…</string>
     <string name="compact_previews">Utiliser moins de mémoire pour les aperçus de pages</string>
     <string name="compact_previews_body">Réduit la précision des couleurs pour les pages entières. Les détails zoomés conservent leur pleine qualité. S\'applique à la réouverture d\'un document.</string>
-    <string name="updater_other_build">Les mises à jour dans l’application concernent uniquement la version officielle pour téléphones ARM64. Mettez cette copie à jour depuis l’endroit où vous l’avez installée.</string>
+    <string name="updater_other_build">Les mises à jour dans l’application concernent uniquement la version officielle pour appareils ARM64. Mettez cette copie à jour depuis l’endroit où vous l’avez installée.</string>
     <string name="viewer_read_only_notice">Les modifications ne peuvent pas être enregistrées dans l\'original. Elles restent dans PdfCraft jusqu\'à ce que vous enregistriez une copie.</string>
     <string name="root_keep_editing">Continuer à modifier</string>
     <string name="root_discard_title">Abandonner les modifications de %1$s ?</string>
@@ -1582,7 +1582,7 @@
     <string name="updater_err_wrong_build">Le fichier téléchargé n’est pas la mise à jour PdfCraft attendue.</string>
     <string name="updater_err_certificate">La mise à jour téléchargée n’est pas signée par PdfCraft et ne peut donc pas remplacer l’application installée.</string>
     <string name="updater_err_android_version">Cette mise à jour nécessite une version plus récente d\'Android.</string>
-    <string name="updater_err_abi">Cette mise à jour n’est pas conçue pour le processeur de votre téléphone.</string>
+    <string name="updater_err_abi">Cette mise à jour n’est pas conçue pour le processeur de votre appareil.</string>
     <string name="updater_err_storage">Impossible d\'enregistrer la mise à jour sur cet appareil. Libérez de l\'espace et réessayez.</string>
     <string name="updater_err_untrusted">Le lien de mise à jour ne provient pas des versions GitHub officielles de PdfCraft et a été refusé.</string>
     <string name="updater_err_server">Le serveur de téléchargement a renvoyé une réponse inattendue. Réessayez plus tard ou téléchargez dans le navigateur.</string>
@@ -1803,7 +1803,7 @@
     <string name="focus_work_started">Retour à la concentration</string>
     <string name="study_section">Statistiques d\'étude</string>
     <string name="study_clear_stats">Supprimer les statistiques d\'étude</string>
-    <string name="study_stats_body">Le temps de lecture ne compte que si un document est ouvert au premier plan et que vous avez touché l\'écran dans les 2 dernières minutes. Sur l\'accueil, Continuer à étudier ne compte que les documents de la catégorie Études. Il reste sur ce téléphone.</string>
+    <string name="study_stats_body">Le temps de lecture ne compte que si un document est ouvert au premier plan et que vous avez touché l\'écran dans les 2 dernières minutes. Sur l\'accueil, Continuer à étudier ne compte que les documents de la catégorie Études. Il reste sur cet appareil.</string>
     <string name="study_stats_cleared">Statistiques d\'étude supprimées</string>
     <string name="study_continue">Continuer à étudier</string>
     <string name="study_week_minutes">Cette semaine %1$d h %2$d min</string>
@@ -1828,7 +1828,7 @@
     <string name="library_delete_collection">Supprimer la collection</string>
     <string name="library_delete_collection_body">La collection et celles qu\'elle contient sont supprimées. Les fichiers ne le sont pas.</string>
     <string name="library_index_switch">Rechercher dans les documents</string>
-    <string name="library_index_body">Construit un index du texte, des signets et des commentaires des fichiers, un par un quand aucun document n\'est ouvert. Batterie minimale hors charge : 20%. Il reste sur ce téléphone.</string>
+    <string name="library_index_body">Construit un index du texte, des signets et des commentaires des fichiers, un par un quand aucun document n\'est ouvert. Batterie minimale hors charge : 20%. Il reste sur cet appareil.</string>
     <string name="library_wipe_index">Supprimer l\'index de recherche</string>
     <string name="library_index_wiped">Index de recherche supprimé</string>
     <string name="library_unavailable">Indisponible : fichier déplacé ou accès retiré</string>
@@ -1969,7 +1969,7 @@
     <string name="lecture_back_10">Reculer de 10 secondes</string>
     <string name="lecture_forward_10">Avancer de 10 secondes</string>
     <string name="lecture_close_player">Fermer le lecteur du cours</string>
-    <string name="lecture_body">Pendant l\'enregistrement, chaque commentaire écrit retient son moment. Lisez un enregistrement et touchez un commentaire pour entendre ce qui se disait quand vous l\'avez écrit. Les enregistrements restent sur ce téléphone, dans PdfCraft.</string>
+    <string name="lecture_body">Pendant l\'enregistrement, chaque commentaire écrit retient son moment. Lisez un enregistrement et touchez un commentaire pour entendre ce qui se disait quand vous l\'avez écrit. Les enregistrements restent sur cet appareil, dans PdfCraft.</string>
     <string name="lecture_delete_title">Supprimer cet enregistrement ?</string>
     <string name="lecture_needs_saved">Enregistrez d\'abord ce document pour enregistrer à côté</string>
     <string name="lecture_cannot_record">L\'enregistrement n\'a pas pu être fait</string>

@@ -7,7 +7,7 @@
     <string name="scan_camera_denied">PdfCraft darf die Kamera nicht verwenden. Importiere stattdessen Fotos oder erlaube die Kamera in den Einstellungen.</string>
     <string name="scan_camera_import">Fotos importieren</string>
     <string name="scan_camera_open_settings">Einstellungen öffnen</string>
-    <string name="scan_camera_phone_app">Handykamera</string>
+    <string name="scan_camera_phone_app">Kamera-App</string>
     <string name="scan_camera_torch_on">Licht einschalten</string>
     <string name="scan_camera_torch_off">Licht ausschalten</string>
     <string name="scan_camera_viewfinder">Sucher. Zum Fokussieren tippen.</string>
@@ -15,10 +15,10 @@
     <string name="scan_camera_done">Fertig (%1$d)</string>
     <string name="scan_camera_last_page">Zuletzt aufgenommene Seite, %1$d insgesamt</string>
     <string name="scan_camera_failed">Das Foto konnte nicht aufgenommen werden. Versuche es erneut.</string>
-    <string name="scan_camera_unavailable">Die Kamera konnte nicht gestartet werden. Verwende stattdessen die Kamera-App des Handys.</string>
+    <string name="scan_camera_unavailable">Die Kamera konnte nicht gestartet werden. Verwende stattdessen die Kamera-App des Geräts.</string>
     <string name="scan_camera_image_unavailable">PdfCraft braucht die Kameraberechtigung, um ein Foto aufzunehmen.</string>
     <string name="scan_camera_setting">Scannen mit</string>
     <string name="scan_camera_setting_in_app">PdfCraft-Kamera</string>
-    <string name="scan_camera_setting_phone">Kamera-App des Handys</string>
-    <string name="scan_camera_setting_body">Die Kamera-App des Handys funktioniert nur, solange PdfCraft die Kamera verwenden darf.</string>
+    <string name="scan_camera_setting_phone">Kamera-App des Geräts</string>
+    <string name="scan_camera_setting_body">Die Kamera-App des Geräts funktioniert nur, solange PdfCraft die Kamera verwenden darf.</string>
 </resources>

@@ -7,7 +7,7 @@
     <string name="scan_camera_light">Lumière</string>
     <string name="scan_camera_grid">Grille</string>
     <string name="scan_camera_more">Plus d\'options</string>
-    <string name="scan_camera_use_phone_app">Utiliser l\'appli appareil photo du téléphone</string>
+    <string name="scan_camera_use_phone_app">Utiliser l\'appli Appareil photo</string>
     <string name="scan_camera_import_short">Importer</string>
     <string name="scan_camera_open_pages">Ouvrir le scan. Pages : %1$d</string>
     <string name="scan_camera_done_short">OK</string>
