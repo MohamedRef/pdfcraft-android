@@ -2397,7 +2397,7 @@ fn bookmarks_from_text_styles_nest_the_headings_and_undo() {
     );
     assert_eq!(styles[0].sample, "Chapter One");
     let (chapter, section) = (styles[0].style.clone(), styles[1].style.clone());
-    s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![chapter.clone(), section.clone()] }).unwrap();
+    s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![chapter.clone(), section.clone()], found: None }).unwrap();
     let outline = s.get(id).unwrap().info.outline.clone();
     assert_eq!(
         outline_titles(&outline),
@@ -2414,14 +2414,14 @@ fn bookmarks_from_text_styles_nest_the_headings_and_undo() {
     s.undo(id).unwrap();
     assert!(s.get(id).unwrap().info.outline.is_empty());
     // One level is enough; the sections are then left out.
-    s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![chapter] }).unwrap();
+    s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![chapter], found: None }).unwrap();
     assert_eq!(outline_titles(&s.get(id).unwrap().info.outline), ["Untitled→0[Chapter One→1,Chapter Two and its subtitle→2]"]);
     s.undo(id).unwrap();
     // Nothing chosen, or a style no text is in: refused, nothing changes.
-    let err = s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![] }).unwrap_err();
+    let err = s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![], found: None }).unwrap_err();
     assert!(err.to_string().contains("at least one bookmark level"), "{err}");
     let unused = pdfcraft_engine_style(&section, 30.0);
-    let err = s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![unused] }).unwrap_err();
+    let err = s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![unused], found: None }).unwrap_err();
     assert!(err.to_string().contains("no text is set in the chosen styles"), "{err}");
     assert!(s.get(id).unwrap().info.outline.is_empty());
 }
@@ -2438,7 +2438,7 @@ fn bookmarks_from_text_styles_refuse_one_style_for_two_levels() {
     let near = pdfcraft_engine_style(&section, section.size + 0.1);
     for levels in [vec![chapter.clone(), chapter.clone()], vec![chapter.clone(), section.clone(), near]] {
         let n = levels.len();
-        let err = s.apply(id, Edit::BookmarksFromTextStyles { levels }).unwrap_err();
+        let err = s.apply(id, Edit::BookmarksFromTextStyles { levels, found: None }).unwrap_err();
         assert!(err.to_string().contains(&format!("levels {} and {n} have the same text style", n - 1)), "{err}");
         assert!(s.get(id).unwrap().info.outline.is_empty());
     }
@@ -2464,11 +2464,11 @@ fn bookmarks_from_text_styles_need_copying_permission() {
     assert!(s.get(id).unwrap().allows_assembly() && !s.get(id).unwrap().allows_copying());
     assert!(s.get(id).unwrap().text_styles().is_empty(), "no samples of text that may not be copied");
     let style = text_style_bookmarks::TextStyle { font: "Helvetica-Bold".into(), size: 18.0, bold: true, italic: false };
-    let err = s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![style.clone()] }).unwrap_err();
+    let err = s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![style.clone()], found: None }).unwrap_err();
     assert_eq!(err, EditError::NotPermitted("copying text and images"));
     let owner = s.open("r.pdf", None, bytes, Some("owner")).unwrap();
     assert!(!s.get(owner).unwrap().text_styles().is_empty());
-    assert!(s.apply(owner, Edit::BookmarksFromTextStyles { levels: vec![style] }).is_ok(), "the owner may");
+    assert!(s.apply(owner, Edit::BookmarksFromTextStyles { levels: vec![style], found: None }).is_ok(), "the owner may");
 }
 
 /// CodeRabbit on #4560: two headings in one style in two columns, the right one a little lower,
@@ -2486,7 +2486,7 @@ fn headings_in_two_columns_are_two_bookmarks() {
     let mut s = Session::new();
     let id = s.open("cols.pdf", None, Arc::new(bytes), None).unwrap();
     let style = s.get(id).unwrap().text_styles()[0].style.clone();
-    s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![style] }).unwrap();
+    s.apply(id, Edit::BookmarksFromTextStyles { levels: vec![style], found: None }).unwrap();
     assert_eq!(outline_titles(&s.get(id).unwrap().info.outline), ["Untitled→0[Left heading→1,Right heading→1]"]);
 }
 

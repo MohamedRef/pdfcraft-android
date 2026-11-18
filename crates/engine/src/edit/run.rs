@@ -589,25 +589,22 @@ pub(crate) fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut E
                 .collect();
             pdfcraft_organize::add_bookmark_tree(doc, "Untitled", &entries)?;
         }
-        Edit::BookmarksFromTextStyles { levels } => {
-            if levels.is_empty() {
-                return Err(EditError::Invalid("choose a text style for at least one bookmark level".into()));
-            }
-            // Each line goes to the first level whose style it is in: a style given again, or one
-            // within the size tolerance of an earlier level's, would leave its level empty.
-            for (i, a) in levels.iter().enumerate() {
-                if let Some(j) = levels.iter().skip(i.saturating_add(1)).position(|b| a.matches(b)) {
-                    let (first, second) = (i.saturating_add(1), i.saturating_add(j).saturating_add(2));
-                    return Err(EditError::Invalid(format!(
-                        "bookmark levels {first} and {second} have the same text style: choose a different one for each level"
-                    )));
+        Edit::BookmarksFromTextStyles { levels, found } => {
+            crate::text_style_bookmarks::check_levels(levels).map_err(EditError::Invalid)?;
+            // Android adaptation (#652): the bookmarks read page by page before the edit, or
+            // read here.
+            let read;
+            let entries = match found {
+                Some(found) => found,
+                None => {
+                    read = crate::text_style_bookmarks::headings(doc, levels);
+                    &read
                 }
-            }
-            let entries = crate::text_style_bookmarks::headings(doc, levels);
+            };
             if entries.is_empty() {
                 return Err(EditError::Invalid("no text is set in the chosen styles".into()));
             }
-            pdfcraft_organize::add_bookmark_tree(doc, "Untitled", &entries)?;
+            pdfcraft_organize::add_bookmark_tree(doc, "Untitled", entries)?;
         }
         Edit::NumberPages { from, to, style, prefix, first } => pdfcraft_organize::number_pages(doc, *from, *to, *style, prefix, *first)?,
         Edit::AddMeasurement(m) => {

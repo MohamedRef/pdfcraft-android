@@ -136,6 +136,10 @@ pub enum Edit {
     /// under it, …), under a new first "Untitled" bookmark (#1693; see [`crate::text_style_bookmarks`]).
     BookmarksFromTextStyles {
         levels: Vec<crate::text_style_bookmarks::TextStyle>,
+        /// Android adaptation (#652): the bookmarks already read for `levels`, page by page
+        /// before the edit ([`crate::Document::text_style_headings`]), so a long book can say
+        /// how far it is and stop; `None` reads them in the edit.
+        found: Option<Vec<pdfcraft_organize::OutlineEntry>>,
     },
     /// Label pages `from..=to` (0-based) as Acrobat's "Number pages" does; later pages keep their labels.
     NumberPages {
