@@ -44,7 +44,7 @@ pub use lookup::{
 pub use model3d::{Model3d, Model3dKind, model_3d, model_3d_annotations};
 pub(crate) use modify::n;
 // Android adaptation (#521): the whole-stroke eraser.
-pub use modify::erase_ink_strokes;
+pub use modify::{InkStrokeReach, erase_ink_strokes, ink_reach};
 pub use modify::{
     MAX_LAYER_NAME_CHARS, add_reply, add_text_replacement, annots_to_layer, deletable, delete_annotation, erase_ink, fillable, goes_with, lift_annotation,
     move_annotation, release_members, transform_annotation, set_border_color, set_border_shape, set_contents, set_fill, set_font_size, set_locked, set_marked,

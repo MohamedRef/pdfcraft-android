@@ -274,6 +274,22 @@ class PageImages(
         null
     }
 
+    /**
+     * The saved strokes the Draw eraser can take on [page], as the engine's whole-stroke eraser
+     * measures them (#655); null when they cannot be read. Read beside the view's text, not
+     * behind queued tools, so they are in while the eraser is still down.
+     */
+    suspend fun erasableStrokes(page: Int): List<ErasableInkStroke>? = try {
+        withContext(engine.interactive + job) {
+            engine.session.erasableStrokes(doc, page.toUInt()).mapNotNull { erasableInkStroke(it.index.toInt(), it.stroke.toInt(), it.points, it.halfWidths) }
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Ink, "erase_strokes_read", e)
+        null
+    }
+
     /** Forget everything (the document was replaced). */
     fun clear() = synchronized(lock) {
         cache.clear()
