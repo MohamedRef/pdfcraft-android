@@ -517,7 +517,7 @@ private fun InkLatencyReport() {
         Text(value, color = c.text, fontSize = 13.sp)
         Row {
             TextButton(onClick = { version++ }) { Text(stringResource(R.string.ink_latency_refresh), color = c.accent) }
-            TextButton(onClick = { InkLatency.normal.clear(); InkLatency.lowLatency.clear(); version++ }) {
+            TextButton(onClick = { InkLatency.normal.clear(); version++ }) {
                 Text(stringResource(R.string.ink_latency_reset), color = c.accent)
             }
         }

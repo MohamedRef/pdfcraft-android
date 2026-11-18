@@ -353,8 +353,8 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
         val app = app
         vm.viewModelScope.launch {
             // the pen latency so far (#128), as Pen settings shows it
-            listOf("normal" to io.github.artcraftandroid.pdfcraft.ui.viewer.InkLatency.normal, "low_latency" to io.github.artcraftandroid.pdfcraft.ui.viewer.InkLatency.lowLatency).forEach { (path, stats) ->
-                stats.summary()?.let { Diag.event(DiagArea.Ink, "latency_summary", "path" to path, "samples" to it.count, "p50_ms" to it.medianMs, "p95_ms" to it.p95Ms) }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.InkLatency.normal.summary()?.let {
+                Diag.event(DiagArea.Ink, "latency_summary", "path" to "normal", "samples" to it.count, "p50_ms" to it.medianMs, "p95_ms" to it.p95Ms)
             }
             io.github.artcraftandroid.pdfcraft.ui.viewer.PenDiag.flushPalm()
             Diagnostics.memory("share")

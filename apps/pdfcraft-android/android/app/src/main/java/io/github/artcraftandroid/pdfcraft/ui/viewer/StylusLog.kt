@@ -6,8 +6,11 @@ import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import kotlin.math.abs
 import kotlin.math.hypot
 
-/** One raw pen sample as Android delivered it: event time (ms), window position (px), pressure. */
-internal data class PenSample(val time: Long, val x: Float, val y: Float, val pressure: Float)
+/**
+ * One raw pen sample as Android delivered it: event time (ms), window position (px), pressure,
+ * and the pen's lean from upright in radians ([tilt], NaN when the pen does not report it).
+ */
+internal data class PenSample(val time: Long, val x: Float, val y: Float, val pressure: Float, val tilt: Float = Float.NaN)
 
 /**
  * A bounded log of the latest raw pen samples, in time order. Compose's historical pointer changes
@@ -47,6 +50,21 @@ internal class PenSampleLog(private val capacity: Int = 256) {
     }
 
     /**
+     * The pen's tilt in radians at the sample logged at [time] (± [toleranceMs]), or `null` when
+     * none was logged there or it had no tilt. Each historical sample keeps its own lean: the
+     * newest one alone ([StylusLog.tiltRad]) would be given to every sample of a batch.
+     */
+    @Synchronized
+    fun tiltAt(time: Long, toleranceMs: Long = 1L): Float? {
+        var best: PenSample? = null
+        for (s in samples) {
+            val d = abs(s.time - time)
+            if (d <= toleranceMs && (best == null || d < abs(best.time - time))) best = s
+        }
+        return best?.tilt?.takeIf { it.isFinite() }
+    }
+
+    /**
      * Where the pen will be [aheadMs] after its newest sample, as a window-pixel offset from that
      * sample: its mean velocity over the last [windowMs], capped at [maxPx]. `null` when the pen
      * is up, the samples are stale (older than [now] − [staleMs]) or too few.
@@ -81,7 +99,11 @@ internal object StylusLog {
     @Volatile private var tiltMax = Float.NaN
     @Volatile private var tiltReported: Boolean? = null
 
-    /** The pen's lean from upright in radians at its newest sample (NaN when not reported), for the pen model. */
+    /**
+     * The pen's lean from upright in radians at its newest sample (NaN when not reported). The pen
+     * model takes each sample's own lean from [PenSampleLog.tiltAt]; this is the fallback when a
+     * sample's time is not in the log.
+     */
     @Volatile var tiltRad = Float.NaN
         private set
 
@@ -110,11 +132,13 @@ internal object StylusLog {
             MotionEvent.ACTION_MOVE -> InkLatency.stroke.move(event.historySize + 1)
         }
         for (h in 0 until event.historySize) {
-            pen.add(PenSample(event.getHistoricalEventTime(h), event.getHistoricalX(index, h), event.getHistoricalY(index, h), event.getHistoricalPressure(index, h)))
-            tilt(event.getHistoricalAxisValue(MotionEvent.AXIS_TILT, index, h))
+            val lean = event.getHistoricalAxisValue(MotionEvent.AXIS_TILT, index, h)
+            pen.add(PenSample(event.getHistoricalEventTime(h), event.getHistoricalX(index, h), event.getHistoricalY(index, h), event.getHistoricalPressure(index, h), lean))
+            tilt(lean)
         }
-        pen.add(PenSample(event.eventTime, event.getX(index), event.getY(index), event.getPressure(index)))
-        tilt(event.getAxisValue(MotionEvent.AXIS_TILT, index))
+        val newest = event.getAxisValue(MotionEvent.AXIS_TILT, index)
+        pen.add(PenSample(event.eventTime, event.getX(index), event.getY(index), event.getPressure(index), newest))
+        tilt(newest)
         when (event.actionMasked) {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 pen.setDown(false)
@@ -155,7 +179,6 @@ internal object StylusLog {
             "ms" to t.durationMs, "events" to t.events, "samples" to t.samples, "sample_hz" to t.sampleHz,
             "eraser" to t.eraser, "cancelled" to t.cancelled, "mode" to mode,
             "normal_n" to (t.normal?.count ?: 0), "normal_p50_ms" to t.normal?.medianMs, "normal_p95_ms" to t.normal?.p95Ms, "normal_max_ms" to t.normalMaxMs,
-            "front_n" to (t.front?.count ?: 0), "front_p50_ms" to t.front?.medianMs, "front_p95_ms" to t.front?.p95Ms, "front_max_ms" to t.frontMaxMs,
             "pointer" to t.pointer, "draws" to t.draws,
             "frame_p50_ms" to t.frameGap?.medianMs, "frame_p95_ms" to t.frameGap?.p95Ms, "frame_max_ms" to t.frameGapMaxMs,
             "draw_p50_us" to t.drawUs?.medianMs, "draw_p95_us" to t.drawUs?.p95Ms, "draw_max_us" to t.drawMaxUs,

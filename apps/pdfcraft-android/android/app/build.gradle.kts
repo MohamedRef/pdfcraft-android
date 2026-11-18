@@ -257,9 +257,11 @@ android {
     testOptions { unitTests { isIncludeAndroidResources = true } }
     // Calls to APIs newer than minSdk fail the build (#502, #507): JDK 21's SequencedCollection
     // members (reversed(), getFirst(), removeLast() on Java collections) compile fine but are
-    // missing below Android 15. Only this check runs, so lint stays quick.
+    // missing below Android 15. A few more checks that are cheap and catch real faults also fail it
+    // (#691): a cursor or obtained object left open, a wake lock not released, an allocation in a
+    // View's onDraw, a version check minSdk makes always true. Only these run, so lint stays quick.
     lint {
-        checkOnly += "NewApi"
+        checkOnly += listOf("NewApi", "Recycle", "Wakelock", "DrawAllocation", "ObsoleteSdkInt")
         abortOnError = true
         // the shipped code only; tests run on the JVM, not on a phone
         ignoreTestSources = true
