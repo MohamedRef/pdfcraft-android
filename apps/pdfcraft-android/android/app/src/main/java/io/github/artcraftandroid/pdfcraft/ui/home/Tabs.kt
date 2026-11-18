@@ -67,6 +67,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
@@ -204,7 +205,7 @@ fun ToolsTab(vm: AppViewModel) {
             return@Column
         }
         LazyVerticalGrid(
-            GridCells.Adaptive(80.dp), modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+            GridCells.Adaptive(toolsCellMinWidth(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)), modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // All: a heading over each category's tools
@@ -220,9 +221,20 @@ fun ToolsTab(vm: AppViewModel) {
     }
 }
 
+/**
+ * The narrowest a Tools cell may be (#721): 80 dp on a phone, 104 dp where the screen is wide
+ * ([io.github.artcraftandroid.pdfcraft.ui.WideScreenMinWidth]), so on a tablet each name has the
+ * room it needs instead of eight 81 dp cells cutting "Enhance scanned pa…".
+ */
+internal fun toolsCellMinWidth(screenWidthDp: Int): Dp =
+    if (screenWidthDp >= io.github.artcraftandroid.pdfcraft.ui.WideScreenMinWidth.value) 104.dp else 80.dp
+
+/** Lines a tool's name may take under its tile (#721): "Read handwriting on this page (beta)" needs three. */
+internal const val TOOL_NAME_LINES = 3
+
 /** One tool in Tools: its tinted tile over its name, the whole cell one button. */
 @Composable
-private fun ToolCell(t: QuickTool, name: String, onClick: () -> Unit) {
+internal fun ToolCell(t: QuickTool, name: String, onClick: () -> Unit) {
     val c = pdfColors
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onClick).padding(vertical = 6.dp, horizontal = 2.dp).semantics { contentDescription = name },
@@ -232,7 +244,7 @@ private fun ToolCell(t: QuickTool, name: String, onClick: () -> Unit) {
             Icon(t.icon, null, tint = t.hue, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(6.dp))
-        Text(name, color = c.label, fontSize = 12.sp, lineHeight = 15.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(name, color = c.label, fontSize = 12.sp, lineHeight = 15.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = TOOL_NAME_LINES, overflow = TextOverflow.Ellipsis)
     }
 }
 
