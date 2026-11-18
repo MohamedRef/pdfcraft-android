@@ -972,6 +972,10 @@
     <string name="ink_highlighter_straight_explanation">Cada traço do marca-texto sai como uma linha reta.</string>
     <string name="ink_pressure">Pressão</string>
     <string name="ink_pressure_explanation">Quanto a linha muda quando você pressiona. Em 0%, mantém uma só largura.</string>
+    <string name="ink_pattern">Linha</string>
+    <string name="ink_pattern_solid">Contínua</string>
+    <string name="ink_pattern_dashed">Tracejada</string>
+    <string name="ink_pattern_dotted">Pontilhada</string>
     <string name="ink_pressure_percent">Pressão %1$d%%</string>
     <string name="pen_lab_title">Laboratório de canetas</string>
     <string name="pen_lab_summary">Ajuste como cada caneta responde à pressão e à velocidade</string>

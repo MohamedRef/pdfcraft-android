@@ -356,9 +356,16 @@ internal fun PenStylePicker(vm: AppViewModel) {
         )
         Canvas(Modifier.fillMaxWidth().height(26.dp).padding(horizontal = 12.dp)) {
             val lineWidth = inkStyleWidthRuns(listOf(1f, 1f), pen.width, false, style).firstOrNull()?.width ?: pen.width
+            // the line as the pen draws it: solid, dashed or dotted (#682)
+            val mask = inkPatternMask(prefs.penPattern(style), lineWidth.dp.toPx())
             drawLine(color.copy(alpha = inkStyleOpacity(pen.opacity, style)),
                 Offset(0f, size.height / 2), Offset(size.width, size.height / 2),
-                strokeWidth = lineWidth.dp.toPx(), cap = if (style == InkStyle.Highlighter) StrokeCap.Square else StrokeCap.Round)
+                strokeWidth = lineWidth.dp.toPx(), cap = if (style == InkStyle.Highlighter) StrokeCap.Square else StrokeCap.Round,
+                pathEffect = mask?.let {
+                    // round ends add half a width to each piece
+                    val w = lineWidth.dp.toPx()
+                    androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(maxOf(it.on - w, 0.01f), it.off + w), 0f)
+                })
         }
         if (style == InkStyle.Highlighter) {
             Row(
@@ -371,6 +378,27 @@ internal fun PenStylePicker(vm: AppViewModel) {
                     Text(stringResource(R.string.ink_highlighter_straight_explanation), color = c.label, fontSize = 12.sp)
                 }
                 PdfSwitch(prefs.highlighterStraight, null)
+            }
+        }
+        if (inkPatternApplies(style)) {
+            // solid, dashed or dotted, kept per pen (#682)
+            Text(stringResource(R.string.ink_pattern), color = c.text, fontSize = 14.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                InkPattern.entries.forEach { p ->
+                    val sel = prefs.penPattern(style) == p
+                    Box(
+                        Modifier.border(if (sel) 2.dp else 1.dp, if (sel) c.accent else c.divider, RoundedCornerShape(18.dp))
+                            .selectable(selected = sel, role = Role.RadioButton) { prefs.updatePenPattern(style, p) }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(stringResource(when (p) {
+                            InkPattern.Solid -> R.string.ink_pattern_solid
+                            InkPattern.Dashed -> R.string.ink_pattern_dashed
+                            InkPattern.Dotted -> R.string.ink_pattern_dotted
+                        }), color = c.text, fontSize = 13.sp)
+                    }
+                }
             }
         }
         if (style != InkStyle.Highlighter) {

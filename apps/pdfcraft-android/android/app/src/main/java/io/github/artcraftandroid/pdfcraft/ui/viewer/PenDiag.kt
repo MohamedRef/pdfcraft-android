@@ -60,6 +60,10 @@ internal object PenDiag {
     /** The ink stroke's numbers, once. */
     fun takeInkStroke(): PenStrokeStats? = inkStats.also { inkStats = null }
 
+    /** A dashed or dotted line was cut into its pieces on lift (#682): numbers only. */
+    fun pattern(pattern: String, pieces: Int, points: Int) =
+        Diag.event(DiagArea.Ink, "ink_pattern", "pattern" to pattern, "pieces" to pieces, "points" to points)
+
     /**
      * The drafts of a Draw session were saved (#609): how many strokes with how many points went
      * to the engine as how many comments, how many groups of them it took, and how long that was.

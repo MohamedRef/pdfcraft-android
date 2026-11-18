@@ -75,6 +75,18 @@ class ToolPrefs(context: Context) {
 
     internal fun penPressure(style: InkStyle): Float = penPressures.getValue(style).floatValue
 
+    /** Each pen's line, solid, dashed or dotted (#682); the marker is always solid. */
+    private val penPatterns = InkStyle.entries.associateWith {
+        mutableStateOf(InkPattern.fromKey(runCatching { prefs.getString(penPatternKey(it), null) }.getOrNull()))
+    }
+
+    internal fun penPattern(style: InkStyle): InkPattern = if (inkPatternApplies(style)) penPatterns.getValue(style).value else InkPattern.Solid
+
+    internal fun updatePenPattern(style: InkStyle, pattern: InkPattern) {
+        penPatterns.getValue(style).value = pattern
+        prefs.edit().putString(penPatternKey(style), pattern.key).apply()
+    }
+
     internal fun updatePenPressure(style: InkStyle, v: Float) {
         val safe = penPressureSetting(v)
         penPressures.getValue(style).floatValue = safe
