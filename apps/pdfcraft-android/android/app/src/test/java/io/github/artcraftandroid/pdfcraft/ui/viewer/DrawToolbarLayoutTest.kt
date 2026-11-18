@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -114,6 +115,37 @@ class DrawToolbarLayoutTest {
         rule.onNodeWithContentDescription(text(R.string.ink_guides_title)).performClick()
         rule.waitForIdle()
         assertEquals(Picker.Guides, ctl.picker)
+    }
+
+    /**
+     * #697: with six pens and the four text markups, the pens, the eraser and the lasso lie in
+     * the bar without scrolling wherever eight 48 dp slots fit (384 dp and wider), and every
+     * markup is reached by scrolling at every width. Before #697 they shared one evenly spaced
+     * row, so on a 384 dp phone the lasso sat half outside the bar.
+     */
+    @Test
+    fun lassoStaysInViewBesideTheTextMarkups() {
+        val prefs = ToolPrefs(context)
+        val ctl = ViewerController()
+        var width by mutableStateOf(widths.first())
+        rule.setContent {
+            PdfcraftTheme(ThemeChoice.Light) {
+                // a fresh bar per width, so each starts unscrolled as it does on a phone
+                key(width) { Box(Modifier.requiredWidth(width)) { DrawToolbarBar(ctl, prefs, onMarkup = {}) } }
+            }
+        }
+        val primary = InkStyle.entries.map { text(inkStyleLabel(it)) } + text(R.string.toolbar_eraser) + text(R.string.toolbar_ink_lasso)
+        val markups = listOf(
+            text(R.string.common_tool_highlight), text(R.string.common_tool_underline),
+            text(R.string.toolbar_strikethrough), text(R.string.toolbar_squiggly),
+        )
+        for (w in widths) {
+            width = w
+            rule.waitForIdle()
+            if (w >= 48.dp * primary.size) primary.forEach { assertReachable(it, w) }
+            markups.forEach { assertReachable(it, w, scrolls = true) }
+            primary.forEach { assertReachable(it, w, scrolls = true) }
+        }
     }
 
     @Test
