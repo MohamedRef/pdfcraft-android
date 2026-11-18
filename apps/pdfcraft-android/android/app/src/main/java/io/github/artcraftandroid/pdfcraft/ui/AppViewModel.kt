@@ -32,6 +32,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerTool
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import org.json.JSONObject
@@ -504,6 +505,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             doc.diagNumber = settings.diagDoc
             doc.lent = lent?.let { io.github.artcraftandroid.pdfcraft.engine.LentState(it.dev, it.ino, it.size) }
             watchLent(doc)
+            if (source != null) attachInkJournal(doc, source)
             val access = source?.let { withContext(Dispatchers.IO) { files.writeAccess(it) } }
             doc.writable = access == null || access in io.github.artcraftandroid.pdfcraft.engine.WriteAccess.WRITABLE
             if (!doc.writable) doc.readOnlyReason = access
@@ -760,7 +762,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         if (document !== doc) return@withLock
                         // Explicit Discard, never automatic cleanup: preserve file recovery
                         // until the user confirms and the native document has closed.
-                        closeQuietly(eng, doc)
+                        closeQuietly(eng, doc, discarded = true)
                         doc.source?.let { src ->
                             val discarded = withContext(Dispatchers.IO) {
                                 runCatching { files.discardWorkingCopy(src) }
@@ -826,7 +828,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return true
     }
 
-    internal suspend fun closeQuietly(eng: Engine, doc: OpenDocument) {
+    internal suspend fun closeQuietly(eng: Engine, doc: OpenDocument, discarded: Boolean = false) {
+        closeInkJournal(doc, discarded)
         runCatching { eng.command { close(doc.id, true) } }
         doc.images.close()
         doc.search.clear()
@@ -903,7 +906,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val settled = kotlinx.coroutines.withTimeoutOrNull(PENDING_EDITS_WAIT_MS) { doc.pendingEdits.first { it <= 0 } } != null
             Diag.event(DiagArea.Save, "pending_edits_wait", "doc" to doc.diagNumber, "trigger" to trigger, "settled" to settled)
         }
-        if (!doc.info.dirty && !doc.notWrittenBack) return@withLock true
+        // the strokes the engine has now are in the file once this save succeeds (#680)
+        val journalMark = doc.inkJournal?.saveStarted()
+        if (!doc.info.dirty && !doc.notWrittenBack) {
+            // nothing unsaved in the engine: what it took is in the file already
+            journalMark?.let { doc.inkJournal?.saved(it) }
+            return@withLock true
+        }
         // its original lost pages to another app (#476): a save would carry their zeros
         if (doc.lentChanged) {
             Diag.event(DiagArea.Save, "save", "doc" to doc.diagNumber, "trigger" to trigger, "outcome" to "lent_changed")
@@ -925,6 +934,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // an in-place original takes only appended revisions while it is open (#453)
                 doc.lent?.saved(out.optBoolean("incremental", false))
             }
+            journalMark?.let { doc.inkJournal?.saved(it) }
             stage = "refresh"
             Diag.measure(DiagArea.Save, "refresh", "doc" to doc.diagNumber) { refresh(doc) }
             // a copy for the backup folder, even when writing back fails (#145)
@@ -1294,6 +1304,98 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Undo/Redo: one message for a run of them, updated in place, gone soon after the last (#618). */
     private fun step(doc: OpenDocument, message: String) {
         onMain { messageBoard.raise(message, MessageKind.Step, owner = doc) }
+    }
+
+    /**
+     * The journal of [doc]'s strokes not saved yet (#680), in the app's no-backup files under a
+     * name made from [source]. Strokes it still holds from a visit the app did not end (a crash,
+     * a killed app, the phone switched off) are added back as ink once the document can be edited,
+     * when its pages are the ones they were drawn on.
+     */
+    private fun attachInkJournal(doc: OpenDocument, source: Uri) {
+        if (!settings.toolPrefs.penTuning.inkJournal) return
+        val app = getApplication<Application>()
+        val file = io.github.artcraftandroid.pdfcraft.ui.viewer.InkJournalFile(
+            File(File(app.noBackupFilesDir, "ink_journal"), io.github.artcraftandroid.pdfcraft.ui.viewer.inkJournalName(source.toString())),
+            io.github.artcraftandroid.pdfcraft.ui.viewer.inkJournalFingerprint(doc.viewer.pages),
+        )
+        // one write at a time, in order, off the main thread
+        val writer = Dispatchers.IO.limitedParallelism(1)
+        val journal = io.github.artcraftandroid.pdfcraft.ui.viewer.InkJournal(file) { block -> viewModelScope.launch(writer) { block() } }
+        val state = io.github.artcraftandroid.pdfcraft.ui.viewer.DocInkJournal(journal, doc.ink)
+        doc.inkJournal = state
+        // each gesture's end (a stroke, an erase, a lasso edit, Undo, Redo) and each hand-over to the engine
+        state.watcher = viewModelScope.launch {
+            androidx.compose.runtime.snapshotFlow { listOf(doc.ink.edits.size, doc.ink.undone.size, doc.ink.saving.size, doc.ink.strokes.size) }
+                .collectLatest {
+                    delay(io.github.artcraftandroid.pdfcraft.ui.viewer.INK_JOURNAL_SYNC_MS)
+                    if (doc.inkJournal === state) state.sync()
+                }
+        }
+        viewModelScope.launch {
+            androidx.compose.runtime.snapshotFlow { doc.info.preparing }.first { !it }
+            if (doc.inkJournal !== state) return@launch
+            val started = android.os.SystemClock.elapsedRealtime()
+            val found = withContext(writer) { journal.read() }
+            val points = found.strokes.sumOf { it.points.size }
+            fun log(outcome: String, applied: Int = 0) = Diag.event(
+                DiagArea.Ink, "ink_journal", "doc" to doc.diagNumber, "outcome" to outcome, "strokes" to found.strokes.size, "points" to points,
+                "records" to found.records, "torn" to found.torn, "bytes" to found.bytes, "applied" to applied, "ms" to android.os.SystemClock.elapsedRealtime() - started,
+            )
+            if (doc.inkJournal !== state) return@launch
+            if (found.outcome != "read" || found.strokes.isEmpty()) {
+                if (found.outcome != "none") {
+                    log(found.outcome)
+                    journal.delete()
+                }
+                state.restoring = false
+                state.sync()
+                return@launch
+            }
+            if (!doc.info.allowsAnnotation) {
+                // kept for a visit that may add ink; this one writes none
+                log("not_allowed")
+                doc.inkJournal = null
+                return@launch
+            }
+            val restored = found.strokes.map { s -> io.github.artcraftandroid.pdfcraft.ui.viewer.InkJournalItem(Any(), listOf("restored")) { s } }
+            state.adoptRestored(restored)
+            val groups = io.github.artcraftandroid.pdfcraft.ui.viewer.inkSaveCommandGroups(found.strokes) { argb -> androidx.compose.ui.graphics.Color(argb).hex() }
+            runToolBatch(doc, "comment_add", groups) { applied ->
+                val done = applied.coerceIn(0, restored.size)
+                // strokes the engine refuses stay drafts, as Draw's own do (#73)
+                val refused = found.strokes.drop(done)
+                if (refused.isNotEmpty()) {
+                    state.refused(restored.drop(done))
+                    val drafts = refused.map { s ->
+                        io.github.artcraftandroid.pdfcraft.ui.viewer.InkStroke(s.page, s.appearance, s.pressureSensitive).also {
+                            it.points.addAll(s.points)
+                            it.scales.addAll(s.scales)
+                            it.densities.addAll(s.densities)
+                        }
+                    }
+                    doc.ink.strokes.addAll(0, drafts)
+                    doc.ink.edits.addAll(0, drafts.map { io.github.artcraftandroid.pdfcraft.ui.viewer.DraftInkEdit.Added(listOf(it)) })
+                }
+                log("restored", done)
+                state.restoring = false
+                state.sync()
+                if (document === doc) tell(text(R.string.msg_ink_restored, found.strokes.size))
+            }
+        }
+    }
+
+    /** [doc] closes: its journal goes, unless strokes are still unsaved (they come back next time) and not [discarded]. */
+    private fun closeInkJournal(doc: OpenDocument, discarded: Boolean) {
+        val state = doc.inkJournal ?: return
+        doc.inkJournal = null
+        val unsaved = state.unsaved
+        state.closed(discarded)
+        val j = state.journal
+        if (j.writes > 0 || unsaved > 0) Diag.event(
+            DiagArea.Ink, "ink_journal_closed", "doc" to doc.diagNumber, "writes" to j.writes, "failures" to j.failures,
+            "slowest_write_ms" to j.slowestWriteMs, "bytes_written" to j.bytesWritten, "unsaved" to unsaved, "discarded" to discarded,
+        )
     }
 
     /** [count] Draw strokes the document refused stay drafts (#73); say where, once Draw is left. */

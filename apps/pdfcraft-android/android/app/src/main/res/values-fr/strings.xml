@@ -909,6 +909,7 @@
     <string name="msg_undone">%1$s annulé</string>
     <string name="msg_redone">%1$s rétabli</string>
     <string name="msg_ink_kept">L\'encre non enregistrée a été conservée. Ouvrez Dessiner et touchez OK pour l\'enregistrer à nouveau.</string>
+    <string name="msg_ink_restored">%1$d traits non enregistrés à la fermeture de l\'app ont été rajoutés.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">Cet outil n\'est pas disponible en raison des paramètres de sécurité du document.</string>
@@ -1305,6 +1306,8 @@
     <string name="pen_lab_group_drawing">Dessin</string>
     <string name="pen_lab_draft_picture">Garder les traits terminés comme image</string>
     <string name="pen_lab_draft_picture_body">Pendant l’écriture, les traits déjà écrits sont affichés depuis une image au lieu d’être redessinés à chaque image. Désactivez pour comparer, ou si des traits s’affichent mal.</string>
+    <string name="pen_lab_ink_journal">Garder l\'encre non enregistrée en cas de plantage</string>
+    <string name="pen_lab_ink_journal_body">Écrit chaque trait pas encore enregistré dans un petit fichier pendant que vous écrivez, et le rajoute quand le document est rouvert après une fermeture inattendue de l\'app. Désactivé : les traits non enregistrés sont alors perdus, comme avant.</string>
     <string name="pen_lab_written">Valeurs des stylos écrites dans le journal</string>
     <string name="ink_shapes">Formes</string>
     <string name="ink_toolbar_guides">Guides</string>

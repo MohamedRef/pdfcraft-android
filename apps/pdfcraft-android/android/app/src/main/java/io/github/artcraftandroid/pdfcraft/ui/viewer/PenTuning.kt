@@ -86,6 +86,15 @@ internal class PenTuning(private val prefs: SharedPreferences) {
      * Whether the finished drafts are shown as one picture while writing ([InkDraftPicture], #609).
      * On unless the owner turns it off in the Pen lab, to compare or if the picture ever shows wrong.
      */
+    /** Strokes not saved yet are journaled and added back after a crash (#680); on unless turned off. */
+    var inkJournal by mutableStateOf(prefs.getBoolean("ink_journal", true))
+        private set
+
+    fun updateInkJournal(on: Boolean) {
+        inkJournal = on
+        prefs.edit().putBoolean("ink_journal", on).apply()
+    }
+
     var draftPicture by mutableStateOf(prefs.getBoolean("draft_picture", true))
         private set
 
@@ -155,7 +164,7 @@ internal class PenTuning(private val prefs: SharedPreferences) {
         }
         val c = pressureCurve
         Diag.event(DiagArea.Ink, "pressure_curve", "y25" to c.ys[0], "y50" to c.ys[1], "y75" to c.ys[2], "linear" to c.linear)
-        Diag.event(DiagArea.Ink, "pen_lab_options", "draft_picture" to draftPicture)
+        Diag.event(DiagArea.Ink, "pen_lab_options", "draft_picture" to draftPicture, "ink_journal" to inkJournal)
         logRange()
     }
 

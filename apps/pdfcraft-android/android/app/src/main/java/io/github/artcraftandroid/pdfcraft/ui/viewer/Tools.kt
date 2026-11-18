@@ -930,6 +930,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 vm.runToolBatch(doc, "comment_add", groups) { applied ->
                     PenDiag.draftsSaved(taken.size, taken.sumOf { it.points.size }, groups.sumOf { it.size }, applied, android.os.SystemClock.uptimeMillis() - savedAt)
                     val kept = drafts.settle(taken, applied)
+                    // in the engine now, but not in the file until the next save (#680)
+                    doc.inkJournal?.committed(taken.take(applied))
                     steps.finished(groups.take(applied).sumOf { it.size })
                     if (kept > 0) vm.inkKept(doc, kept)
                 }

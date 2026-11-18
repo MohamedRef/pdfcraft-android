@@ -1338,6 +1338,7 @@
     <string name="msg_undone">%1$s undone</string>
     <string name="msg_redone">%1$s redone</string>
     <string name="msg_ink_kept">Ink that wasn\'t saved is kept. Open Draw and tap Done to save it again.</string>
+    <string name="msg_ink_restored">%1$d strokes not saved when the app closed were added back.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">This tool is not available due to the document\'s security settings.</string>
@@ -1658,6 +1659,8 @@
     <string name="pen_lab_group_drawing">Drawing</string>
     <string name="pen_lab_draft_picture">Keep finished strokes as an image</string>
     <string name="pen_lab_draft_picture_body">Strokes already written are shown from one image instead of being drawn again on every frame. Turn off to compare, or if strokes ever show wrong.</string>
+    <string name="pen_lab_ink_journal">Keep unsaved ink through a crash</string>
+    <string name="pen_lab_ink_journal_body">Writes each stroke not saved yet to a small file as you write, and adds it back when the document is opened again after the app closed unexpectedly. Off: strokes not saved are lost then, as before.</string>
     <string name="pen_lab_written">Pen values written to the log</string>
     <string name="ink_shapes">Shapes</string>
     <string name="ink_toolbar_guides">Guides</string>
