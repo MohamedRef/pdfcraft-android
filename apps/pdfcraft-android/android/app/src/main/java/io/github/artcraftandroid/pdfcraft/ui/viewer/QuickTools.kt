@@ -92,7 +92,8 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     Highlight("highlight", R.string.common_tool_highlight, R.string.common_tool_highlight, LucideIcons.Highlighter, ToolHues.text, ToolCategory.Annotate, subTools = true),
     Draw("draw", R.string.common_tool_draw, R.string.common_tool_draw, LucideIcons.PenLine, ToolHues.sign, ToolCategory.Annotate),
     FillSign("fillsign", R.string.common_tool_fill_sign, R.string.common_tool_fill_sign, LucideIcons.Signature, ToolHues.sign, ToolCategory.Annotate, subTools = true),
-    Export("export", R.string.common_tool_export, R.string.common_tool_export, LucideIcons.FileOutput, ToolHues.export, ToolCategory.Convert),
+    // "Export PDF" in the lists and on its screen; on the bar a word, so it keeps one line at 384 dp (#708)
+    Export("export", R.string.toolbar_label_export, R.string.common_tool_export, LucideIcons.FileOutput, ToolHues.export, ToolCategory.Convert),
     Combine("combine", R.string.toolbar_label_combine, R.string.common_tool_combine, LucideIcons.Combine, ToolHues.combine, ToolCategory.Pages),
     Compress("compress", R.string.toolbar_label_compress, R.string.common_tool_compress, LucideIcons.FileArchive, ToolHues.compress, ToolCategory.Convert),
     Protect("protect", R.string.toolbar_label_password, R.string.common_tool_set_password, LucideIcons.FileLock2, ToolHues.protect, ToolCategory.Edit),

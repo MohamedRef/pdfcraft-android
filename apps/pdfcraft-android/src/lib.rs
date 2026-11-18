@@ -427,6 +427,23 @@ pub struct CommentInfo {
     pub lines: Vec<f32>,
 }
 
+/// Most points [`MobileSession::erasable_strokes`] gives for one page (#655): past it Draw does
+/// not hide the strokes the whole-stroke eraser touches there, and they go when the edit lands.
+const MAX_ERASABLE_POINTS: usize = 250_000;
+
+/// Android adaptation (#655): one stroke of a drawing the Draw eraser can change, as its
+/// whole-stroke eraser measures it ([`MobileSession::erasable_strokes`]).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ErasableStroke {
+    /// The drawing's index on its page (as [`CommentInfo::index`]), and the stroke's in it.
+    pub index: u32,
+    pub stroke: u32,
+    /// Its points, `x0, y0, x1, y1, …` (view points, as the eraser's path).
+    pub points: Vec<f32>,
+    /// Half its width at each point (view points): how far past it the eraser still touches it.
+    pub half_widths: Vec<f32>,
+}
+
 /// A form field's widget on a page: what a tap there fills.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct WidgetInfo {
@@ -1340,6 +1357,40 @@ impl MobileSession {
         }
         let hidden = Arc::new(hidden.into_iter().map(|i| i as usize).collect());
         self.compact_image(self.render_pixels(doc, page, scale, tile, None, Some(hidden))?, false)
+    }
+
+    /// Android adaptation (#655): the strokes of the drawings `comment_erase` can change on page
+    /// `page` (unlocked Ink that is not a Fill & Sign mark), as it measures them, so Draw hides
+    /// each one the whole-stroke eraser touches while it is still down. Empty while the document
+    /// is still being prepared; refused past [`MAX_ERASABLE_POINTS`].
+    pub fn erasable_strokes(&self, doc: u64, page: u32) -> Result<Vec<ErasableStroke>, MobileError> {
+        self.with_doc(doc, |d| {
+            let page = page as usize;
+            let Some(p) = d.info.pages.get(page) else { return Ok(Vec::new()) };
+            let drawings: Vec<usize> =
+                d.info.annotations.iter().filter(|a| a.page == page && a.subtype == "Ink" && !a.fill_sign && !a.locked).map(|a| a.index).collect();
+            // view points per user unit (a page's /UserUnit), for widths as the page is shown
+            let (o, x) = (p.user_to_view(0.0, 0.0), p.user_to_view(1.0, 0.0));
+            let scale = (x[0] - o[0]).hypot(x[1] - o[1]);
+            let mut out = Vec::new();
+            let mut points = 0usize;
+            for (index, strokes) in drawings.iter().zip(d.ink_reach(page, &drawings)) {
+                let Some(strokes) = strokes else { continue };
+                for (k, s) in strokes.iter().enumerate() {
+                    points = points.saturating_add(s.points.len());
+                    if points > MAX_ERASABLE_POINTS {
+                        return Err(MobileError::Command(format!("page {} has more than {} points of ink to erase live", page + 1, MAX_ERASABLE_POINTS)));
+                    }
+                    out.push(ErasableStroke {
+                        index: u32::try_from(*index).unwrap_or(u32::MAX),
+                        stroke: u32::try_from(k).unwrap_or(u32::MAX),
+                        points: s.points.iter().flat_map(|q| p.user_to_view(q[0] as f32, q[1] as f32)).collect(),
+                        half_widths: s.half_widths.iter().map(|w| *w as f32 * scale).collect(),
+                    });
+                }
+            }
+            Ok(out)
+        })?
     }
 
     /// Run tool `name` with JSON arguments (`""` = none) and return its JSON result: the tools and

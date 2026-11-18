@@ -753,6 +753,12 @@ impl Document {
         self.editor.as_ref().and_then(|e| pdfcraft_annot::props(&e.cos, page, index))
     }
 
+    /// Android adaptation (#655): the strokes of the drawings at `indices` on page `page` as the
+    /// Draw eraser measures them ([`pdfcraft_annot::ink_reach`]); empty while editing is not ready.
+    pub fn ink_reach(&self, page: usize, indices: &[usize]) -> Vec<Option<Vec<pdfcraft_annot::InkStrokeReach>>> {
+        self.editor.as_ref().map(|e| pdfcraft_annot::ink_reach(&e.cos, page, indices)).unwrap_or_default()
+    }
+
     /// A form field's Appearance-tab look (borders, colours, font).
     pub fn field_look(&self, name: &str) -> Option<pdfcraft_forms::Look> {
         let e = self.editor.as_ref()?;

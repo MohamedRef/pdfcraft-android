@@ -177,3 +177,38 @@ fn the_whole_stroke_eraser_removes_a_touched_line_and_is_one_undo_step() {
     let bad = mobile.execute("comment_erase".into(), json!({ "doc": doc.id, "page": 1, "path": [[20, 20]], "whole": "yes" }).to_string());
     assert!(bad.is_err() || bad.unwrap().contains("error"));
 }
+
+#[test]
+fn the_whole_stroke_erasers_strokes_are_read_as_the_edit_measures_them() {
+    // #655: Draw hides each stroke the whole-stroke eraser touches while it is down, by the
+    // edit's own measure: each stroke's points (view space) and half its width at each point
+    let fixture = Fixture::new();
+    let mobile = MobileSession::new();
+    let doc = mobile.open(fixture.0.to_string_lossy().to_string(), None).unwrap();
+    // pressure ink, a width per point
+    tool(&mobile, "comment_add", json!({
+        "doc": doc.id, "page": 1, "type": "ink", "strokes": [[[20, 20], [60, 60], [90, 90]]], "widths": [[1.0, 3.0, 2.0]],
+        "color": "#161616", "opacity": 1.0, "width": 2.0,
+    }));
+    // one drawing of two strokes, 4 pt wide
+    tool(&mobile, "comment_add", json!({
+        "doc": doc.id, "page": 1, "type": "ink", "strokes": [[[150, 160], [180, 190]], [[150, 250], [190, 250]]],
+        "color": "#161616", "opacity": 1.0, "width": 4.0,
+    }));
+    let close = |a: &[f32], b: &[f32]| a.len() == b.len() && a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-3);
+    let strokes = mobile.erasable_strokes(doc.id, 0).unwrap();
+    assert_eq!(strokes.iter().map(|s| (s.index, s.stroke)).collect::<Vec<_>>(), vec![(0, 0), (1, 0), (1, 1)]);
+    assert!(close(&strokes[0].points, &[20.0, 20.0, 60.0, 60.0, 90.0, 90.0]), "{:?}", strokes[0].points);
+    assert!(close(&strokes[0].half_widths, &[0.5, 1.5, 1.0]), "{:?}", strokes[0].half_widths);
+    assert!(close(&strokes[2].points, &[150.0, 250.0, 190.0, 250.0]), "{:?}", strokes[2].points);
+    assert!(close(&strokes[2].half_widths, &[2.0, 2.0]), "{:?}", strokes[2].half_widths);
+    // 5 pt from the lower stroke's centre line: the radius (3) plus its half width (2) reach it
+    tool(&mobile, "comment_erase", json!({
+        "doc": doc.id, "page": 1, "path": [[170, 245.1]], "radius": 3.0, "whole": true, "erase_highlights": true,
+    }));
+    let left = mobile.erasable_strokes(doc.id, 0).unwrap();
+    assert_eq!(left.len(), 2, "only the touched stroke went");
+    assert!(close(&left[1].points, &[150.0, 160.0, 180.0, 190.0]), "{:?}", left[1].points);
+    assert!(mobile.erasable_strokes(doc.id, 7).unwrap().is_empty(), "no such page");
+    mobile.close(doc.id, true).unwrap();
+}

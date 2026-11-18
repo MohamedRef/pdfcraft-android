@@ -1697,6 +1697,59 @@ impl InkPiece {
     }
 }
 
+/// Android adaptation: one number per point of each of `strokes` under `key` of a drawing
+/// (`/PCWidths`, `/PCDensity`), or `None` unless it has exactly one for every point.
+fn per_point(doc: &Document, d: &Dict, key: &[u8], strokes: &[Vec<[f64; 2]>]) -> Option<Vec<Vec<f64>>> {
+    d.get(key)
+        .map(|l| doc.resolve(l))
+        .and_then(|l| l.as_array().cloned())
+        .map(|l| l.iter().map(|s| doc.resolve(s).as_array().map(|a| a.iter().filter_map(|x| doc.resolve(x).as_f64()).collect()).unwrap_or_default()).collect())
+        .filter(|f: &Vec<Vec<f64>>| f.len() == strokes.len() && f.iter().zip(strokes).all(|(f, s)| f.len() == s.len()))
+}
+
+/// Android adaptation (#655): one stroke of a drawing as the eraser measures it: its points (user
+/// space) and how far past each its paint reaches (half its width there), which
+/// [`erase_ink_strokes`] adds to the eraser's radius.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InkStrokeReach {
+    pub points: Vec<[f64; 2]>,
+    pub half_widths: Vec<f64>,
+}
+
+/// Android adaptation (#655): the strokes (in `/InkList` order) of each drawing at `indices` on
+/// page `page`, as [`erase_ink_strokes`] measures them, so Draw can hide each stroke the
+/// whole-stroke eraser touches while it is still down; `None` for an entry that is not a drawing
+/// or cannot be read. Changes nothing: the page tree is walked once and the page's `/Annots` read
+/// once.
+pub fn ink_reach(doc: &Document, page: usize, indices: &[usize]) -> Vec<Option<Vec<InkStrokeReach>>> {
+    let list = page_ref(doc, page).map(|p| annots(doc, p)).unwrap_or_default();
+    indices
+        .iter()
+        .map(|&index| {
+            let entry = doc.resolve(list.get(index)?);
+            let d = entry.as_dict()?;
+            if d.name(b"Subtype") != Some(b"Ink") {
+                return None;
+            }
+            let strokes = ink_strokes(doc, d).ok()?;
+            let factors = per_point(doc, d, b"PCWidths", &strokes);
+            // as erase_ink_strokes: the reach at a point is the radius plus half the width there
+            let half_width = border_width_of(d).max(0.0) / 2.0;
+            Some(
+                strokes
+                    .into_iter()
+                    .enumerate()
+                    .map(|(si, points)| {
+                        let factor = |i: usize| factors.as_ref().map_or(1.0, |f| f[si][i]);
+                        let half_widths = (0..points.len()).map(|i| half_width * factor(i).max(0.0)).collect();
+                        InkStrokeReach { points, half_widths }
+                    })
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
 /// The Eraser (Draw tools): remove the parts of drawing `(page, index)` within `radius` points
 /// of `path` (measured to the stroke's painted edge, so half its width is added), splitting
 /// strokes where they are cut. Strokes the eraser does not reach keep their exact points. A
@@ -1721,19 +1774,9 @@ pub fn erase_ink_strokes(doc: &mut Document, page: usize, index: usize, path: &[
     }
     let strokes = ink_strokes(doc, &d)?;
     // Android pressure ink: each point's relative width (`/PCWidths`), carried through the cut.
-    let factors: Option<Vec<Vec<f64>>> = d
-        .get(b"PCWidths")
-        .map(|l| doc.resolve(l))
-        .and_then(|l| l.as_array().cloned())
-        .map(|l| l.iter().map(|s| doc.resolve(s).as_array().map(|a| a.iter().filter_map(|x| doc.resolve(x).as_f64()).collect()).unwrap_or_default()).collect())
-        .filter(|f: &Vec<Vec<f64>>| f.len() == strokes.len() && f.iter().zip(&strokes).all(|(f, s)| f.len() == s.len()));
+    let factors = per_point(doc, &d, b"PCWidths", &strokes);
     // A pencil's density per point (`/PCDensity`, #569), carried the same way.
-    let densities: Option<Vec<Vec<f64>>> = d
-        .get(b"PCDensity")
-        .map(|l| doc.resolve(l))
-        .and_then(|l| l.as_array().cloned())
-        .map(|l| l.iter().map(|s| doc.resolve(s).as_array().map(|a| a.iter().filter_map(|x| doc.resolve(x).as_f64()).collect()).unwrap_or_default()).collect())
-        .filter(|f: &Vec<Vec<f64>>| f.len() == strokes.len() && f.iter().zip(&strokes).all(|(f, s)| f.len() == s.len()));
+    let densities = per_point(doc, &d, b"PCDensity", &strokes);
     // The eraser's path as segments (a single point is a segment of length zero).
     let segs: Vec<([f64; 2], [f64; 2])> = if path.len() == 1 { vec![(path[0], path[0])] } else { path.windows(2).map(|w| (w[0], w[1])).collect() };
     // Ink is cut where the eraser circle meets its painted edge, not only its centreline:

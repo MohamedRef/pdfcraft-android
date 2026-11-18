@@ -812,6 +812,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var transformFrom by remember { mutableStateOf(Offset.Zero) }
     var transformScale by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
     var transformAngle by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    // which side of the box the turn handle was taken on (#709), for the log
+    var transformSide by remember { mutableStateOf(LassoTurnSide.Above) }
     fun endTransform() { transformHandle = null; transformScale = 1f; transformAngle = 0f }
     fun clearSelection() { selected.clear(); savedSelected.clear(); lassoPage = null; lassoPoints.clear(); moving = false; moveAnchor = null; moveOffset = Offset.Zero; endTransform() }
     /** Every selected outline in page points: draft stroke points and saved comments' rectangles. */
@@ -1135,6 +1137,23 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var layerSize by remember(doc) { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
     // The live eraser (#521): the page without its erasable ink, shown along the eraser's path.
     var liveErase by remember(doc) { mutableStateOf<LiveErase?>(null) }
+    // The gesture before's live view when a new gesture starts before that one's edit's page is
+    // drawn: kept until then, so what it erased does not come back meanwhile (#655).
+    var liveErasePrev by remember(doc) { mutableStateOf<LiveErase?>(null) }
+    /** Waits until [le]'s edit's own page is drawn (at the latest a few seconds after lift), then logs it and calls [gone]. */
+    suspend fun untilEditDrawn(le: LiveErase, gone: () -> Unit) {
+        while (true) {
+            delay(32)
+            val gen = le.liftedGen ?: continue
+            val now = android.os.SystemClock.uptimeMillis()
+            val shown = (doc.images.latestBase(le.region.page)?.key?.gen ?: Long.MIN_VALUE) > gen
+            if (shown || now - le.liftedAt > 5_000) {
+                le.log(if (shown) "page_drawn" else "timed_out", now)
+                gone()
+                return
+            }
+        }
+    }
     /** The drafts as they were when the eraser touched down: its undo step, or what a cancel puts back. */
     var eraseDraftsBefore by remember(doc) { mutableStateOf<List<InkStroke>?>(null) }
     // The text markups on the eraser's page and those it has touched so far (#660): each goes
@@ -1150,17 +1169,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     LaunchedEffect(liveErase) {
         // gone once the edit's own page is drawn (or the edit changed nothing), at the latest after a few seconds
         val le = liveErase ?: return@LaunchedEffect
-        while (true) {
-            delay(32)
-            val gen = le.liftedGen ?: continue
-            val now = android.os.SystemClock.uptimeMillis()
-            val shown = (doc.images.latestBase(le.region.page)?.key?.gen ?: Long.MIN_VALUE) > gen
-            if (shown || now - le.liftedAt > 5_000) {
-                le.log(if (shown) "page_drawn" else "timed_out", now)
-                if (liveErase === le) liveErase = null
-                return@LaunchedEffect
-            }
-        }
+        untilEditDrawn(le) { if (liveErase === le) liveErase = null }
+    }
+    LaunchedEffect(liveErasePrev) {
+        val le = liveErasePrev ?: return@LaunchedEffect
+        untilEditDrawn(le) { if (liveErasePrev === le) liveErasePrev = null }
     }
     if (doc.controller.rulerOn && doc.controller.ruler == null && layerSize.width > 0f) {
         doc.controller.ruler = Ruler(
@@ -1225,19 +1238,33 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     val guardSizePx = with(LocalDensity.current) { prefs.palmGuardSizeDp.dp.toPx() }
     val buttonClick = remember(doc) { PenButtonClickDetector() }
 
-    /** Renders the page under its erasable ink for the gesture starting at [first] (#521). */
+    /**
+     * Renders the page under its erasable ink for the gesture starting at [first] (#521); for the
+     * whole-stroke eraser it also reads the page's saved strokes, to hide each one it touches (#655).
+     */
     fun startLiveErase(page: Int, first: Offset) {
+        // the gesture before, lifted, stays shown until its own edit's page is drawn (#655)
+        liveErase?.takeIf { it.liftedGen != null }?.let { before ->
+            liveErasePrev?.log("replaced", android.os.SystemClock.uptimeMillis())
+            liveErasePrev = before
+        }
         liveErase = null
         val hidden = erasableInk(doc.comments, page)
         if (hidden.isEmpty()) return
         val view = androidx.compose.ui.geometry.Rect(Offset.Zero, layerSize)
         val region = eraseRegion(page, doc.viewer.pageRectOnScreen(page), view, doc.viewer.pixelsPerPoint(page)) ?: return
-        val le = LiveErase(region, activeEraserRadius, android.os.SystemClock.uptimeMillis())
+        val startedAt = android.os.SystemClock.uptimeMillis()
+        val le = LiveErase(region, activeEraserRadius, startedAt, activeEraseWhole)
         le.add(first)
+        le.passed(first, startedAt)
         liveErase = le
         liveEraseScope.launch {
             val img = doc.images.renderHiding(page, region.scale, io.github.artcraftandroid.pdfcraft.core.TileRect(region.x.toUInt(), region.y.toUInt(), region.w.toUInt(), region.h.toUInt()), hidden)
             le.rendered(img, android.os.SystemClock.uptimeMillis())
+        }
+        if (le.whole) liveEraseScope.launch {
+            val strokes = doc.images.erasableStrokes(page)
+            le.strokesRead(strokes, android.os.SystemClock.uptimeMillis())
         }
     }
 
@@ -1295,8 +1322,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         eraserPoints.clear()
         eraserPoints.add(Offset(at.x, at.y))
         eraserChunks[0] = 0
-        // the live view rubs out only what is under the eraser; whole strokes go when the edit lands
-        if (!activeEraseWhole) startLiveErase(at.page, Offset(at.x, at.y))
+        // the live view rubs out what is under the eraser, or hides each saved stroke it touches (#655)
+        startLiveErase(at.page, Offset(at.x, at.y))
     }
 
     fun moveErase(p: Offset) {
@@ -1308,12 +1335,16 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             eraseDrafts(page, from, Offset(at.x, at.y))
             touchMarkups(from, Offset(at.x, at.y))
         }
-        liveErase?.takeIf { it.region.page == page && it.liftedGen == null }?.add(Offset(at.x, at.y))
+        val live = liveErase?.takeIf { it.region.page == page && it.liftedGen == null }
+        live?.add(Offset(at.x, at.y))
+        val before = eraserPoints.lastOrNull()
         appendEraserPoint(eraserPoints, Offset(at.x, at.y), activeEraserRadius)?.let { chunk ->
             // A very long gesture erases its finished part now; the rest follows on lift (#76).
             eraserChunks[0]++
             documentEdit("comment_erase", inkEraseCommand(page, chunk, activeEraserRadius.toDouble(), activeEraseWhole))
         }
+        // the whole-stroke eraser tests each step of the path the edit gets, as the edit will (#655)
+        eraserPoints.lastOrNull()?.takeIf { it != before }?.let { live?.passed(it, android.os.SystemClock.uptimeMillis()) }
     }
 
     fun cancelErase() {
@@ -1366,10 +1397,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         if (path.isNotEmpty() && savedInk) {
             // One native Edit::Batch per gesture, including freehand marker Ink.
             documentEdit("comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble(), activeEraseWhole)) { made ->
-                // nothing erased: nothing changes on the page, so the live view goes now
-                if (!made && le != null && liveErase === le) {
+                // nothing erased (or the edit failed): nothing changes on the page, so the live
+                // view goes now, also when a newer gesture has started meanwhile (#655)
+                if (!made && le != null && (liveErase === le || liveErasePrev === le)) {
                     le.log("nothing_erased", android.os.SystemClock.uptimeMillis())
-                    liveErase = null
+                    if (liveErase === le) liveErase = null else liveErasePrev = null
                 }
             }
         } else if (le != null) liveErase = null
@@ -1430,6 +1462,30 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         pieces
     }
 
+    /**
+     * What the lasso's turn handle has to keep clear of on [page] (#709), in its points: the part of
+     * the page shown under the top bar and the tab strip and above the toolbar and the zoom pad, and
+     * the selection's buttons. Null before the layer is laid out (the handle is then above the box).
+     */
+    fun lassoTurnRoom(page: Int): LassoTurnRoom? {
+        val size = doc.viewer.pages.getOrNull(page) ?: return null
+        val perPt = doc.viewer.pixelsPerPoint(page).takeIf { it > 0f } ?: return null
+        if (layerSize.width <= 0f || layerSize.height <= 0f) return null
+        val covered = maxOf(doc.viewer.padBottom, if (doc.controller.zoomBoxOn) padHeightPx else 0f)
+        val a = doc.viewer.screenToPageUnclamped(page, Offset(0f, doc.viewer.padTop)) ?: return null
+        val b = doc.viewer.screenToPageUnclamped(page, Offset(layerSize.width, layerSize.height - covered)) ?: return null
+        val menu = lassoMenuBounds?.let { m ->
+            val p = doc.viewer.screenToPageUnclamped(page, m.topLeft)
+            val q = doc.viewer.screenToPageUnclamped(page, m.bottomRight)
+            if (p != null && q != null) androidx.compose.ui.geometry.Rect(p.x, p.y, q.x, q.y) else null
+        }
+        val ptPerDp = density.density / perPt
+        return LassoTurnRoom(
+            androidx.compose.ui.geometry.Rect(maxOf(0f, a.x), maxOf(0f, a.y), minOf(size.width, b.x), minOf(size.height, b.y)),
+            menu, LASSO_KNOB_DP * ptPerDp, LASSO_HANDLE_SLOP_DP * ptPerDp,
+        )
+    }
+
     fun beginLasso(p: Offset) {
         val at = doc.viewer.screenToPage(p) ?: run { clearSelection(); return }
         val existing = lassoPage
@@ -1437,11 +1493,15 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             val b = selectionBounds
             // a handle first (#689): the resize handle is a corner of the box, which a move would take
             val perPt = doc.viewer.pixelsPerPoint(at.page).takeIf { it > 0f } ?: 1f
-            val handle = b?.let { lassoHandleAt(it, Offset(at.x, at.y), LASSO_HANDLE_SLOP_DP * density.density / perPt, LASSO_TURN_HANDLE_DP * density.density / perPt) }
+            val turnOffset = LASSO_TURN_HANDLE_DP * density.density / perPt
+            // the turn handle where it is drawn: beside or below the box where above is hidden (#709)
+            val room = lassoTurnRoom(at.page)
+            val handle = b?.let { lassoHandleAt(it, Offset(at.x, at.y), LASSO_HANDLE_SLOP_DP * density.density / perPt, turnOffset, room) }
             if (b != null && handle != null) {
                 transformHandle = handle
                 transformPivot = lassoPivot(b, handle)
-                transformFrom = lassoHandlePosition(b, handle, LASSO_TURN_HANDLE_DP * density.density / perPt)
+                transformFrom = lassoHandlePosition(b, handle, turnOffset, room)
+                transformSide = lassoTurnSpot(b, turnOffset, room).side
                 transformScale = 1f
                 transformAngle = 0f
                 return
@@ -1508,6 +1568,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         val scale = if (handle == LassoHandle.Resize) transformScale else 1f
         val angle = if (handle == LassoHandle.Turn) transformAngle else 0f
         val pivot = transformPivot
+        val side = if (handle == LassoHandle.Turn) transformSide.name.lowercase() else null
         endTransform()
         if (kotlin.math.abs(scale - 1f) < 1e-3f && kotlin.math.abs(angle) < 0.05f) return
         val draftCount = selected.size
@@ -1539,7 +1600,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             if (selected.isEmpty()) lassoPage = null
             if (notTurned > 0) vm.tell(text(R.string.ink_lasso_not_turned))
         }
-        PenDiag.lassoTransform(handle.name.lowercase(), scale, angle, draftCount, savedCount, notTurned)
+        PenDiag.lassoTransform(handle.name.lowercase(), scale, angle, draftCount, savedCount, notTurned, side)
     }
 
     fun finishLasso(p: Offset) {
@@ -1972,6 +2033,13 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         Canvas(Modifier.fillMaxSize().onSizeChanged { canvasSize = it }) {
             if (current != null) pendingInput.drawn(android.os.SystemClock.uptimeMillis(), InkLatency.normal)
             val drawStart = if (current != null) System.nanoTime() else 0L
+            // The whole-stroke eraser (#655): each saved stroke it touched is hidden at once, under
+            // the drafts, until the edit's own page is drawn.
+            for (le in listOfNotNull(liveErasePrev, liveErase)) {
+                if (!le.whole) continue
+                val erased = le.region.page
+                drawWholeStrokeErase(le, doc.viewer.pageToScreen(erased, 0f, 0f), doc.viewer.pixelsPerPoint(erased), if (doc.controller.nightMode) nightInvertFilter else null)
+            }
             // Strokes being saved stay drawn until the document has them, under the newer drafts.
             val all = drafts.saving + strokes
             // Finished drafts are shown from their picture when it stands for exactly what is on
@@ -2004,11 +2072,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             }
             // The live eraser (#521): along the eraser's path, the page without its erasable ink
             // covers the ink there (and drafts being saved), until the edit's own page is drawn.
-            liveErase?.let { le ->
-                val img = le.image ?: return@let
+            for (le in listOfNotNull(liveErasePrev, liveErase)) {
+                if (le.whole) continue
+                val img = le.image ?: continue
                 val r = le.region
                 val pts = le.path.toList()
-                if (pts.isEmpty()) return@let
+                if (pts.isEmpty()) continue
                 val ppp = doc.viewer.pixelsPerPoint(r.page)
                 val topLeft = doc.viewer.pageToScreen(r.page, r.x / r.scale, r.y / r.scale)
                 val size = androidx.compose.ui.unit.IntSize(Math.round(r.w / r.scale * ppp), Math.round(r.h / r.scale * ppp))
@@ -2108,17 +2177,20 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         val b = doc.viewer.pageToScreen(page, bounds.right + moveOffset.x, bounds.bottom + moveOffset.y)
                         drawRect(Color(0xFF1A85CA).copy(alpha = 0.12f), a, Size(b.x - a.x, b.y - a.y))
                         drawRect(Color(0xFF1A85CA), a, Size(b.x - a.x, b.y - a.y), style = Stroke(width = 1.5.dp.toPx()))
-                        // the resize handle at the corner and the turn handle above (#689), while the selection stands still
+                        // the resize handle at the corner and the turn handle above (#689), or beside or below
+                        // the box where above is hidden (#709), while the selection stands still
                         if (!moving && lassoPoints.isEmpty()) {
                             val perPt = doc.viewer.pixelsPerPoint(page).takeIf { it > 0f } ?: 1f
                             val turnOffset = LASSO_TURN_HANDLE_DP * density.density / perPt
                             val corner = lassoHandlePosition(bounds, LassoHandle.Resize, turnOffset).let { doc.viewer.pageToScreen(page, it.x, it.y) }
-                            val turn = lassoHandlePosition(bounds, LassoHandle.Turn, turnOffset).let { doc.viewer.pageToScreen(page, it.x, it.y) }
-                            val top = doc.viewer.pageToScreen(page, (bounds.left + bounds.right) / 2f, bounds.top)
-                            drawLine(Color(0xFF1A85CA), top, turn, strokeWidth = 1.5.dp.toPx())
+                            // the same spot the touch looks for it at (beginLasso)
+                            val spot = lassoTurnSpot(bounds, turnOffset, lassoTurnRoom(page))
+                            val turn = doc.viewer.pageToScreen(page, spot.knob.x, spot.knob.y)
+                            // its stalk from the box's edge nearest it
+                            drawLine(Color(0xFF1A85CA), doc.viewer.pageToScreen(page, spot.root.x, spot.root.y), turn, strokeWidth = 1.5.dp.toPx())
                             for (o in listOf(corner, turn)) {
-                                drawCircle(Color.White, 7.dp.toPx(), o)
-                                drawCircle(Color(0xFF1A85CA), 7.dp.toPx(), o, style = Stroke(width = 2.dp.toPx()))
+                                drawCircle(Color.White, LASSO_KNOB_DP.dp.toPx(), o)
+                                drawCircle(Color(0xFF1A85CA), LASSO_KNOB_DP.dp.toPx(), o, style = Stroke(width = 2.dp.toPx()))
                             }
                             drawCircle(Color(0xFF1A85CA), 2.5.dp.toPx(), turn)
                         }
