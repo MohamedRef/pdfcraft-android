@@ -1395,6 +1395,7 @@
     <string name="pen_lab_group_tip">Punta</string>
     <string name="pen_lab_nib">Pennino piatto</string>
     <string name="pen_lab_nib_angle">Angolo del pennino (°)</string>
+    <string name="pen_lab_width_slope">Variazione di larghezza per pt</string>
     <string name="pen_lab_taper_start">Inizio a punta (larghezze della penna)</string>
     <string name="pen_lab_taper_end">Fine a punta (larghezze della penna)</string>
     <string name="pen_lab_damping">Smussatura della larghezza (ms)</string>
@@ -1555,6 +1556,7 @@
     <string name="ink_width_value">%1$.1f pt</string>
     <string name="ink_style_ballpoint">Biro</string>
     <string name="ink_style_fountain">Stilografica</string>
+    <string name="ink_style_calligraphy">Calligrafia</string>
     <string name="ink_style_pencil">Matita</string>
     <string name="ink_style_brush">Pennello</string>
     <string name="ink_style_highlighter">Evidenziatore</string>
@@ -1575,6 +1577,7 @@
     <string name="ink_toolbar_brush">Pennello</string>
     <string name="ink_toolbar_pencil">Matita</string>
     <string name="ink_toolbar_fountain">Stilo</string>
+    <string name="ink_toolbar_calligraphy">Calligrafia</string>
     <string name="ink_toolbar_ballpoint">Biro</string>
     <string name="ocr_review_title">Rivedi il testo riconosciuto</string>
     <string name="ocr_review_scope">Pagina corrente: %1$d</string>

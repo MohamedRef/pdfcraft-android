@@ -197,7 +197,7 @@ internal class InkStroke(
         // the last sample, when thinning had not made it a point yet
         thinner.flush()?.let { (q, scale, density) -> addPoint(q, scale, density) }
         val end = smoother?.end() ?: return
-        val scale = dynamics?.next(end, lastTimeMs, lastPressure, tiltAt(lastTimeMs)) ?: 1f
+        val scale = dynamics?.liftScale(end, lastTimeMs, lastPressure, tiltAt(lastTimeMs)) ?: 1f
         addPoint(end, scale, dynamics?.density ?: 1f)
     }
 
@@ -214,7 +214,31 @@ internal class InkStroke(
 
     /** Smoothed page-space paths, rebuilt only when this stroke's points change. */
     val paths = InkPathCache()
+
+    private var boundsKey: Any? = null
+    private var boundsBox: InkLassoBounds? = null
+
+    /**
+     * The box of this stroke's points (page points), kept until they change (#687): the eraser
+     * leaves a stroke it cannot reach without copying or walking its points. Null without points.
+     */
+    fun bounds(): InkLassoBounds? {
+        val key = Triple(points.size, points.firstOrNull(), points.lastOrNull())
+        if (key != boundsKey) {
+            boundsBox = inkLassoBounds(listOf(points.toList()))
+            boundsKey = key
+        }
+        return boundsBox
+    }
 }
+
+/**
+ * Whether the eraser moving from [a] to [b] cannot reach anything in [box] (#687): the box grown
+ * by [reach] (the eraser's radius and the widest half of the line) does not meet the segment's box.
+ */
+internal fun inkEraserMisses(box: InkLassoBounds, a: Offset, b: Offset, reach: Float): Boolean =
+    minOf(a.x, b.x) > box.right + reach || maxOf(a.x, b.x) < box.left - reach ||
+        minOf(a.y, b.y) > box.bottom + reach || maxOf(a.y, b.y) < box.top - reach
 
 /**
  * A new ink stroke (#569): a freehand stroke gets the pen model with [tuning]'s dials for its
@@ -1165,6 +1189,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         while (i < strokes.size) {
             val s = strokes[i]
             if (s.page != page) { i++; continue }
+            // far from the eraser: left without copying its points (#687); a line is at most 3 times its pen's width
+            val widest = inkStylePointWidths(listOf(3f), s.appearance.width, s.appearance.style).first() / 2f
+            val box = s.bounds()
+            if (box == null || inkEraserMisses(box, a, b, radius + widest)) { i++; continue }
             val pts = s.points.toList()
             val half = inkStylePointWidths(s.scales.toList(), s.appearance.width, s.appearance.style).map { it / 2f }
             val runs = eraseInkRun(pts, s.scales.toList(), half, a, b, radius)

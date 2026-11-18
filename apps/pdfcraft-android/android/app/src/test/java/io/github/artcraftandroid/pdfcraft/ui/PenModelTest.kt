@@ -121,7 +121,7 @@ class PenModelTest {
      * its width is still close to the ballpoint's and that pair is left out until then.
      */
     @Test fun everyPenOnTheSheetIsUnlikeEveryOther() {
-        val pens = listOf(InkStyle.Ballpoint, InkStyle.Fountain, InkStyle.Brush, InkStyle.Pencil)
+        val pens = listOf(InkStyle.Ballpoint, InkStyle.Fountain, InkStyle.Calligraphy, InkStyle.Brush, InkStyle.Pencil)
         val prints = pens.associateWith { style ->
             listOf(lightToHard, slowWord, fastWord, down, side).flatMap { stroke ->
                 val w = middle(widths(style, stroke))
@@ -327,6 +327,49 @@ class PenModelTest {
         val p = s.next(Offset(10f, 0f), 16L)
         assertTrue(p.x.isFinite() && p.y.isFinite())
         assertTrue(InkSmoother(Float.NaN).next(Offset(2f, 2f), 0L) == Offset(2f, 2f))
+    }
+
+    /** #678: a flat nib at 45° rising to the right is thick across it and thin along it. */
+    @Test fun theCalligraphyNibIsThickAcrossAndThinAlong() {
+        // page y points down: up and to the right runs along the nib, down and to the right across it
+        val along = line(Offset(0f, 80f), Offset(80f, 0f), 60, 8L, 0.6f, 0.6f)
+        val across = line(Offset(0f, 0f), Offset(80f, 80f), 60, 8L, 0.6f, 0.6f)
+        val a = quantile(middle(widths(InkStyle.Calligraphy, along)), 0.5f)!!
+        val c = quantile(middle(widths(InkStyle.Calligraphy, across)), 0.5f)!!
+        assertEquals("along $a, across $c", 0.2f, a / c, 0.03f)
+        // a downstroke and a sidestroke are both in between, and alike
+        val d = quantile(middle(widths(InkStyle.Calligraphy, down)), 0.5f)!!
+        val s = quantile(middle(widths(InkStyle.Calligraphy, side)), 0.5f)!!
+        assertEquals(d, s, d * 0.05f)
+        assertTrue("down $d between $a and $c", d > a * 2f && d < c * 0.9f)
+        // pressure moves it only a little
+        assertTrue(spread(middle(widths(InkStyle.Calligraphy, side.mapIndexed { i, x -> x.copy(pressure = 0.05f + 0.95f * i / side.lastIndex) }))) < 1.4f)
+    }
+
+    /**
+     * #678: where a stroke turns from along the nib to across it (a sharp "^" at an S Pen's 4 ms
+     * between samples), the calligraphy pen's width follows within about a pen width of travel;
+     * the other pens' bound on the width's change would spread the turn over twice as far.
+     */
+    @Test fun theCalligraphyWidthTurnsWithTheStroke() {
+        val n = 60
+        val up = List(n) { i -> S(Offset(i.toFloat() * 0.7f, (n - 1 - i) * 0.7f), i * 4L, 0.6f) }
+        val down = List(n) { i -> S(Offset((n - 1 + i) * 0.7f, i * 0.7f), (n - 1 + i) * 4L, 0.6f) }.drop(1)
+        val stroke = up + down
+        val step = 0.7f * kotlin.math.sqrt(2f)
+        fun travelToThick(dials: PenDials): Float {
+            val dyn = PenDynamics(dials, PressureSource.Pen, PressureRange(), penWidth)
+            val w = stroke.map { dyn.next(it.p, it.t, it.pressure) }
+            val thin = w[n - 5]
+            val thick = w.last()
+            val reached = (n - 1 until w.size).first { w[it] >= thin + 0.9f * (thick - thin) }
+            return (reached - (n - 1)) * step
+        }
+        val calligraphy = PenDials.default(InkStyle.Calligraphy)
+        val fast = travelToThick(calligraphy)
+        val bounded = travelToThick(calligraphy.copy(widthSlope = PenDials.default(InkStyle.Fountain).widthSlope))
+        assertTrue("$fast pt", fast <= penWidth * 1.25f)
+        assertTrue("$fast pt against $bounded pt", fast <= bounded * 0.6f)
     }
 
     @Test fun theNibIsAnEllipse() {

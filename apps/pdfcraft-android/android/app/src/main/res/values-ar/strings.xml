@@ -1148,6 +1148,7 @@
     <string name="pen_lab_group_tip">السن</string>
     <string name="pen_lab_nib">سن مسطّح</string>
     <string name="pen_lab_nib_angle">زاوية السن (°)</string>
+    <string name="pen_lab_width_slope">تغيّر العرض لكل نقطة</string>
     <string name="pen_lab_taper_start">بداية مدبّبة (بعرض القلم)</string>
     <string name="pen_lab_taper_end">نهاية مدبّبة (بعرض القلم)</string>
     <string name="pen_lab_damping">تنعيم العرض (مللي ثانية)</string>
@@ -1308,6 +1309,7 @@
     <string name="ink_width_value">%1$.1f نقطة</string>
     <string name="ink_style_ballpoint">قلم جاف</string>
     <string name="ink_style_fountain">قلم حبر</string>
+    <string name="ink_style_calligraphy">قلم خط</string>
     <string name="ink_style_pencil">قلم رصاص</string>
     <string name="ink_style_brush">فرشاة</string>
     <string name="ink_style_highlighter">قلم تمييز</string>
@@ -1328,6 +1330,7 @@
     <string name="ink_toolbar_brush">فرشاة</string>
     <string name="ink_toolbar_pencil">رصاص</string>
     <string name="ink_toolbar_fountain">حبر</string>
+    <string name="ink_toolbar_calligraphy">خط</string>
     <string name="ink_toolbar_ballpoint">جاف</string>
     <string name="ocr_review_title">راجع النص المتعرَّف عليه</string>
     <string name="ocr_review_scope">الصفحة الحالية: %1$d</string>

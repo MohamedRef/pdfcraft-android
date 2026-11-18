@@ -1413,6 +1413,7 @@
     <string name="pen_lab_group_tip">Punta</string>
     <string name="pen_lab_nib">Plumilla plana</string>
     <string name="pen_lab_nib_angle">Ángulo de la plumilla (°)</string>
+    <string name="pen_lab_width_slope">Cambio de grosor por pt</string>
     <string name="pen_lab_taper_start">Inicio en punta (anchos del lápiz)</string>
     <string name="pen_lab_taper_end">Final en punta (anchos del lápiz)</string>
     <string name="pen_lab_damping">Suavizado del ancho (ms)</string>
@@ -1573,6 +1574,7 @@
     <string name="ink_width_value">%1$.1f pt</string>
     <string name="ink_style_ballpoint">Bolígrafo</string>
     <string name="ink_style_fountain">Pluma</string>
+    <string name="ink_style_calligraphy">Caligrafía</string>
     <string name="ink_style_pencil">Lápiz</string>
     <string name="ink_style_brush">Pincel</string>
     <string name="ink_style_highlighter">Resaltador</string>
@@ -1593,6 +1595,7 @@
     <string name="ink_toolbar_brush">Pincel</string>
     <string name="ink_toolbar_pencil">Lápiz</string>
     <string name="ink_toolbar_fountain">Pluma</string>
+    <string name="ink_toolbar_calligraphy">Caligrafía</string>
     <string name="ink_toolbar_ballpoint">Boli</string>
     <string name="ocr_review_title">Revisar texto reconocido</string>
     <string name="ocr_review_scope">Página actual: %1$d</string>
