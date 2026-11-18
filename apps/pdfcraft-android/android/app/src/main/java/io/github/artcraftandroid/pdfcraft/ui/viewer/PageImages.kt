@@ -42,6 +42,27 @@ internal fun sameScale(had: Float, wanted: Float): Boolean = kotlin.math.abs(had
 /** A request: the key, and how to render it (page, scale, tile). */
 data class ImageRequest(val key: ImageKey, val scale: Float, val tile: TileRect?, val prefetch: Boolean = false)
 
+/** A stand-in image no longer in the cache (#685): its slot, its bytes, whether it is a tile and whether its slot is in view. */
+internal data class StandIn<K>(val slot: K, val bytes: Long, val tile: Boolean, val inView: Boolean)
+
+/**
+ * Which stand-ins to let go when the images held are [over] the budget by that many bytes (#685):
+ * those not in view, tiles first (each a small part of a page, rendered again when it is wanted),
+ * then whole pages, until enough is freed; never one in view, which stands in until its new image
+ * comes.
+ */
+internal fun <K> standInsToDrop(standIns: List<StandIn<K>>, over: Long): List<StandIn<K>> {
+    if (over <= 0L) return emptyList()
+    val out = ArrayList<StandIn<K>>()
+    var freed = 0L
+    for (s in standIns.filter { !it.inView }.sortedBy { if (it.tile) 0 else 1 }) {
+        if (freed >= over) break
+        out += s
+        freed += s.bytes
+    }
+    return out
+}
+
 /** Renders at least this long also report their size in the open timings (#236). */
 internal const val SLOW_RENDER_MS = 250L
 
@@ -178,13 +199,17 @@ class PageImages(
             // The layout changed under a cached image (fit each page to the width, #524; another
             // page mode or window size): its key is the same, its scale is not. It goes, so the page
             // renders sharp again; the old pixels stay as the fallback until then.
+            var dropped = false
             for (r in requests) {
                 val have = cache[r.key] ?: continue
                 if (!sameScale(have.scale, r.scale)) {
                     cache.remove(r.key)
                     bytes -= have.bytes
+                    dropped = true
                 }
             }
+            // what stood in for pages no longer in view counts now, and goes when over budget (#685)
+            if (dropped) evict()
             requests.maxOfOrNull { it.key.gen }?.let(failures::generationWanted)
             // #91: a tile the view stopped wanting stops drawing, so the workers get to the ones in
             // view sooner. Whole pages finish: they stand in while their page scrolls back.
@@ -207,6 +232,8 @@ class PageImages(
             cache.clear()
             failures.clear()
             bytes = 0
+            // the stand-ins are all that is held now; those out of view go when over budget (#685)
+            evict()
         }
         signal.trySend(Unit)
     }
@@ -387,15 +414,42 @@ class PageImages(
         }
     }
 
-    /** Drop least recently used images over budget, never the ones wanted now. */
+    /**
+     * The stand-ins whose image is no longer in the cache (#685): after [invalidate] or a rescale
+     * dropped it there, it is held for the stand-in alone, outside [bytes].
+     */
+    private fun orphanStandIns(): List<StandIn<Any>> {
+        val pages = wanted.filter { it.key.isBase }.mapTo(HashSet()) { it.key.page }
+        val tiles = wanted.filter { !it.key.isBase }.mapTo(HashSet()) { Triple(it.key.page, it.key.level, it.key.tile) }
+        val out = ArrayList<StandIn<Any>>()
+        // containsKey: a get would count as a use in the cache's order
+        for ((page, image) in fallback) if (!cache.containsKey(image.key)) out += StandIn<Any>(page, image.bytes.toLong(), false, page in pages)
+        for ((slot, image) in tileFallback) if (!cache.containsKey(image.key)) out += StandIn<Any>(slot, image.bytes.toLong(), true, slot in tiles)
+        return out
+    }
+
+    /**
+     * Drop images over budget: first the stand-ins no longer in the cache and not in view (#685),
+     * then the least recently used cached images, never the ones wanted now. The stand-ins left
+     * count in the budget too.
+     */
     private fun evict() {
-        if (bytes <= budgetBytes) return
+        val orphans = orphanStandIns()
+        var held = bytes.toLong() + orphans.sumOf { it.bytes }
+        if (held <= budgetBytes) return
+        for (s in standInsToDrop(orphans, held - budgetBytes)) {
+            @Suppress("UNCHECKED_CAST")
+            if (s.tile) tileFallback.remove(s.slot as Triple<Int, Int, Int>) else fallback.remove(s.slot as Int)
+            held -= s.bytes
+        }
+        if (held <= budgetBytes) return
         val keep = wanted.mapTo(HashSet()) { it.key }
         val it = cache.entries.iterator()
-        while (bytes > budgetBytes && it.hasNext()) {
+        while (held > budgetBytes && it.hasNext()) {
             val e = it.next()
             if (e.key in keep) continue
             bytes -= e.value.bytes
+            held -= e.value.bytes
             it.remove()
             if (fallback[e.key.page]?.key == e.key) fallback.remove(e.key.page)
             val slot = Triple(e.key.page, e.key.level, e.key.tile)
