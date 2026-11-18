@@ -283,8 +283,14 @@ impl Automation {
             "text_styles" => {
                 // The samples are the document's text, as text_lines is.
                 let doc = self.doc_to_copy(&a)?;
+                // Android adaptation (#723): page by page, each page told to the job watch
+                // (`reading`) with a stop between pages; a stop lists nothing.
+                let watch = self.job_watch.clone();
                 let styles: Vec<Value> = doc
-                    .text_styles()
+                    .text_styles_watched(|done, total| {
+                        watch.as_ref().is_none_or(|w| w(crate::JobStep { stage: "reading", done, total, fraction: Self::part(done, total), attempt: 1 }))
+                    })
+                    .ok_or_else(|| failed(pdfcraft_engine::EditError::Cancelled))?
                     .into_iter()
                     .map(|u| {
                         json!({

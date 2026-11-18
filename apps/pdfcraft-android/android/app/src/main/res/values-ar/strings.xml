@@ -1084,6 +1084,8 @@
     <string name="text_styles_scan">تحليل أنماط النص</string>
     <string name="text_styles_scope">قد تستغرق المستندات الكبيرة بعض الوقت.</string>
     <string name="text_styles_loading">جارٍ تحليل أنماط النص…</string>
+    <string name="text_styles_loading_page">جارٍ تحليل أنماط النص: الصفحة %1$d من %2$d…</string>
+    <string name="text_styles_stopped">التحليل وقف. حلّل تاني عشان تظهر الأنماط.</string>
     <string name="text_styles_failed">تعذّر تحليل أنماط النص. قد يكون المستند يمنع النسخ، أو تغيّر أثناء التحليل. حاول مرة أخرى.</string>
     <string name="text_styles_empty">لم يُعثر على أنماط نص. الصفحات التي تحتوي على صور فقط تحتاج إلى التعرّف على النص أولًا.</string>
     <string name="text_styles_description">%1$s، %2$s نقطة · %3$d سطر في %4$d صفحة</string>

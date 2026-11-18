@@ -127,4 +127,15 @@ class JobStepsTest {
         assertNull(textStylesLine("reading", 0, 0))
         assertNull(textStylesLine("something_new", 1, 4))
     }
+
+    /** #723: Analyze text styles counts the pages read for the styles from one. */
+    @Test
+    fun analyzeTextStylesCountsPagesFromOne() {
+        assertEquals(JobLine(R.string.text_styles_loading_page, listOf(1, 869)), stylesLine("reading", 0, 869))
+        assertEquals(JobLine(R.string.text_styles_loading_page, listOf(869, 869)), stylesLine("reading", 868, 869))
+        assertEquals(JobLine(R.string.text_styles_loading_page, listOf(869, 869)), stylesLine("reading", 869, 869))
+        // a document with no pages, or a step it does not know: the sheet's own line stays
+        assertNull(stylesLine("reading", 0, 0))
+        assertNull(stylesLine("something_new", 1, 4))
+    }
 }

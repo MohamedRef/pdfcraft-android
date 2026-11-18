@@ -115,48 +115,56 @@ fn page_lines(doc: &Document, page: usize) -> Vec<Line> {
     on_page
 }
 
-/// The text lines of `doc`'s first [`MAX_PAGES`] pages, each page's in reading order.
-fn lines(doc: &Document) -> Vec<Line> {
-    (0..pages_read(doc)).flat_map(|page| page_lines(doc, page)).collect()
-}
-
 /// The styles `doc`'s text is set in, the largest size first (then the most used): headings
 /// are usually larger than the text around them.
 pub fn styles(doc: &Document) -> Vec<TextStyleUse> {
+    styles_watched(doc, |_, _| true).unwrap_or_default()
+}
+
+/// Android adaptation (#723): [`styles`] read page by page, so a long book can say how far it is
+/// and stop. `step(done, pages)` is told before each page is read (`done` of the `pages` read);
+/// when it says `false` the reading stops and this gives `None`. [`styles`] is this never stopped.
+pub fn styles_watched(doc: &Document, mut step: impl FnMut(usize, usize) -> bool) -> Option<Vec<TextStyleUse>> {
     let mut uses: Vec<(TextStyleUse, Option<usize>)> = Vec::new();
     // The styles by font, weight, slant and size in quarter points, so a line is matched against
     // the few styles near its size rather than every style found (a page can hold thousands).
     // A size matches within a quarter point: the bucket's neighbours are looked at too.
     let mut index: std::collections::HashMap<(String, bool, bool, i64), Vec<usize>> = std::collections::HashMap::new();
     let bucket = |size: f64| (size / SIZE_TOLERANCE).floor() as i64;
-    for line in lines(doc) {
-        let key = |b: i64| (line.style.font.clone(), line.style.bold, line.style.italic, b);
-        let b = bucket(line.style.size);
-        let found = [b.saturating_sub(1), b, b.saturating_add(1)]
-            .into_iter()
-            .filter_map(|b| index.get(&key(b)))
-            .flatten()
-            .copied()
-            .find(|&i| uses.get(i).is_some_and(|(u, _)| u.style.matches(&line.style)));
-        match found.and_then(|i| uses.get_mut(i)) {
-            Some((u, last_page)) => {
-                u.lines = u.lines.saturating_add(1);
-                if *last_page != Some(line.page) {
-                    u.pages = u.pages.saturating_add(1);
-                    *last_page = Some(line.page);
+    let pages = pages_read(doc);
+    for page in 0..pages {
+        if !step(page, pages) {
+            return None;
+        }
+        for line in page_lines(doc, page) {
+            let key = |b: i64| (line.style.font.clone(), line.style.bold, line.style.italic, b);
+            let b = bucket(line.style.size);
+            let found = [b.saturating_sub(1), b, b.saturating_add(1)]
+                .into_iter()
+                .filter_map(|b| index.get(&key(b)))
+                .flatten()
+                .copied()
+                .find(|&i| uses.get(i).is_some_and(|(u, _)| u.style.matches(&line.style)));
+            match found.and_then(|i| uses.get_mut(i)) {
+                Some((u, last_page)) => {
+                    u.lines = u.lines.saturating_add(1);
+                    if *last_page != Some(line.page) {
+                        u.pages = u.pages.saturating_add(1);
+                        *last_page = Some(line.page);
+                    }
                 }
-            }
-            None => {
-                let sample = line.text.chars().take(SAMPLE_CHARS).collect();
-                index.entry(key(b)).or_default().push(uses.len());
-                uses.push((TextStyleUse { style: line.style, lines: 1, pages: 1, sample }, Some(line.page)));
+                None => {
+                    let sample = line.text.chars().take(SAMPLE_CHARS).collect();
+                    index.entry(key(b)).or_default().push(uses.len());
+                    uses.push((TextStyleUse { style: line.style, lines: 1, pages: 1, sample }, Some(line.page)));
+                }
             }
         }
     }
     let mut uses: Vec<TextStyleUse> = uses.into_iter().map(|(u, _)| u).collect();
     uses.sort_by(|a, b| b.style.size.total_cmp(&a.style.size).then(b.lines.cmp(&a.lines)));
     uses.truncate(MAX_STYLES);
-    uses
+    Some(uses)
 }
 
 /// Why `levels` can't make bookmarks, if they can't: none is chosen, or one style is chosen for

@@ -1341,6 +1341,8 @@
     <string name="text_styles_scan">Textstile analysieren</string>
     <string name="text_styles_scope">Große Dokumente können eine Weile dauern.</string>
     <string name="text_styles_loading">Textstile werden analysiert…</string>
+    <string name="text_styles_loading_page">Textstile werden analysiert: Seite %1$d von %2$d …</string>
+    <string name="text_styles_stopped">Analyse angehalten. Analysiere erneut, um die Stile aufzulisten.</string>
     <string name="text_styles_failed">Textstile konnten nicht analysiert werden. Das Dokument schränkt möglicherweise das Kopieren ein oder wurde während der Analyse geändert. Versuche es erneut.</string>
     <string name="text_styles_empty">Keine Textstile gefunden. Seiten, die nur aus Bildern bestehen, benötigen zuerst eine Texterkennung.</string>
     <string name="text_styles_description">%1$s, %2$s pt · %3$d Zeilen auf %4$d Seiten</string>

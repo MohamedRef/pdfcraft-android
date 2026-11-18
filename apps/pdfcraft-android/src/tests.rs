@@ -713,6 +713,34 @@ fn watched_style_bookmarks_count_the_pages_and_a_stop_changes_nothing() {
     assert!(s.document(doc).unwrap().undo.is_some());
 }
 
+/// #723: Analyze text styles through the watched call says each page it reads, and lists what
+/// the plain call lists. A stop lists nothing and changes nothing.
+#[test]
+fn watched_text_styles_count_the_pages_and_a_stop_lists_nothing() {
+    let s = MobileSession::new();
+    let doc = s.open(text_pdf("Heading\nBody text"), None).unwrap().id;
+    let before = s.document(doc).unwrap();
+    let args = json!({"doc": doc});
+    let steps = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let told = steps.clone();
+    let stop: pdfcraft_automation::JobWatch = std::sync::Arc::new(move |step: pdfcraft_automation::JobStep| {
+        told.lock().unwrap().push((step.stage, step.done, step.total));
+        false
+    });
+    let e = s.call_watched("text_styles", &args, Some(stop)).unwrap_err();
+    assert!(matches!(&e, MobileError::Command(m) if m.contains("cancelled")), "{e}");
+    assert_eq!(*steps.lock().unwrap(), [("reading", 0, 1)]);
+    assert_eq!(s.document(doc).unwrap().generation, before.generation);
+
+    let job = ToolJob::new();
+    let listed: Value = serde_json::from_str(&s.execute_watched("text_styles".into(), args.to_string(), job.clone()).unwrap()).unwrap();
+    let plain: Value = serde_json::from_str(&s.execute("text_styles".into(), args.to_string()).unwrap()).unwrap();
+    assert_eq!(listed, plain);
+    assert!(!listed["styles"].as_array().unwrap().is_empty());
+    let p = job.progress();
+    assert_eq!((p.stage.as_str(), p.done, p.total, p.steps), ("reading", 0, 1, 1), "{p:?}");
+}
+
 #[test]
 fn style_bookmarks_append_undo_and_survive_save_through_mobile_tools() {
     let s = MobileSession::new();

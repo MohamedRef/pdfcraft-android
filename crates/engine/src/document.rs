@@ -431,10 +431,20 @@ impl Document {
     /// styles (#1693).
     /// Empty when the document doesn't allow copying: the samples are its text.
     pub fn text_styles(&self) -> Vec<crate::text_style_bookmarks::TextStyleUse> {
+        self.text_styles_watched(|_, _| true).unwrap_or_default()
+    }
+
+    /// Android adaptation (#723): [`Self::text_styles`] read page by page, so a long book can say
+    /// how far it is and stop: `step(done, pages)` is told before each page, and `None` means it
+    /// said stop. Empty when the document doesn't allow copying: the samples are its text.
+    pub fn text_styles_watched(&self, step: impl FnMut(usize, usize) -> bool) -> Option<Vec<crate::text_style_bookmarks::TextStyleUse>> {
         if !self.allows_copying() {
-            return Vec::new();
+            return Some(Vec::new());
         }
-        self.editor.as_ref().map(|e| crate::text_style_bookmarks::styles(&e.cos)).unwrap_or_default()
+        match self.editor.as_ref() {
+            Some(e) => crate::text_style_bookmarks::styles_watched(&e.cos, step),
+            None => Some(Vec::new()),
+        }
     }
 
     /// Android adaptation (#652): the bookmarks [`Edit::BookmarksFromTextStyles`] makes for

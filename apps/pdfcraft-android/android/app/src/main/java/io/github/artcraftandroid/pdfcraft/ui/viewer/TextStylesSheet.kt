@@ -11,6 +11,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,13 +27,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.artcraftandroid.pdfcraft.R
+import io.github.artcraftandroid.pdfcraft.core.ToolJob
 import io.github.artcraftandroid.pdfcraft.engine.PdfTextStyle
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
+import io.github.artcraftandroid.pdfcraft.ui.JOB_WATCH_MS
+import io.github.artcraftandroid.pdfcraft.ui.JobLine
 import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
 import io.github.artcraftandroid.pdfcraft.ui.PdfSheet
 import io.github.artcraftandroid.pdfcraft.ui.SheetBackHeader
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
+import io.github.artcraftandroid.pdfcraft.ui.stylesLine
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Deliberately opt-in: text_styles can read the first 5,000 pages. No work on PDF opening. */
@@ -45,6 +51,13 @@ internal fun TextStylesSheet(vm: AppViewModel, doc: OpenDocument) {
     var loadedGeneration by remember(doc.id) { mutableStateOf<ULong?>(null) }
     var loading by remember(doc.id) { mutableStateOf(false) }
     var failed by remember(doc.id, generation) { mutableStateOf(false) }
+    // Analyze's run (#723): its job says the page being read, and Cancel, or the sheet closing,
+    // stops the engine at its next page.
+    var running by remember(doc.id) { mutableStateOf<ToolJob?>(null) }
+    var line by remember(doc.id) { mutableStateOf<JobLine?>(null) }
+    var stopAsked by remember(doc.id) { mutableStateOf(false) }
+    var stopped by remember(doc.id, generation) { mutableStateOf(false) }
+    DisposableEffect(doc.id) { onDispose { running?.cancel() } }
     // Changing generation invalidates the list and selection above. A running analysis also
     // compares its captured generation before publishing or enabling an edit.
     LaunchedEffect(doc.id, generation) { loadedGeneration = null }
@@ -61,12 +74,26 @@ internal fun TextStylesSheet(vm: AppViewModel, doc: OpenDocument) {
             scope.launch {
                 loading = true
                 failed = false
+                stopped = false
+                stopAsked = false
                 styles = null
                 selected = emptyList()
                 loadedGeneration = null
+                val job = ToolJob()
+                running = job
+                val watching = launch {
+                    while (true) {
+                        val p = job.progress()
+                        if (p.steps > 0uL) line = stylesLine(p.stage, p.done.toInt(), p.total.toInt())
+                        delay(JOB_WATCH_MS)
+                    }
+                }
+                val started = System.nanoTime()
+                var outcome = "failed"
                 try {
                     val engine = checkNotNull(vm.engine)
-                    val result = engine.tool("text_styles", mapOf("doc" to doc.id))
+                    val result = engine.tool("text_styles", mapOf("doc" to doc.id), job)
+                    outcome = "finished"
                     check(vm.document === doc && doc.info.generation == generation)
                     val rows = result.getJSONArray("styles")
                     // The pinned native engine already returns at most 200 styles.
@@ -77,10 +104,22 @@ internal fun TextStylesSheet(vm: AppViewModel, doc: OpenDocument) {
                     }
                     loadedGeneration = generation
                 } catch (e: CancellationException) {
+                    if (outcome != "finished") outcome = "stopped"
                     throw e
                 } catch (_: Exception) {
-                    failed = true
+                    if (outcome != "finished" && job.isCancelled()) {
+                        outcome = "stopped"
+                        stopped = true
+                    } else {
+                        failed = true
+                    }
                 } finally {
+                    watching.cancel()
+                    val p = job.progress()
+                    vm.jobEnd("text_styles", doc, outcome, started, doc.info.fileSize.toLong(), doc.pageCount,
+                        p.stage, p.done.toInt(), p.total.toInt(), p.percent.toInt())
+                    running = null
+                    line = null
                     loading = false
                 }
             }
@@ -91,7 +130,18 @@ internal fun TextStylesSheet(vm: AppViewModel, doc: OpenDocument) {
         }
         LazyColumn(Modifier.weight(1f)) {
             when {
-                loading -> item { Text(stringResource(R.string.text_styles_loading), modifier = Modifier.padding(18.dp)) }
+                loading -> item {
+                    Column(Modifier.padding(18.dp)) {
+                        Text(line?.let { stringResource(it.res, *it.args.toTypedArray()) } ?: stringResource(R.string.text_styles_loading))
+                        val job = running
+                        if (job != null) {
+                            TextButton(enabled = !stopAsked, onClick = { stopAsked = true; job.cancel() }) {
+                                Text(stringResource(if (stopAsked) R.string.busy_cancelling else R.string.common_cancel))
+                            }
+                        }
+                    }
+                }
+                stopped -> item { Text(stringResource(R.string.text_styles_stopped), modifier = Modifier.padding(18.dp)) }
                 failed -> item { Text(stringResource(R.string.text_styles_failed), modifier = Modifier.padding(18.dp)) }
                 styles?.isEmpty() == true -> item { Text(stringResource(R.string.text_styles_empty), modifier = Modifier.padding(18.dp)) }
                 else -> {
