@@ -75,44 +75,49 @@ fn without_subset_tag(name: &str) -> &str {
     }
 }
 
-/// The text lines of `doc`'s first [`MAX_PAGES`] pages, each page's in reading order. Text that
-/// is only whitespace, or whose size can't be read, is left out.
-fn lines(doc: &Document) -> Vec<Line> {
-    let pages = pdfcraft_organize::page_count(doc).unwrap_or(0).min(MAX_PAGES);
-    let mut out = Vec::new();
-    for page in 0..pages {
-        let Ok(found) = pdfcraft_edit::text_lines(doc, page) else { continue };
-        let mut on_page: Vec<Line> = found
-            .into_iter()
-            .filter_map(|l| {
-                let text = l.text.split_whitespace().collect::<Vec<_>>().join(" ");
-                // `size` is the size the line is shown at in user space (the `Tf` size times the
-                // text rendering matrix), so `1 Tf` with a 14× text matrix is 14.
-                let size = l.size;
-                let [x0, y0, x1, y1] = l.rect;
-                let ok = !text.is_empty() && size.is_finite() && size > 0.0 && [x0, y0, x1, y1].iter().all(|v| v.is_finite());
-                ok.then(|| Line {
-                    page,
-                    text,
-                    style: TextStyle {
-                        font: without_subset_tag(&l.base_font).to_string(),
-                        size: (size * 10.0).round() / 10.0,
-                        bold: l.bold,
-                        italic: l.italic,
-                    },
-                    top: y0.max(y1),
-                    bottom: y0.min(y1),
-                    left: x0.min(x1),
-                    right: x0.max(x1),
-                })
+/// How many pages are read: the first [`MAX_PAGES`].
+fn pages_read(doc: &Document) -> usize {
+    pdfcraft_organize::page_count(doc).unwrap_or(0).min(MAX_PAGES)
+}
+
+/// The text lines of page `page` (0-based) in reading order. Text that is only whitespace, or
+/// whose size can't be read, is left out; a page whose text can't be read has none.
+fn page_lines(doc: &Document, page: usize) -> Vec<Line> {
+    let Ok(found) = pdfcraft_edit::text_lines(doc, page) else { return Vec::new() };
+    let mut on_page: Vec<Line> = found
+        .into_iter()
+        .filter_map(|l| {
+            let text = l.text.split_whitespace().collect::<Vec<_>>().join(" ");
+            // `size` is the size the line is shown at in user space (the `Tf` size times the
+            // text rendering matrix), so `1 Tf` with a 14× text matrix is 14.
+            let size = l.size;
+            let [x0, y0, x1, y1] = l.rect;
+            let ok = !text.is_empty() && size.is_finite() && size > 0.0 && [x0, y0, x1, y1].iter().all(|v| v.is_finite());
+            ok.then(|| Line {
+                page,
+                text,
+                style: TextStyle {
+                    font: without_subset_tag(&l.base_font).to_string(),
+                    size: (size * 10.0).round() / 10.0,
+                    bold: l.bold,
+                    italic: l.italic,
+                },
+                top: y0.max(y1),
+                bottom: y0.min(y1),
+                left: x0.min(x1),
+                right: x0.max(x1),
             })
-            .collect();
-        // Down the page; along each row from the left. Boxes of one row differ by a fraction
-        // of a point, so rows are compared at a tenth of a point.
-        on_page.sort_by(|a, b| (b.top * 10.0).round().total_cmp(&(a.top * 10.0).round()).then(a.left.total_cmp(&b.left)));
-        out.extend(on_page);
-    }
-    out
+        })
+        .collect();
+    // Down the page; along each row from the left. Boxes of one row differ by a fraction
+    // of a point, so rows are compared at a tenth of a point.
+    on_page.sort_by(|a, b| (b.top * 10.0).round().total_cmp(&(a.top * 10.0).round()).then(a.left.total_cmp(&b.left)));
+    on_page
+}
+
+/// The text lines of `doc`'s first [`MAX_PAGES`] pages, each page's in reading order.
+fn lines(doc: &Document) -> Vec<Line> {
+    (0..pages_read(doc)).flat_map(|page| page_lines(doc, page)).collect()
 }
 
 /// The styles `doc`'s text is set in, the largest size first (then the most used): headings
@@ -154,54 +159,84 @@ pub fn styles(doc: &Document) -> Vec<TextStyleUse> {
     uses
 }
 
+/// Why `levels` can't make bookmarks, if they can't: none is chosen, or one style is chosen for
+/// two levels. Each line goes to the first level whose style it is in, so a style given again,
+/// or one within the size tolerance of an earlier level's, would leave its level empty.
+pub fn check_levels(levels: &[TextStyle]) -> Result<(), String> {
+    if levels.is_empty() {
+        return Err("choose a text style for at least one bookmark level".into());
+    }
+    for (i, a) in levels.iter().enumerate() {
+        if let Some(j) = levels.iter().skip(i.saturating_add(1)).position(|b| a.matches(b)) {
+            let (first, second) = (i.saturating_add(1), i.saturating_add(j).saturating_add(2));
+            return Err(format!("bookmark levels {first} and {second} have the same text style: choose a different one for each level"));
+        }
+    }
+    Ok(())
+}
+
 /// The bookmarks for the lines in `levels`' styles: a line in `levels[0]`'s style is a level-1
 /// bookmark, `levels[1]`'s a level-2 one under the level-1 bookmark before it, and so on. A
 /// heading set on several lines (one after another in the same style, close below each other)
 /// is one bookmark. Each goes to the top of its heading.
 pub fn headings(doc: &Document, levels: &[TextStyle]) -> Vec<OutlineEntry> {
+    headings_watched(doc, levels, |_, _| true).unwrap_or_default()
+}
+
+/// Android adaptation (#652): [`headings`] read page by page, so a long book can say how far it
+/// is and stop. `step(done, pages)` is told before each page is read (`done` of the `pages`
+/// read); when it says `false` the reading stops and this gives `None`. A heading never runs on
+/// to the next page, so the entries are those of [`headings`], which is this never stopped.
+pub fn headings_watched(doc: &Document, levels: &[TextStyle], mut step: impl FnMut(usize, usize) -> bool) -> Option<Vec<OutlineEntry>> {
+    let pages = pages_read(doc);
     let mut entries: Vec<OutlineEntry> = Vec::new();
     // The heading the previous line belonged to: its level, and the top, bottom, left and right
     // of its last line.
     let mut open: Option<(usize, f64, f64, f64, f64)> = None;
-    for line in lines(doc) {
-        let Some(level) = levels.iter().position(|s| s.matches(&line.style)) else {
-            open = None;
-            continue;
-        };
-        // A heading goes on to the next row down, close below its last line and under it. A line
-        // on the same row (two headings side by side), or in another column, is a heading of
-        // its own.
-        let continues = open.is_some_and(|(l, top, bottom, left, right)| {
-            let size = line.style.size;
-            let under = line.left < right && left < line.right;
-            l == level && line.top < top - size * 0.5 && bottom - line.top < size * 0.6 && under
-        }) && entries.last().is_some_and(|e| e.page == line.page);
-        if continues {
-            if let Some(e) = entries.last_mut()
-                && e.title.chars().count() < MAX_TITLE_CHARS
-            {
-                e.title.push(' ');
-                e.title.push_str(&line.text);
-                e.title = e.title.chars().take(MAX_TITLE_CHARS).collect();
-            }
-        } else {
-            if entries.len() >= MAX_BOOKMARKS {
-                break;
-            }
-            // The level counts from 1; the position in `levels` is at most its length, which a
-            // caller keeps small (a few levels), so it fits a u8.
-            let level = u8::try_from(level.saturating_add(1)).unwrap_or(u8::MAX);
-            entries.push(OutlineEntry {
-                level,
-                title: line.text.chars().take(MAX_TITLE_CHARS).collect(),
-                page: line.page,
-                element: None,
-                top: Some(line.top),
-            });
+    'pages: for page in 0..pages {
+        if !step(page, pages) {
+            return None;
         }
-        open = Some((level, line.top, line.bottom, line.left, line.right));
+        for line in page_lines(doc, page) {
+            let Some(level) = levels.iter().position(|s| s.matches(&line.style)) else {
+                open = None;
+                continue;
+            };
+            // A heading goes on to the next row down, close below its last line and under it. A
+            // line on the same row (two headings side by side), or in another column, is a
+            // heading of its own.
+            let continues = open.is_some_and(|(l, top, bottom, left, right)| {
+                let size = line.style.size;
+                let under = line.left < right && left < line.right;
+                l == level && line.top < top - size * 0.5 && bottom - line.top < size * 0.6 && under
+            }) && entries.last().is_some_and(|e| e.page == line.page);
+            if continues {
+                if let Some(e) = entries.last_mut()
+                    && e.title.chars().count() < MAX_TITLE_CHARS
+                {
+                    e.title.push(' ');
+                    e.title.push_str(&line.text);
+                    e.title = e.title.chars().take(MAX_TITLE_CHARS).collect();
+                }
+            } else {
+                if entries.len() >= MAX_BOOKMARKS {
+                    break 'pages;
+                }
+                // The level counts from 1; the position in `levels` is at most its length, which
+                // a caller keeps small (a few levels), so it fits a u8.
+                let level = u8::try_from(level.saturating_add(1)).unwrap_or(u8::MAX);
+                entries.push(OutlineEntry {
+                    level,
+                    title: line.text.chars().take(MAX_TITLE_CHARS).collect(),
+                    page: line.page,
+                    element: None,
+                    top: Some(line.top),
+                });
+            }
+            open = Some((level, line.top, line.bottom, line.left, line.right));
+        }
     }
-    entries
+    Some(entries)
 }
 
 #[cfg(test)]
