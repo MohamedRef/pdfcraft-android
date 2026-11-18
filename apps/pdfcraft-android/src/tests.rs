@@ -693,7 +693,7 @@ fn watched_style_bookmarks_count_the_pages_and_a_stop_changes_nothing() {
     let args = json!({"doc": doc, "levels": [level]});
     let steps = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let told = steps.clone();
-    let stop: pdfcraft_automation::JobWatch = std::sync::Arc::new(move |step| {
+    let stop: pdfcraft_automation::JobWatch = std::sync::Arc::new(move |step: pdfcraft_automation::JobStep| {
         told.lock().unwrap().push((step.stage, step.done, step.total));
         false
     });
