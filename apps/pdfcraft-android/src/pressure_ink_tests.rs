@@ -153,6 +153,42 @@ fn lasso_edits_many_comments_as_one_undo_step() {
     assert_eq!(s.document(doc).unwrap().generation, generation);
 }
 
+/// #689: the lasso's handles turn and scale saved comments about an anchor, in the view's
+/// coordinates (y down: a positive angle turns clockwise as seen), as one undo step.
+#[test]
+fn lasso_turns_and_resizes_many_comments_as_one_undo_step() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_letter(), None).unwrap().id;
+    s.execute("comment_add".into(), json!({"doc": doc, "page": 1, "type": "ink", "strokes": [[[100.0, 100.0], [200.0, 100.0]]]}).to_string()).unwrap();
+    s.execute("comment_add".into(), json!({"doc": doc, "page": 1, "type": "ink", "strokes": [[[100.0, 150.0], [200.0, 150.0]]]}).to_string()).unwrap();
+    let rects = |s: &MobileSession| s.comments(doc).unwrap().iter().map(|c| c.rect.clone()).collect::<Vec<_>>();
+    let before = rects(&s);
+    // a quarter turn clockwise about the first line's start, twice as big: it now runs down from there
+    let r: Value = serde_json::from_str(&s.execute("comments_edit_many".into(), json!({"doc": doc, "page": 1, "comments": [1, 2], "transform": [100.0, 100.0, 2.0, 90.0]}).to_string()).unwrap()).unwrap();
+    assert_eq!(r["changed"], 2);
+    let turned = rects(&s);
+    let first = &turned[0];
+    let (x0, y0, x1, y1) = (first[0].min(first[2]), first[1].min(first[3]), first[0].max(first[2]), first[1].max(first[3]));
+    assert!(x1 - x0 < 12.0 && (y1 - y0) > 195.0 && y0 > 90.0 && y0 < 101.0 && y1 > 299.0, "{first:?}");
+    // the second line, 50 pt below, turns to run down from (0, 100) to (0, 300)
+    let second = &turned[1];
+    let mid = (second[0] + second[2]) / 2.0;
+    assert!(mid.abs() < 1.0 && second[1].min(second[3]) < 101.0 && second[1].max(second[3]) > 299.0, "{second:?}");
+    s.execute("edit_undo".into(), json!({"doc": doc}).to_string()).unwrap();
+    assert_eq!(rects(&s), before, "one undo puts both back");
+    // a rectangle is scaled but not turned: the whole edit is refused and nothing changes
+    s.execute("comment_add".into(), json!({"doc": doc, "page": 1, "type": "rectangle", "rect": [300.0, 300.0, 400.0, 350.0]}).to_string()).unwrap();
+    let generation = s.document(doc).unwrap().generation;
+    assert!(s.execute("comments_edit_many".into(), json!({"doc": doc, "page": 1, "comments": [1, 3], "transform": [300.0, 300.0, 1.0, 30.0]}).to_string()).is_err());
+    assert_eq!(s.document(doc).unwrap().generation, generation);
+    s.execute("comments_edit_many".into(), json!({"doc": doc, "page": 1, "comments": [3], "transform": [300.0, 300.0, 0.5, 0.0]}).to_string()).unwrap();
+    let rect = s.comments(doc).unwrap()[2].rect.clone();
+    assert!(((rect[2] - rect[0]).abs() - 50.0).abs() < 0.5, "{rect:?}");
+    for bad in [json!([1, 2, 0.0, 0]), json!([1, 2, 1.0, 1.0e9]), json!([1, 2, 1.0])] {
+        assert!(s.execute("comments_edit_many".into(), json!({"doc": doc, "page": 1, "comments": [1], "transform": bad}).to_string()).is_err(), "{bad}");
+    }
+}
+
 /// A pencil stroke (#569) along y = [`Y`] from x=100 to x=300, 10 pt wide, at one ink `density`.
 fn pencil_stroke(s: &MobileSession, doc: u64, density: f64) -> Result<String, super::MobileError> {
     let points: Vec<Value> = (0..=20).map(|i| json!([100.0 + i as f64 * 10.0, Y as f64])).collect();

@@ -1007,15 +1007,26 @@ impl Automation {
             _ => return Err(ToolError::InvalidArgs("delete must be a boolean".into())),
         };
         let shift = a.nums::<2>("move")?;
+        // Android adaptation (#689): [anchor x, anchor y, scale, angle in degrees], in the view's
+        // coordinates (y down, so a positive angle turns clockwise as seen)
+        let transform = a.nums::<4>("transform")?;
         let color = a.opt_str("color")?.map(parse_color).transpose()?;
-        if [delete, shift.is_some(), color.is_some()].iter().filter(|x| **x).count() != 1 {
-            return Err(ToolError::InvalidArgs("give exactly one of move, color or delete".into()));
+        if [delete, shift.is_some(), color.is_some(), transform.is_some()].iter().filter(|x| **x).count() != 1 {
+            return Err(ToolError::InvalidArgs("give exactly one of move, transform, color or delete".into()));
         }
         if indices.is_empty() {
             return Ok(json!({ "changed": 0, "skipped": skipped }));
         }
         let changed = indices.len();
-        let (label, edits): (&str, Vec<Edit>) = if delete {
+        let (label, edits): (&str, Vec<Edit>) = if let Some([x, y, scale, angle]) = transform {
+            if !(x.is_finite() && y.is_finite() && angle.is_finite()) || !(0.02..=50.0).contains(&scale) || angle.abs() > 3600.0 {
+                return Err(ToolError::InvalidArgs("transform must be an anchor, a scale from 0.02 to 50 and an angle in degrees".into()));
+            }
+            // the view's y points down and user space's up: a turn as seen is the other way round there
+            let anchor = to_user(&info, x, y);
+            let label = if angle != 0.0 { "Turn comments" } else { "Resize comments" };
+            (label, indices.into_iter().map(|index| Edit::TransformAnnotation { page, index, anchor, scale, angle: -angle }).collect())
+        } else if delete {
             ("Delete comments", indices.into_iter().map(|index| Edit::DeleteAnnotation { page, index }).collect())
         } else if let Some([dx, dy]) = shift {
             if !(dx.is_finite() && dy.is_finite()) || dx.abs() > 20_000.0 || dy.abs() > 20_000.0 {
