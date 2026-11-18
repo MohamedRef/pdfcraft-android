@@ -7,7 +7,7 @@
     <string name="scan_camera_light">Luz</string>
     <string name="scan_camera_grid">Cuadrícula</string>
     <string name="scan_camera_more">Más opciones</string>
-    <string name="scan_camera_use_phone_app">Usar la app de cámara del teléfono</string>
+    <string name="scan_camera_use_phone_app">Usar la app de cámara del dispositivo</string>
     <string name="scan_camera_import_short">Importar</string>
     <string name="scan_camera_open_pages">Abrir el escaneo. Páginas: %1$d</string>
     <string name="scan_camera_done_short">Listo</string>

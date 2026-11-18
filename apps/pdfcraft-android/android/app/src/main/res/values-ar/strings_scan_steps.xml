@@ -7,7 +7,7 @@
     <string name="scan_camera_light">الإضاءة</string>
     <string name="scan_camera_grid">الشبكة</string>
     <string name="scan_camera_more">خيارات أخرى</string>
-    <string name="scan_camera_use_phone_app">استخدام تطبيق الكاميرا في الهاتف</string>
+    <string name="scan_camera_use_phone_app">استخدام تطبيق الكاميرا في الجهاز</string>
     <string name="scan_camera_import_short">استيراد</string>
     <string name="scan_camera_open_pages">فتح المسح. الصفحات: %1$d</string>
     <string name="scan_camera_done_short">تم</string>

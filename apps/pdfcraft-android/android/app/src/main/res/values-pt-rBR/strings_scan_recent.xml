@@ -12,7 +12,7 @@
     <string name="scan_recent_delete_title">Excluir esta digitalização?</string>
     <string name="scan_recent_delete_body">As fotos dela são removidas do app. O PDF salvo continua.</string>
     <string name="settings_scan_recent">Manter digitalizações recentes para editar</string>
-    <string name="settings_scan_recent_body">As últimas 10 digitalizações salvas mantêm as fotos no app para você alterar bordas e aparência depois. As fotos ficam neste telefone até você excluí-las.</string>
+    <string name="settings_scan_recent_body">As últimas 10 digitalizações salvas mantêm as fotos no app para você alterar bordas e aparência depois. As fotos ficam neste dispositivo até você excluí-las.</string>
     <string name="settings_scan_recent_delete">Excluir digitalizações recentes</string>
     <string name="settings_scan_recent_none">Nenhuma digitalização recente</string>
     <plurals name="scan_recent_missing">

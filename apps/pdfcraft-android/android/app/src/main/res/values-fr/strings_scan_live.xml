@@ -5,7 +5,7 @@
     <string name="scan_live_light">Il faut plus de lumière</string>
     <string name="scan_live_fit">Cadrez toute la page</string>
     <string name="scan_live_closer">Rapprochez-vous</string>
-    <string name="scan_live_flatter">Tenez le téléphone plus à plat au-dessus de la page</string>
+    <string name="scan_live_flatter">Tenez l’appareil plus à plat au-dessus de la page</string>
     <string name="scan_live_still">Ne bougez plus</string>
     <string name="scan_live_ready">Prêt</string>
     <string name="scan_live_setting">Contour de la page dans l\'appareil photo</string>

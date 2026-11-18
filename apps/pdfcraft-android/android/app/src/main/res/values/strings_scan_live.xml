@@ -5,7 +5,7 @@
     <string name="scan_live_light">More light needed</string>
     <string name="scan_live_fit">Fit the whole page in the frame</string>
     <string name="scan_live_closer">Move closer</string>
-    <string name="scan_live_flatter">Hold the phone flatter over the page</string>
+    <string name="scan_live_flatter">Hold the device flatter over the page</string>
     <string name="scan_live_still">Hold still</string>
     <string name="scan_live_ready">Ready</string>
     <string name="scan_live_setting">Page outline in the camera</string>

@@ -74,7 +74,7 @@
     <string name="home_clear_recent">مسح الأخيرة</string>
     <string name="home_sort_by_name">ترتيب حسب الاسم</string>
     <string name="home_sort_by_date">ترتيب حسب التاريخ</string>
-    <string name="home_other_files">ملفات أخرى على هذا الهاتف</string>
+    <string name="home_other_files">ملفات أخرى على هذا الجهاز</string>
     <string name="home_open_file">فتح ملف</string>
     <string name="home_new_scan">مسح ضوئي جديد</string>
     <string name="home_no_recent_title">لا توجد ملفات أخيرة</string>
@@ -111,7 +111,7 @@
         <item quantity="many">حذف %1$d ملفًا؟</item>
         <item quantity="other">حذف %1$d ملف؟</item>
     </plurals>
-    <string name="home_delete_files_body">ستُحذف من هذا الهاتف.</string>
+    <string name="home_delete_files_body">ستُحذف من هذا الجهاز.</string>
     <string name="home_clear_recent_title">مسح الملفات الأخيرة؟</string>
     <string name="home_clear_recent_body">ستُمسح قائمة الملفات الأخيرة. ستبقى الملفات نفسها في أماكنها.</string>
     <string name="home_export_as">تصدير بصيغة…</string>
@@ -149,7 +149,7 @@
     <string name="home_about_export">حفظ PDF كمستند أو جدول بيانات أو شرائح أو صور</string>
     <string name="home_about_protect">حماية ملف PDF بكلمة مرور</string>
     <string name="home_search_your_files">ابحث في ملفاتك</string>
-    <string name="home_search_empty_body">ابحث عن ملفات PDF على هذا الهاتف بالاسم.</string>
+    <string name="home_search_empty_body">ابحث عن ملفات PDF على هذا الجهاز بالاسم.</string>
     <string name="home_recent_searches">عمليات البحث الأخيرة</string>
     <string name="home_remove_search">إزالة %1$s</string>
     <plurals name="home_search_results">
@@ -396,7 +396,7 @@
     <string name="viewer_add_text">إضافة نص</string>
     <string name="viewer_reading_hint">باعد بين إصبعين أو اضغط مرتين لتكبير النص.</string>
     <string name="viewer_reading_no_text">لا يوجد نص في هذه الصفحة لإعادة تنسيقه.</string>
-    <string name="read_aloud_no_voice">تتطلب القراءة بصوت عالٍ تثبيت صوت لتحويل النص إلى كلام على هذا الهاتف.</string>
+    <string name="read_aloud_no_voice">تتطلب القراءة بصوت عالٍ تثبيت صوت لتحويل النص إلى كلام على هذا الجهاز.</string>
     <string name="read_aloud_open_player">فتح المشغّل</string>
     <string name="read_aloud_close_player">إغلاق المشغّل</string>
     <string name="read_aloud_read_again">قراءة مجددًا</string>
@@ -973,7 +973,7 @@
     <string name="files_location_another_app">تطبيق آخر</string>
     <string name="files_folder_unnamed">مجلد</string>
     <string name="files_bookmark_page">الصفحة %1$d</string>
-    <string name="main_error_no_app">لا يوجد تطبيق على هذا الهاتف لتنفيذ هذا الإجراء.</string>
+    <string name="main_error_no_app">لا يوجد تطبيق على هذا الجهاز لتنفيذ هذا الإجراء.</string>
     <string name="main_error_not_allowed">لم يسمح Android بهذا الإجراء.</string>
     <string name="main_error_print_not_allowed">لا يُسمح بطباعة هذا المستند.</string>
     <string name="service_notification_reading">جارٍ القراءة بصوت عالٍ</string>
@@ -1350,7 +1350,7 @@
     <string name="ocr_review_empty">لم يُعثر على كلمات في هذه الصفحة.</string>
     <string name="ocr_review_limited">عرض حتى %1$d كلمة، مع الكلمات غير المؤكدة أولًا.</string>
     <string name="ocr_review_unknown">غير معروف</string>
-    <string name="updater_other_build">التحديثات داخل التطبيق مخصصة فقط للإصدار الرسمي لهواتف ARM64. حدّث هذه النسخة من المكان الذي ثبّتها منه.</string>
+    <string name="updater_other_build">التحديثات داخل التطبيق مخصصة فقط للإصدار الرسمي لأجهزة ARM64. حدّث هذه النسخة من المكان الذي ثبّتها منه.</string>
     <string name="msg_busy_recognizing_page">التعرّف على النص: الصفحة %1$d من %2$d…</string>
     <string name="busy_cancelling">جارٍ الإيقاف…</string>
     <string name="busy_cancel_keeps">يتوقف الإلغاء بعد الصفحة الحالية. تحتفظ الصفحات المقروءة بنصها.</string>
@@ -1413,7 +1413,7 @@
     <string name="updater_err_wrong_build">الملف الذي نُزّل ليس تحديث PdfCraft المتوقع.</string>
     <string name="updater_err_certificate">التحديث الذي نُزّل غير موقّع من PdfCraft، لذلك لا يمكنه استبدال التطبيق المثبّت.</string>
     <string name="updater_err_android_version">يتطلب هذا التحديث إصدارًا أحدث من Android.</string>
-    <string name="updater_err_abi">هذا التحديث غير مخصص لمعالج هاتفك.</string>
+    <string name="updater_err_abi">هذا التحديث غير مخصص لمعالج جهازك.</string>
     <string name="updater_err_storage">تعذّر حفظ التحديث على هذا الجهاز. وفّر بعض المساحة وحاول مرة أخرى.</string>
     <string name="updater_err_untrusted">رابط التحديث ليس من إصدارات GitHub الرسمية لـ PdfCraft، لذلك تم رفضه.</string>
     <string name="updater_err_server">أرسل خادم التنزيل ردًا غير متوقع. حاول لاحقًا أو نزّل من المتصفح.</string>
@@ -1713,7 +1713,7 @@
     <string name="focus_work_started">رجوع للتركيز</string>
     <string name="study_section">إحصائيات المذاكرة</string>
     <string name="study_clear_stats">حذف إحصائيات المذاكرة</string>
-    <string name="study_stats_body">وقت القراءة بيتحسب بس والمستند مفتوح قدامك ولمست الشاشة في آخر دقيقتين. في الرئيسية، «كمّل مذاكرة» بيحسب مستندات المذاكرة بس. بيفضل على الموبايل ده بس.</string>
+    <string name="study_stats_body">وقت القراءة بيتحسب بس والمستند مفتوح قدامك ولمست الشاشة في آخر دقيقتين. في الرئيسية، «كمّل مذاكرة» بيحسب مستندات المذاكرة بس. بيفضل على الجهاز ده بس.</string>
     <string name="study_stats_cleared">تم حذف إحصائيات المذاكرة</string>
     <string name="study_continue">كمّل مذاكرة</string>
     <string name="study_week_minutes">الأسبوع ده %1$d س %2$d د</string>
@@ -1738,7 +1738,7 @@
     <string name="library_delete_collection">حذف المجموعة</string>
     <string name="library_delete_collection_body">المجموعة والمجموعات اللي جواها هتتحذف. الملفات نفسها مش هتتحذف.</string>
     <string name="library_index_switch">البحث داخل المستندات</string>
-    <string name="library_index_body">بيعمل فهرس بحث لنصوص وعلامات وتعليقات ملفات المكتبة، ملف ملف والمستندات مقفولة، ومش تحت 20% بطارية إلا وهو بيشحن. بيفضل على الموبايل ده بس.</string>
+    <string name="library_index_body">بيعمل فهرس بحث لنصوص وعلامات وتعليقات ملفات المكتبة، ملف ملف والمستندات مقفولة، ومش تحت 20% بطارية إلا وهو بيشحن. بيفضل على الجهاز ده بس.</string>
     <string name="library_wipe_index">حذف فهرس البحث</string>
     <string name="library_index_wiped">تم حذف فهرس البحث</string>
     <string name="library_unavailable">غير متاح: الملف اتنقل أو الصلاحية اتشالت</string>
@@ -2040,7 +2040,7 @@
     <string name="lecture_back_10">رجوع 10 ثوانٍ</string>
     <string name="lecture_forward_10">تقديم 10 ثوانٍ</string>
     <string name="lecture_close_player">إغلاق مشغّل المحاضرة</string>
-    <string name="lecture_body">أثناء التسجيل، كل تعليق تكتبه يتذكّر وقته. شغّل التسجيل واضغط على تعليق لتسمع ما قيل وأنت تكتبه. تبقى التسجيلات على هذا الهاتف داخل PdfCraft.</string>
+    <string name="lecture_body">أثناء التسجيل، كل تعليق تكتبه يتذكّر وقته. شغّل التسجيل واضغط على تعليق لتسمع ما قيل وأنت تكتبه. تبقى التسجيلات على هذا الجهاز داخل PdfCraft.</string>
     <string name="lecture_delete_title">حذف هذا التسجيل؟</string>
     <string name="lecture_needs_saved">احفظ هذا المستند أولًا لتسجّل بجانبه</string>
     <string name="lecture_cannot_record">تعذّر إجراء التسجيل</string>

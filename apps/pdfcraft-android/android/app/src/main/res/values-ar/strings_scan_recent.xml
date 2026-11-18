@@ -12,7 +12,7 @@
     <string name="scan_recent_delete_title">حذف هذا السكان؟</string>
     <string name="scan_recent_delete_body">ستُحذف صوره من التطبيق. ملف PDF الذي حفظته يبقى كما هو.</string>
     <string name="settings_scan_recent">الاحتفاظ بالسكانات الأخيرة لتعديلها</string>
-    <string name="settings_scan_recent_body">آخر ١٠ سكانات تحفظها تبقى صورها في التطبيق لتعدّل حوافها وشكلها لاحقًا. تبقى الصور على هذا الهاتف حتى تحذفها.</string>
+    <string name="settings_scan_recent_body">آخر ١٠ سكانات تحفظها تبقى صورها في التطبيق لتعدّل حوافها وشكلها لاحقًا. تبقى الصور على هذا الجهاز حتى تحذفها.</string>
     <string name="settings_scan_recent_delete">حذف السكانات الأخيرة</string>
     <string name="settings_scan_recent_none">لا توجد سكانات أخيرة</string>
     <plurals name="scan_recent_missing">

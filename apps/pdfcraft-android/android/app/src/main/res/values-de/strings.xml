@@ -78,7 +78,7 @@
     <string name="home_clear_recent">Zuletzt verwendete löschen</string>
     <string name="home_sort_by_name">Nach Namen sortieren</string>
     <string name="home_sort_by_date">Nach Datum sortieren</string>
-    <string name="home_other_files">Weitere Dateien auf diesem Smartphone</string>
+    <string name="home_other_files">Weitere Dateien auf diesem Gerät</string>
     <string name="home_open_file">Datei öffnen</string>
     <string name="home_new_scan">Neuer Scan</string>
 
@@ -117,7 +117,7 @@
         <item quantity="one">%d Datei löschen?</item>
         <item quantity="other">%d Dateien löschen?</item>
     </plurals>
-    <string name="home_delete_files_body">Sie werden von diesem Smartphone entfernt.</string>
+    <string name="home_delete_files_body">Sie werden von diesem Gerät entfernt.</string>
     <string name="home_clear_recent_title">Zuletzt verwendete Dateien löschen?</string>
     <string name="home_clear_recent_body">Die Liste der zuletzt verwendeten Dateien wird geleert. Die Dateien selbst bleiben an ihrem Speicherort.</string>
 
@@ -177,7 +177,7 @@
 
     <!-- Search tab -->
     <string name="home_search_your_files">Dateien durchsuchen</string>
-    <string name="home_search_empty_body">PDFs auf diesem Smartphone anhand ihres Namens finden.</string>
+    <string name="home_search_empty_body">PDFs auf diesem Gerät anhand ihres Namens finden.</string>
     <string name="home_recent_searches">Letzte Suchanfragen</string>
     <!-- Accessibility label; %1$s is a past search -->
     <string name="home_remove_search">%1$s entfernen</string>
@@ -477,7 +477,7 @@
     <string name="viewer_reading_no_text">Auf dieser Seite gibt es keinen Text, der neu umbrochen werden kann.</string>
 
     <!-- Read Aloud: the player -->
-    <string name="read_aloud_no_voice">Zum Vorlesen wird eine Text-in-Sprache-Stimme auf diesem Smartphone benötigt.</string>
+    <string name="read_aloud_no_voice">Zum Vorlesen wird eine Text-in-Sprache-Stimme auf diesem Gerät benötigt.</string>
     <string name="read_aloud_open_player">Player öffnen</string>
     <string name="read_aloud_close_player">Player schließen</string>
     <string name="read_aloud_read_again">Erneut vorlesen</string>
@@ -1176,7 +1176,7 @@
     <string name="files_bookmark_page">Seite %1$d</string>
 
     <!-- Main: messages when Android can't do what was asked -->
-    <string name="main_error_no_app">Auf diesem Smartphone ist keine App verfügbar, die das ausführen kann.</string>
+    <string name="main_error_no_app">Auf diesem Gerät ist keine App verfügbar, die das ausführen kann.</string>
     <string name="main_error_not_allowed">Android hat dies nicht zugelassen.</string>
     <string name="main_error_print_not_allowed">Das Drucken ist für dieses Dokument nicht zulässig.</string>
 
@@ -1611,7 +1611,7 @@
     <string name="comments_loading">Kommentare werden geladen…</string>
     <string name="compact_previews">Weniger Speicher für Seitenvorschauen verwenden</string>
     <string name="compact_previews_body">Verringert die Farbgenauigkeit ganzer Seiten. Vergrößerte Details behalten die volle Qualität. Gilt beim erneuten Öffnen eines Dokuments.</string>
-    <string name="updater_other_build">Updates in der App gibt es nur für die offizielle Version für ARM64-Telefone. Aktualisiere diese Kopie dort, wo du sie installiert hast.</string>
+    <string name="updater_other_build">Updates in der App gibt es nur für die offizielle Version für ARM64-Geräte. Aktualisiere diese Kopie dort, wo du sie installiert hast.</string>
     <string name="viewer_read_only_notice">Änderungen können nicht im Original gespeichert werden. Sie bleiben in PdfCraft, bis du eine Kopie speicherst.</string>
     <string name="root_keep_editing">Weiter bearbeiten</string>
     <string name="root_discard_title">Änderungen an %1$s verwerfen?</string>
@@ -1700,7 +1700,7 @@
     <string name="updater_err_wrong_build">Die heruntergeladene Datei ist nicht das erwartete PdfCraft-Update.</string>
     <string name="updater_err_certificate">Das heruntergeladene Update ist nicht von PdfCraft signiert und kann die installierte App daher nicht ersetzen.</string>
     <string name="updater_err_android_version">Für dieses Update ist eine neuere Android-Version erforderlich.</string>
-    <string name="updater_err_abi">Dieses Update ist nicht für den Prozessor deines Telefons gebaut.</string>
+    <string name="updater_err_abi">Dieses Update ist nicht für den Prozessor deines Geräts gebaut.</string>
     <string name="updater_err_storage">Das Update konnte auf diesem Gerät nicht gespeichert werden. Gib Speicherplatz frei und versuche es erneut.</string>
     <string name="updater_err_untrusted">Der Update-Link stammt nicht aus den offiziellen GitHub-Releases von PdfCraft und wurde abgelehnt.</string>
     <string name="updater_err_server">Der Download-Server hat unerwartet geantwortet. Versuche es später erneut oder lade im Browser herunter.</string>
@@ -1921,7 +1921,7 @@
     <string name="focus_work_started">Zurück zum Fokus</string>
     <string name="study_section">Lernstatistik</string>
     <string name="study_clear_stats">Lernstatistik löschen</string>
-    <string name="study_stats_body">Lesezeit zählt nur, solange ein Dokument im Vordergrund geöffnet ist und Sie in den letzten 2 Minuten den Bildschirm berührt haben. Auf der Startseite zählt „Weiterlernen“ nur Dokumente in Lernen. Sie bleibt auf diesem Telefon.</string>
+    <string name="study_stats_body">Lesezeit zählt nur, solange ein Dokument im Vordergrund geöffnet ist und Sie in den letzten 2 Minuten den Bildschirm berührt haben. Auf der Startseite zählt „Weiterlernen“ nur Dokumente in Lernen. Sie bleibt auf diesem Gerät.</string>
     <string name="study_stats_cleared">Lernstatistik gelöscht</string>
     <string name="study_continue">Weiterlernen</string>
     <string name="study_week_minutes">Diese Woche %1$d h %2$d min</string>
@@ -1946,7 +1946,7 @@
     <string name="library_delete_collection">Sammlung löschen</string>
     <string name="library_delete_collection_body">Die Sammlung und die Sammlungen darin werden gelöscht. Die Dateien werden nicht gelöscht.</string>
     <string name="library_index_switch">In Dokumenten suchen</string>
-    <string name="library_index_body">Erstellt einen Suchindex aus Text, Lesezeichen und Kommentaren der Bibliotheksdateien, eine nach der anderen, während kein Dokument geöffnet ist, und nicht unter 20% Akku außer beim Laden. Er bleibt auf diesem Telefon.</string>
+    <string name="library_index_body">Erstellt einen Suchindex aus Text, Lesezeichen und Kommentaren der Bibliotheksdateien, eine nach der anderen, während kein Dokument geöffnet ist, und nicht unter 20% Akku außer beim Laden. Er bleibt auf diesem Gerät.</string>
     <string name="library_wipe_index">Suchindex löschen</string>
     <string name="library_index_wiped">Suchindex gelöscht</string>
     <string name="library_unavailable">Nicht verfügbar: Datei verschoben oder Zugriff entzogen</string>
@@ -2083,7 +2083,7 @@
     <string name="lecture_back_10">10 Sekunden zurück</string>
     <string name="lecture_forward_10">10 Sekunden vor</string>
     <string name="lecture_close_player">Vorlesungsplayer schließen</string>
-    <string name="lecture_body">Während der Aufnahme merkt sich jeder Kommentar, wann er geschrieben wurde. Spiele eine Aufnahme ab und tippe auf einen Kommentar, um zu hören, was dabei gesagt wurde. Aufnahmen bleiben auf diesem Telefon, in PdfCraft.</string>
+    <string name="lecture_body">Während der Aufnahme merkt sich jeder Kommentar, wann er geschrieben wurde. Spiele eine Aufnahme ab und tippe auf einen Kommentar, um zu hören, was dabei gesagt wurde. Aufnahmen bleiben auf diesem Gerät, in PdfCraft.</string>
     <string name="lecture_delete_title">Diese Aufnahme löschen?</string>
     <string name="lecture_needs_saved">Speichere dieses Dokument zuerst, um dazu aufzunehmen</string>
     <string name="lecture_cannot_record">Die Aufnahme konnte nicht erstellt werden</string>

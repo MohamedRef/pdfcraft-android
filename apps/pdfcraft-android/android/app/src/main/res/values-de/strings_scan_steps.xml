@@ -7,7 +7,7 @@
     <string name="scan_camera_light">Licht</string>
     <string name="scan_camera_grid">Raster</string>
     <string name="scan_camera_more">Weitere Optionen</string>
-    <string name="scan_camera_use_phone_app">Kamera-App des Telefons verwenden</string>
+    <string name="scan_camera_use_phone_app">Kamera-App des Geräts verwenden</string>
     <string name="scan_camera_import_short">Importieren</string>
     <string name="scan_camera_open_pages">Scan öffnen. Seiten: %1$d</string>
     <string name="scan_camera_done_short">Fertig</string>

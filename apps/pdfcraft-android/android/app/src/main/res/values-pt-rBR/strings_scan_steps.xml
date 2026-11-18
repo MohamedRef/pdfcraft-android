@@ -7,7 +7,7 @@
     <string name="scan_camera_light">Luz</string>
     <string name="scan_camera_grid">Grade</string>
     <string name="scan_camera_more">Mais opções</string>
-    <string name="scan_camera_use_phone_app">Usar o app de câmera do celular</string>
+    <string name="scan_camera_use_phone_app">Usar o app de câmera do dispositivo</string>
     <string name="scan_camera_import_short">Importar</string>
     <string name="scan_camera_open_pages">Abrir a digitalização. Páginas: %1$d</string>
     <string name="scan_camera_done_short">Concluir</string>

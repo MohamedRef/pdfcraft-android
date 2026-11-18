@@ -48,6 +48,17 @@ class CopyConsistencyTest {
         assertEquals(emptyList<String>(), long)
     }
 
+    /**
+     * The device is "this device", not "this phone" (#720): PdfCraft runs on tablets too, where the
+     * Library said "It stays on this phone" and Search "Find PDFs on this phone". "Phone" stays where
+     * it means a phone: a phone number, a layout for phones.
+     */
+    @Test
+    fun englishCallsTheDeviceADevice() {
+        val phone = Regex("(?i)\\b(this|your|the) phone\\b|\\bphone's\\b|\\bARM64 phones\\b")
+        assertEquals(emptyList<String>(), english().filter { phone.containsMatchIn(it.second) }.map { "${it.first}: ${it.second}" })
+    }
+
     /** Names that are capitalized on purpose: the app, keys, formats and abbreviations. */
     private val titleCaseOnPurpose = setOf(
         "app_name", "home_sort_name_az", "home_sort_name_za", "home_about_app", "home_leaving_title", "key_page_up",

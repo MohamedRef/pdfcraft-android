@@ -61,7 +61,7 @@
     <string name="home_clear_recent">Limpar recentes</string>
     <string name="home_sort_by_name">Ordenar por nome</string>
     <string name="home_sort_by_date">Ordenar por data</string>
-    <string name="home_other_files">Outros arquivos neste celular</string>
+    <string name="home_other_files">Outros arquivos neste dispositivo</string>
     <string name="home_open_file">Abrir arquivo</string>
     <string name="home_new_scan">Nova digitalização</string>
     <string name="home_no_recent_title">Nenhum arquivo recente</string>
@@ -90,7 +90,7 @@
         <item quantity="one">Excluir %d arquivo?</item>
         <item quantity="other">Excluir %d arquivos?</item>
     </plurals>
-    <string name="home_delete_files_body">Eles serão removidos deste celular.</string>
+    <string name="home_delete_files_body">Eles serão removidos deste dispositivo.</string>
     <string name="home_clear_recent_title">Limpar arquivos recentes?</string>
     <string name="home_clear_recent_body">A lista de arquivos recentes será limpa. Os arquivos continuarão onde estão.</string>
     <string name="home_export_as">Exportar como...</string>
@@ -128,7 +128,7 @@
     <string name="home_about_export">Salve um PDF como documento, planilha, apresentação ou imagens</string>
     <string name="home_about_protect">Proteja um PDF com uma senha</string>
     <string name="home_search_your_files">Pesquisar seus arquivos</string>
-    <string name="home_search_empty_body">Encontre PDFs neste celular pelo nome.</string>
+    <string name="home_search_empty_body">Encontre PDFs neste dispositivo pelo nome.</string>
     <string name="home_recent_searches">Pesquisas recentes</string>
     <string name="home_remove_search">Remover %1$s</string>
     <plurals name="home_search_results">
@@ -324,7 +324,7 @@
     <string name="viewer_add_text">Adicionar texto</string>
     <string name="viewer_reading_hint">Aproxime os dedos ou toque duas vezes para aumentar o texto.</string>
     <string name="viewer_reading_no_text">Não há texto para reorganizar nesta página.</string>
-    <string name="read_aloud_no_voice">A leitura em voz alta precisa de uma voz de conversão de texto em fala neste celular.</string>
+    <string name="read_aloud_no_voice">A leitura em voz alta precisa de uma voz de conversão de texto em fala neste dispositivo.</string>
     <string name="read_aloud_open_player">Abrir o reprodutor</string>
     <string name="read_aloud_close_player">Fechar o reprodutor</string>
     <string name="read_aloud_read_again">Ler novamente</string>
@@ -768,7 +768,7 @@
     <string name="files_location_another_app">Outro app</string>
     <string name="files_folder_unnamed">Pasta</string>
     <string name="files_bookmark_page">Página %1$d</string>
-    <string name="main_error_no_app">Nenhum app neste celular pode fazer isso.</string>
+    <string name="main_error_no_app">Nenhum app neste dispositivo pode fazer isso.</string>
     <string name="main_error_not_allowed">O Android não permitiu essa ação.</string>
     <string name="main_error_print_not_allowed">Não é permitido imprimir este documento.</string>
     <string name="service_notification_reading">Lendo em voz alta</string>
@@ -1196,7 +1196,7 @@
     <string name="comments_loading">Carregando comentários…</string>
     <string name="compact_previews">Usar menos memória nas prévias de página</string>
     <string name="compact_previews_body">Reduz a precisão de cor das páginas inteiras. Os detalhes ampliados mantêm a qualidade total. Aplica-se ao reabrir um documento.</string>
-    <string name="updater_other_build">As atualizações no app são só para a versão oficial para celulares ARM64. Atualize esta cópia de onde você a instalou.</string>
+    <string name="updater_other_build">As atualizações no app são só para a versão oficial para dispositivos ARM64. Atualize esta cópia de onde você a instalou.</string>
     <string name="viewer_read_only_notice">Não é possível salvar as alterações no original. Elas ficam no PdfCraft até você salvar uma cópia.</string>
     <string name="root_keep_editing">Continuar editando</string>
     <string name="root_discard_title">Descartar as alterações em %1$s?</string>
@@ -1285,7 +1285,7 @@
     <string name="updater_err_wrong_build">O arquivo baixado não é a atualização do PdfCraft esperada.</string>
     <string name="updater_err_certificate">A atualização baixada não é assinada pelo PdfCraft, então não pode substituir o app instalado.</string>
     <string name="updater_err_android_version">Esta atualização requer uma versão mais recente do Android.</string>
-    <string name="updater_err_abi">Esta atualização não é feita para o processador do seu celular.</string>
+    <string name="updater_err_abi">Esta atualização não é feita para o processador do seu dispositivo.</string>
     <string name="updater_err_storage">Não foi possível salvar a atualização neste dispositivo. Libere espaço e tente novamente.</string>
     <string name="updater_err_untrusted">O link de atualização não é das versões oficiais do PdfCraft no GitHub, por isso foi recusado.</string>
     <string name="updater_err_server">O servidor de download enviou uma resposta inesperada. Tente mais tarde ou baixe pelo navegador.</string>
@@ -1506,7 +1506,7 @@
     <string name="focus_work_started">De volta ao foco</string>
     <string name="study_section">Estatísticas de estudo</string>
     <string name="study_clear_stats">Excluir estatísticas de estudo</string>
-    <string name="study_stats_body">O tempo de leitura só conta com um documento aberto em primeiro plano e se você tocou na tela nos últimos 2 minutos. No Início, Continuar estudando conta só os documentos de Estudo. Fica neste telefone.</string>
+    <string name="study_stats_body">O tempo de leitura só conta com um documento aberto em primeiro plano e se você tocou na tela nos últimos 2 minutos. No Início, Continuar estudando conta só os documentos de Estudo. Fica neste dispositivo.</string>
     <string name="study_stats_cleared">Estatísticas de estudo excluídas</string>
     <string name="study_continue">Continuar estudando</string>
     <string name="study_week_minutes">Esta semana %1$d h %2$d min</string>
@@ -1531,7 +1531,7 @@
     <string name="library_delete_collection">Excluir coleção</string>
     <string name="library_delete_collection_body">A coleção e as coleções dentro dela são excluídas. Os arquivos não são excluídos.</string>
     <string name="library_index_switch">Pesquisar dentro dos documentos</string>
-    <string name="library_index_body">Cria um índice de busca com texto, marcadores e comentários dos arquivos, um por vez sem documento aberto. Bateria mínima fora da carga: 20%. Fica neste telefone.</string>
+    <string name="library_index_body">Cria um índice de busca com texto, marcadores e comentários dos arquivos, um por vez sem documento aberto. Bateria mínima fora da carga: 20%. Fica neste dispositivo.</string>
     <string name="library_wipe_index">Excluir índice de busca</string>
     <string name="library_index_wiped">Índice de busca excluído</string>
     <string name="library_unavailable">Indisponível: o arquivo foi movido ou o acesso removido</string>
@@ -1672,7 +1672,7 @@
     <string name="lecture_back_10">Voltar 10 segundos</string>
     <string name="lecture_forward_10">Avançar 10 segundos</string>
     <string name="lecture_close_player">Fechar o player da aula</string>
-    <string name="lecture_body">Durante a gravação, cada comentário que você escreve lembra quando. Reproduza uma gravação e toque num comentário para ouvir o que se dizia quando você o escreveu. As gravações ficam neste telefone, no PdfCraft.</string>
+    <string name="lecture_body">Durante a gravação, cada comentário que você escreve lembra quando. Reproduza uma gravação e toque num comentário para ouvir o que se dizia quando você o escreveu. As gravações ficam neste dispositivo, no PdfCraft.</string>
     <string name="lecture_delete_title">Excluir esta gravação?</string>
     <string name="lecture_needs_saved">Salve este documento primeiro para gravar junto a ele</string>
     <string name="lecture_cannot_record">Não foi possível fazer a gravação</string>

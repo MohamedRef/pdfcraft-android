@@ -5,7 +5,7 @@
     <string name="scan_live_light">الإضاءة غير كافية</string>
     <string name="scan_live_fit">أدخل الصفحة كلها في الإطار</string>
     <string name="scan_live_closer">اقترب أكثر</string>
-    <string name="scan_live_flatter">اجعل الهاتف موازيًا للصفحة</string>
+    <string name="scan_live_flatter">اجعل الجهاز موازيًا للصفحة</string>
     <string name="scan_live_still">اثبت</string>
     <string name="scan_live_ready">جاهز</string>
     <string name="scan_live_setting">حدود الصفحة في الكاميرا</string>

@@ -7,7 +7,7 @@
     <string name="scan_camera_light">Light</string>
     <string name="scan_camera_grid">Grid</string>
     <string name="scan_camera_more">More options</string>
-    <string name="scan_camera_use_phone_app">Use the phone\'s camera app</string>
+    <string name="scan_camera_use_phone_app">Use the camera app</string>
     <string name="scan_camera_import_short">Import</string>
     <string name="scan_camera_open_pages">Open the scan. Pages: %1$d</string>
     <string name="scan_camera_done_short">Done</string>
