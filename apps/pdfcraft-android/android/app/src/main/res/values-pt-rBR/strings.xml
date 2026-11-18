@@ -2140,6 +2140,10 @@
     <string name="ink_more_shapes">Mais formas</string>
     <string name="ink_flat_shapes">Formas planas</string>
     <string name="ink_solid_shapes">Sólidos</string>
+    <string name="ink_toolbar_right_triangle">Retângulo</string>
+    <string name="ink_toolbar_double_arrow">Seta dupla</string>
+    <string name="ink_toolbar_frustum">Tronco</string>
+    <string name="ink_toolbar_more_shapes">Mais</string>
     <string name="viewer_hint_polygon">Toque em cada canto. Toque no primeiro canto de novo para terminar.</string>
     <string name="viewer_hint_polyline">Toque em cada ponto. Toque no último ponto de novo para terminar.</string>
     <string name="edit_link">Link</string>

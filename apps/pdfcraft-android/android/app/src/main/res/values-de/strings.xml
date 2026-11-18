@@ -1582,7 +1582,7 @@
     <string name="ink_toolbar_rectangle">Box</string>
     <string name="ink_toolbar_line">Linie</string>
     <string name="ink_toolbar_color">Farbe</string>
-    <string name="ink_toolbar_settings">Einstellungen</string>
+    <string name="ink_toolbar_settings">Optionen</string>
     <string name="ink_toolbar_lasso">Lasso</string>
     <string name="ink_toolbar_eraser">Radieren</string>
     <string name="ink_eraser_size_title">Radierergröße</string>
@@ -2539,6 +2539,10 @@
     <string name="ink_more_shapes">Weitere Formen</string>
     <string name="ink_flat_shapes">Flache Formen</string>
     <string name="ink_solid_shapes">Körper</string>
+    <string name="ink_toolbar_right_triangle">Rechtwinkl.</string>
+    <string name="ink_toolbar_double_arrow">Doppelpfeil</string>
+    <string name="ink_toolbar_frustum">Stumpf</string>
+    <string name="ink_toolbar_more_shapes">Mehr</string>
     <string name="viewer_hint_polygon">Tippe auf jede Ecke. Tippe zum Abschluss erneut auf die erste Ecke.</string>
     <string name="viewer_hint_polyline">Tippe auf jeden Punkt. Tippe zum Abschluss erneut auf den letzten Punkt.</string>
     <string name="edit_link">Link</string>

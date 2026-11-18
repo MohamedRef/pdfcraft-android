@@ -2435,6 +2435,10 @@
     <string name="ink_more_shapes">Plus de formes</string>
     <string name="ink_flat_shapes">Formes planes</string>
     <string name="ink_solid_shapes">Solides</string>
+    <string name="ink_toolbar_right_triangle">Rectangle</string>
+    <string name="ink_toolbar_double_arrow">Double</string>
+    <string name="ink_toolbar_frustum">Tronc</string>
+    <string name="ink_toolbar_more_shapes">Plus</string>
     <string name="viewer_hint_polygon">Touchez chaque coin. Touchez à nouveau le premier coin pour terminer.</string>
     <string name="viewer_hint_polyline">Touchez chaque point. Touchez à nouveau le dernier point pour terminer.</string>
     <string name="edit_link">Lien</string>

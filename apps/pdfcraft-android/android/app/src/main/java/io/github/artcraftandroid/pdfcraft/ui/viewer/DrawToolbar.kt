@@ -30,8 +30,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,8 +43,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
@@ -57,12 +62,22 @@ import io.github.artcraftandroid.pdfcraft.ui.pdfColors
  * pen-first note apps. Top: all five actual pen types, Eraser, Lasso. Bottom: the favourites,
  * then Color, Settings, Shapes and Guides.
  *
- * The top row (seven buttons, 336 dp) scrolls on screens narrower than that. The bottom row's four
- * fixed buttons always keep their place; only the favourites before them scroll (#522).
+ * The top row (eight buttons, 384 dp) scrolls on screens narrower than that; where it fits with the
+ * text markups, its buttons share the bar (#704). The bottom row's four fixed buttons always keep
+ * their place; only the favourites before them scroll (#522).
  */
 internal val DrawToolbarHeight = 112.dp
 private val DrawToolSlot = 48.dp
 private val DrawRowHeight = 56.dp
+
+/** The widest a first-row button grows where the whole row fits, as on a tablet (#704). */
+private val DrawWideSlot = 64.dp
+
+/** A Guides sheet button (#704): the three have the sheet's width to share, so their names read whole. */
+private val DrawGuideSlot = 80.dp
+
+/** A caption's size, then the sizes it steps down through to fit its button before it is cut (#704). */
+private val DrawCaptionSizes = listOf(10.sp, 9.5.sp, 9.sp, 8.5.sp, 8.sp, 7.5.sp)
 
 internal fun activateDrawingPen(ctl: ViewerController, prefs: ToolPrefs, style: InkStyle) {
     prefs.updateInkStyle(style)
@@ -102,12 +117,19 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
             // that scrolls. Where they all fit (a tablet) they share the bar; where they don't,
             // the pens, the eraser and the lasso keep the bar's width, so the lasso stays in view
             // with six pens on a 384 dp phone, and the markups follow in the scroll (#697).
-            val primarySlots = InkStyle.entries.size + 2
-            val markupWidth = if (onMarkup != null) DrawToolSlot * 4 + 9.dp else 0.dp
-            val shared = DrawToolSlot * primarySlots + markupWidth <= maxWidth
-            val primaryWidth = maxOf(maxWidth, DrawToolSlot * primarySlots)
             // read here: the Box and Row scopes below cannot see BoxWithConstraints' maxWidth
             val barWidth = maxWidth
+            val primarySlots = InkStyle.entries.size + 2
+            val markupSlots = if (onMarkup != null) 4 else 0
+            // the markups' divider, with a little room on each side
+            val divider = if (onMarkup != null) 9.dp else 0.dp
+            val markupWidth = DrawToolSlot * markupSlots + divider
+            val shared = DrawToolSlot * primarySlots + markupWidth <= barWidth
+            val primaryWidth = maxOf(barWidth, DrawToolSlot * primarySlots)
+            // Sharing the bar, each button takes its share of it up to 64 dp, so a tablet has the
+            // room to show its captions whole at full size; on a phone each keeps 48 dp (#704).
+            val slot = if (!shared) DrawToolSlot else
+                ((barWidth - divider) / (primarySlots + markupSlots)).coerceIn(DrawToolSlot, DrawWideSlot)
             val pens = rememberScrollState()
             val primaryTools: @Composable () -> Unit = {
                 InkStyle.entries.forEach { style ->
@@ -115,7 +137,7 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
                     val active = !ctl.eraserMode && !ctl.lassoMode &&
                         ctl.inkShapeMode == InkShapeMode.Freehand && prefs.inkStyle == style
                     val pen = prefs.penSettings(style)
-                    DrawToolbarButton(label, active, onClick = {
+                    DrawToolbarButton(label, active, width = slot, onClick = {
                         // Like the eraser: a second tap on the selected pen opens its colour and width.
                         ctl.picker = penButtonPicker(active, picker)
                         if (!active) activateDrawingPen(ctl, prefs, style)
@@ -134,6 +156,7 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
                     label = stringResource(R.string.toolbar_eraser),
                     active = ctl.eraserMode,
                     caption = stringResource(R.string.ink_toolbar_eraser),
+                    width = slot,
                     onClick = {
                         if (ctl.eraserMode) {
                             ctl.picker = if (picker == Picker.EraserSize) Picker.None else Picker.EraserSize
@@ -148,6 +171,7 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
                     label = stringResource(R.string.toolbar_ink_lasso),
                     active = ctl.lassoMode,
                     caption = stringResource(R.string.ink_toolbar_lasso),
+                    width = slot,
                     onClick = {
                         ctl.lassoMode = true
                         ctl.eraserMode = false
@@ -164,24 +188,28 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
                         label = stringResource(R.string.common_tool_highlight),
                         active = false,
                         caption = stringResource(R.string.tool_caption_highlight),
+                        width = slot,
                         onClick = { onMarkup(TextMarkup.Highlight) },
                     ) { Icon(LucideIcons.Highlighter, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
                     DrawToolbarButton(
                         label = stringResource(R.string.common_tool_underline),
                         active = false,
                         caption = stringResource(R.string.tool_caption_underline),
+                        width = slot,
                         onClick = { onMarkup(TextMarkup.Underline) },
                     ) { Icon(LucideIcons.Underline, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
                     DrawToolbarButton(
                         label = stringResource(R.string.toolbar_strikethrough),
                         active = false,
                         caption = stringResource(R.string.tool_caption_strike),
+                        width = slot,
                         onClick = { onMarkup(TextMarkup.Strikethrough) },
                     ) { Icon(LucideIcons.Strikethrough, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
                     DrawToolbarButton(
                         label = stringResource(R.string.toolbar_squiggly),
                         active = false,
                         caption = stringResource(R.string.tool_caption_squiggly),
+                        width = slot,
                         onClick = { onMarkup(TextMarkup.Squiggly) },
                     ) { Icon(io.github.artcraftandroid.pdfcraft.ui.PdfIcons.SquigglyUnderline, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
                 }
@@ -329,14 +357,17 @@ internal val DrawShapes = listOf(
     DrawShape(InkShapeMode.Polyline, LucideIcons.Spline, R.string.toolbar_draw_polyline, R.string.ink_toolbar_polyline),
 )
 
-/** More shapes (#693), on their own sheet: flat ones, then solids; each name is its caption too. */
+/**
+ * More shapes (#693), on their own sheet: flat ones, then solids. Each name is its caption too,
+ * but for the three too long for a 48 dp button in some language, which have a short one (#704).
+ */
 internal val DrawMoreShapes = listOf(
     DrawShape(InkShapeMode.Triangle, null, R.string.ink_shape_triangle, R.string.ink_shape_triangle),
-    DrawShape(InkShapeMode.RightTriangle, null, R.string.ink_shape_right_triangle, R.string.ink_shape_right_triangle),
+    DrawShape(InkShapeMode.RightTriangle, null, R.string.ink_shape_right_triangle, R.string.ink_toolbar_right_triangle),
     DrawShape(InkShapeMode.Diamond, null, R.string.ink_shape_diamond, R.string.ink_shape_diamond),
     DrawShape(InkShapeMode.Pentagon, null, R.string.ink_shape_pentagon, R.string.ink_shape_pentagon),
     DrawShape(InkShapeMode.Hexagon, null, R.string.ink_shape_hexagon, R.string.ink_shape_hexagon),
-    DrawShape(InkShapeMode.DoubleArrow, null, R.string.ink_shape_double_arrow, R.string.ink_shape_double_arrow),
+    DrawShape(InkShapeMode.DoubleArrow, null, R.string.ink_shape_double_arrow, R.string.ink_toolbar_double_arrow),
     DrawShape(InkShapeMode.Axes, null, R.string.ink_shape_axes, R.string.ink_shape_axes),
     DrawShape(InkShapeMode.Cube, null, R.string.ink_shape_cube, R.string.ink_shape_cube),
     DrawShape(InkShapeMode.Prism, null, R.string.ink_shape_prism, R.string.ink_shape_prism),
@@ -345,7 +376,7 @@ internal val DrawMoreShapes = listOf(
     DrawShape(InkShapeMode.Cone, null, R.string.ink_shape_cone, R.string.ink_shape_cone),
     DrawShape(InkShapeMode.Sphere, null, R.string.ink_shape_sphere, R.string.ink_shape_sphere),
     DrawShape(InkShapeMode.Hemisphere, null, R.string.ink_shape_hemisphere, R.string.ink_shape_hemisphere),
-    DrawShape(InkShapeMode.Frustum, null, R.string.ink_shape_frustum, R.string.ink_shape_frustum),
+    DrawShape(InkShapeMode.Frustum, null, R.string.ink_shape_frustum, R.string.ink_toolbar_frustum),
     DrawShape(InkShapeMode.Tube, null, R.string.ink_shape_tube, R.string.ink_shape_tube),
 )
 
@@ -391,7 +422,7 @@ internal fun DrawShapesPicker(ctl: ViewerController, prefs: ToolPrefs) {
     ) {
         DrawShapes.forEach { DrawShapeButton(ctl, prefs, it) }
         // the catalog's shapes and solids, on a sheet of their own (#693)
-        DrawToolbarButton(stringResource(R.string.ink_more_shapes), false, caption = stringResource(R.string.ink_more_shapes), onClick = {
+        DrawToolbarButton(stringResource(R.string.ink_more_shapes), false, caption = stringResource(R.string.ink_toolbar_more_shapes), onClick = {
             ctl.picker = Picker.MoreShapes
         }) {
             Icon(LucideIcons.Shapes, null, tint = c.icon, modifier = Modifier.size(24.dp))
@@ -436,18 +467,21 @@ internal fun DrawGuidesPicker(ctl: ViewerController) {
             active = ctl.rulerOn,
             onClick = { ctl.rulerOn = !ctl.rulerOn; ctl.picker = Picker.None },
             role = Role.Switch,
+            width = DrawGuideSlot,
         ) { Icon(LucideIcons.Ruler, null, tint = if (ctl.rulerOn) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
         DrawToolbarButton(
             label = stringResource(R.string.ink_protractor),
             active = ctl.protractorOn,
             onClick = { ctl.protractorOn = !ctl.protractorOn; ctl.picker = Picker.None },
             role = Role.Switch,
+            width = DrawGuideSlot,
         ) { Icon(LucideIcons.Gauge, null, tint = if (ctl.protractorOn) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
         DrawToolbarButton(
             label = stringResource(R.string.zoom_box),
             active = ctl.zoomBoxOn,
             onClick = { ctl.zoomBoxOn = !ctl.zoomBoxOn; ctl.picker = Picker.None },
             role = Role.Switch,
+            width = DrawGuideSlot,
         ) { Icon(LucideIcons.ZoomIn, null, tint = if (ctl.zoomBoxOn) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
     }
 }
@@ -478,13 +512,14 @@ private fun DrawToolbarButton(
     caption: String = label,
     onClickLabel: String? = null,
     role: Role = Role.RadioButton,
+    width: Dp = DrawToolSlot,
     icon: @Composable () -> Unit,
 ) {
     val c = pdfColors
     val shape = RoundedCornerShape(10.dp)
     val tint = if (active) c.toolAccent else c.label
     Column(
-        Modifier.width(DrawToolSlot).height(54.dp)
+        Modifier.width(width).height(54.dp)
             .background(if (active) c.pressed else Color.Transparent, shape)
             .then(if (active) Modifier.border(1.dp, c.toolAccent.copy(alpha = 0.5f), shape) else Modifier)
             .clickable(role = role, onClickLabel = onClickLabel, onClick = onClick)
@@ -496,14 +531,37 @@ private fun DrawToolbarButton(
         verticalArrangement = Arrangement.Center,
     ) {
         Box(Modifier.height(33.dp), contentAlignment = Alignment.Center) { icon() }
+        DrawCaption(caption, tint, bold = active)
+    }
+}
+
+/**
+ * A Draw button's [caption] on one line that fits the button (#704): set at the largest of
+ * [DrawCaptionSizes] at which it fits in SemiBold, the weight a selected button's caption takes,
+ * and in Regular, so selecting a button never changes its caption's size. Only a caption too long
+ * even at the smallest is cut with an ellipsis. Like WordWrapLabel (Components.kt), on one line.
+ */
+@Composable
+private fun DrawCaption(caption: String, color: Color, bold: Boolean) {
+    val measurer = rememberTextMeasurer()
+    val style = LocalTextStyle.current.merge(TextStyle(fontSize = DrawCaptionSizes.first(), lineHeight = 11.sp))
+    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        val room = constraints.maxWidth
+        val size = remember(caption, style, room, measurer) {
+            DrawCaptionSizes.firstOrNull { candidate ->
+                listOf(FontWeight.SemiBold, FontWeight.Normal).all { weight ->
+                    val at = style.copy(fontSize = candidate, fontWeight = weight)
+                    measurer.measure(caption, at, softWrap = false, maxLines = 1).size.width <= room
+                }
+            } ?: DrawCaptionSizes.last()
+        }
         Text(
             caption,
-            color = tint,
-            fontSize = 10.sp,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+            color = color,
+            style = style.copy(fontSize = size, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal),
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis,
-            lineHeight = 11.sp,
         )
     }
 }

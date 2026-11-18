@@ -2476,6 +2476,11 @@
     <string name="ink_more_shapes">More shapes</string>
     <string name="ink_flat_shapes">Flat shapes</string>
     <string name="ink_solid_shapes">Solids</string>
+    <!-- Translator note: short captions under Draw's 48 dp buttons (#704); each must fit 48 dp at 7.5 sp, about 11 letters. The full names above are read aloud. -->
+    <string name="ink_toolbar_right_triangle">Right</string>
+    <string name="ink_toolbar_double_arrow">Double</string>
+    <string name="ink_toolbar_frustum">Frustum</string>
+    <string name="ink_toolbar_more_shapes">More</string>
     <string name="viewer_hint_polygon">Tap each corner. Tap the first corner again to finish.</string>
     <string name="viewer_hint_polyline">Tap each point. Tap the last point again to finish.</string>
     <!-- Translator note: Flashcards: front and back cards made from the document and reviewed on a schedule. Again, Hard, Good and Easy are review ratings. -->
