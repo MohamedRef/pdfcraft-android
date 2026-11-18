@@ -26,10 +26,12 @@ import kotlin.math.pow
  * - [tilt] is how much leaning the pen widens the line (up to 3 times) and lightens it.
  * - [smoothing] takes the hand's tremor out of the line itself (0 = the points as the pen gave
  *   them, 1 = the most), see [InkSmoother].
+ * - [widthSlope] is how fast the width may change along the line, per point of travel and pen
+ *   width ([PEN_MAX_WIDTH_SLOPE] for most pens; a flat nib turns from thick to thin at once, #678).
  *
  * The chosen width is the width of ordinary writing: every pen's range sits around 1, so a pen set
  * to 2 pt writes about 2 pt wide and gets thinner and thicker from there. Whatever the dials say,
- * the width never changes faster along the line than [PEN_MAX_WIDTH_SLOPE] ([PEN_MAX_TAPER_SLOPE]
+ * the width never changes faster along the line than [widthSlope] (at least [PEN_MAX_TAPER_SLOPE]
  * inside a tapered end) (#601).
  */
 internal data class PenDials(
@@ -47,6 +49,7 @@ internal data class PenDials(
     val densityMin: Float = 1f,
     val densityMax: Float = 1f,
     val tilt: Float = 0f,
+    val widthSlope: Float = PEN_MAX_WIDTH_SLOPE,
 ) {
     /** The same dials kept inside their slider ranges, so a stored value can never break a stroke. */
     fun sanitized(): PenDials {
@@ -67,6 +70,7 @@ internal data class PenDials(
             densityMin = densityMin.ok(0.05f, 1f, 1f).let { dl -> minOf(dl, densityMax.ok(0.05f, 1f, 1f)) },
             densityMax = densityMax.ok(0.05f, 1f, 1f).let { dh -> maxOf(dh, densityMin.ok(0.05f, 1f, 1f)) },
             tilt = tilt.ok(0f, 1f, 0f),
+            widthSlope = widthSlope.ok(0.1f, 4f, PEN_MAX_WIDTH_SLOPE),
         )
     }
 
@@ -90,6 +94,12 @@ internal data class PenDials(
             // three times from lightest to hardest, a little thinner when fast, downstrokes thicker
             // than sidestrokes, short pointed ends
             InkStyle.Fountain -> PenDials(0.5f, 1.5f, speedThin = 0.15f, nib = 0.25f, taperStart = 1.5f, taperEnd = 2f, dampingMs = 25f, smoothing = 0.5f)
+            // a flat nib held at 45° rising to the right (page y points down, so -45°): a stroke
+            // along the nib is a fifth as wide as one across it, and the width turns with the
+            // stroke at once (#678): little damping and a fast width change, since the width follows
+            // the stroke's direction rather than a noisy pressure; pressure moves it a little, and
+            // the ends stay as the nib leaves them
+            InkStyle.Calligraphy -> PenDials(0.85f, 1.15f, nib = 0.8f, nibAngleDeg = -45f, dampingMs = 3f, smoothing = 0.4f, widthSlope = 2f)
             // eight times from lightest to hardest, most of it above the middle, so ordinary
             // writing already varies about twice (the fountain pen's about one and a half times);
             // thinner when fast, longer pointed ends (#608: 0.25…1.8 with a flatter curve wrote
@@ -325,7 +335,7 @@ internal class PenDynamics(
     private var speedKnown = false
     /** The last pressure the pen's sensor gave (after the stretch and curve, before the Pressure setting); NaN before the first. */
     private var lastP01 = Float.NaN
-    /** The width given for the last sample, which the next may leave only by [PEN_MAX_WIDTH_SLOPE]. */
+    /** The width given for the last sample, which the next may leave only by [PenDials.widthSlope]. */
     private var lastOut = Float.NaN
 
     /** The ink density (0…1) of the sample [next] gave last; 1 for solid ink. */
@@ -415,7 +425,7 @@ internal class PenDynamics(
         // however the width came about, it leaves the last one only as far as the pen has moved
         if (lastOut.isFinite()) {
             val creepPt = PEN_STILL_CREEP_DP_PER_S * maxOf(dtMs, 0f) / 1000f / dpPerPt
-            val slope = if (d.taperStart > 0f && travelled < d.taperStart * penWidth) PEN_MAX_TAPER_SLOPE else PEN_MAX_WIDTH_SLOPE
+            val slope = if (d.taperStart > 0f && travelled < d.taperStart * penWidth) maxOf(PEN_MAX_TAPER_SLOPE, d.widthSlope) else d.widthSlope
             // a resting pen's dot fills in [PEN_DOT_FILL_MS], which the creep alone would not let it
             val fill = if (d.taperStart > 0f && travelled < d.taperStart * penWidth) restedStepMs / PEN_DOT_FILL_MS else 0f
             val room = slope * (stepPt + creepPt) / penWidthPt + fill
