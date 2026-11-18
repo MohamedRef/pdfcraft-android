@@ -68,9 +68,10 @@ class DrawCaptionsFitTest {
             val what = "\"${t.layoutInput.text}\" $where at ${t.layoutInput.style.fontSize}"
             assertEquals("$what: lines", 1, t.lineCount)
             assertFalse("$what is cut", t.isLineEllipsized(0))
-            // across only: hasVisualOverflow also counts the line being taller than its box, which the
-            // test's text layout reports for an 11 sp line of 10 sp Inter though nothing is clipped on a device
-            assertFalse("$what is too wide", t.didOverflowWidth)
+            // No overflow flags here: the layout semantics hands back is the paragraph laid out at the
+            // caption box's full width beside the text's own size, so didOverflowWidth and hasVisualOverflow
+            // are true for every caption. Laid out at that width with an ellipsis, a caption that does not
+            // fit is ellipsized, which the check above catches.
         }
     }
 
