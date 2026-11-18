@@ -19,10 +19,11 @@ internal data class InkPenSettings(val argb: Int, val width: Float, val opacity:
             opacity.takeIf { it.isFinite() }?.coerceIn(MIN_OPACITY, 1f) ?: 1f,
         )
 
-        /** Defaults that make sense per pen: black ball and pencil, blue fountain, red brush, yellow wide marker. */
+        /** Defaults that make sense per pen: black ball, calligraphy pen and pencil, blue fountain, red brush, yellow wide marker. */
         fun default(style: InkStyle): InkPenSettings = when (style) {
             InkStyle.Ballpoint -> InkPenSettings(0xFF000000.toInt(), 1f, 1f)
             InkStyle.Fountain -> InkPenSettings(0xFF0000FF.toInt(), 1.5f, 1f)
+            InkStyle.Calligraphy -> InkPenSettings(0xFF000000.toInt(), 3f, 1f)
             InkStyle.Pencil -> InkPenSettings(0xFF444444.toInt(), 1.5f, 1f)
             InkStyle.Brush -> InkPenSettings(0xFFE52237.toInt(), 3f, 1f)
             InkStyle.Highlighter -> InkPenSettings(0xFFFFD100.toInt(), 6f, 1f)
@@ -36,6 +37,7 @@ internal data class InkPenSettings(val argb: Int, val width: Float, val opacity:
         fun defaultOnDark(style: InkStyle): Int = when (style) {
             InkStyle.Ballpoint -> 0xFFFFFFFF.toInt()
             InkStyle.Fountain -> 0xFF8AB4FF.toInt()
+            InkStyle.Calligraphy -> 0xFFFFFFFF.toInt()
             InkStyle.Pencil -> 0xFFD0D0D0.toInt()
             InkStyle.Brush -> 0xFFFF6B7A.toInt()
             InkStyle.Highlighter -> default(style).argb

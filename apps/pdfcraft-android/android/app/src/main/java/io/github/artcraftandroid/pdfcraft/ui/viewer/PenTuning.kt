@@ -160,6 +160,7 @@ internal class PenTuning(private val prefs: SharedPreferences) {
                 "speed_thin" to d.speedThin, "speed_ref" to d.speedRef.toInt(),
                 "nib" to d.nib, "nib_angle" to d.nibAngleDeg.toInt(),
                 "taper_start" to d.taperStart, "taper_end" to d.taperEnd, "damping_ms" to d.dampingMs.toInt(), "smoothing" to d.smoothing, "density_min" to d.densityMin, "density_max" to d.densityMax, "tilt" to d.tilt,
+                "width_slope" to d.widthSlope,
             )
         }
         val c = pressureCurve
@@ -178,7 +179,7 @@ internal class PenTuning(private val prefs: SharedPreferences) {
     private fun key(style: InkStyle, dial: String) = "${style.key}.$dial"
 
     companion object {
-        val KEYS = listOf("min", "max", "curve", "speedThin", "speedRef", "nib", "nibAngle", "taperStart", "taperEnd", "damping", "smoothing", "densityMin", "densityMax", "tilt")
+        val KEYS = listOf("min", "max", "curve", "speedThin", "speedRef", "nib", "nibAngle", "taperStart", "taperEnd", "damping", "smoothing", "densityMin", "densityMax", "tilt", "widthSlope")
         const val LOG_EVERY = 25
         /** The pen model the stored dials were tuned for; a newer [MODEL] drops them (2: #601). */
         const val MODEL = 2
@@ -188,10 +189,10 @@ internal class PenTuning(private val prefs: SharedPreferences) {
 
 /** The dials in [PenTuning.KEYS] order. */
 internal fun PenDials.toList(): List<Float> =
-    listOf(minScale, maxScale, curve, speedThin, speedRef, nib, nibAngleDeg, taperStart, taperEnd, dampingMs, smoothing, densityMin, densityMax, tilt)
+    listOf(minScale, maxScale, curve, speedThin, speedRef, nib, nibAngleDeg, taperStart, taperEnd, dampingMs, smoothing, densityMin, densityMax, tilt, widthSlope)
 
 internal fun penDialsOf(v: List<Float>): PenDials {
     // a missing value is NaN, which [PenDials.sanitized] turns into the dial's neutral value
     fun at(i: Int) = v.getOrElse(i) { Float.NaN }
-    return PenDials(at(0), at(1), at(2), at(3), at(4), at(5), at(6), at(7), at(8), at(9), at(10), at(11), at(12), at(13))
+    return PenDials(at(0), at(1), at(2), at(3), at(4), at(5), at(6), at(7), at(8), at(9), at(10), at(11), at(12), at(13), at(14))
 }

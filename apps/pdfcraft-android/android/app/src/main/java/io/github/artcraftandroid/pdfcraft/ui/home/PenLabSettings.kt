@@ -155,6 +155,7 @@ internal fun PenLabSettings(vm: AppViewModel) {
     SettingsHeader(stringResource(R.string.pen_lab_group_tip))
     Dial(R.string.pen_lab_nib, d.nib, 0f..0.9f, 2) { d.copy(nib = it) }
     Dial(R.string.pen_lab_nib_angle, d.nibAngleDeg, -90f..90f, 0) { d.copy(nibAngleDeg = it) }
+    Dial(R.string.pen_lab_width_slope, d.widthSlope, 0.1f..4f, 1) { d.copy(widthSlope = it) }
     Dial(R.string.pen_lab_taper_start, d.taperStart, 0f..10f, 1) { d.copy(taperStart = it) }
     Dial(R.string.pen_lab_taper_end, d.taperEnd, 0f..10f, 1) { d.copy(taperEnd = it) }
     Dial(R.string.pen_lab_damping, d.dampingMs, 0f..200f, 0) { d.copy(dampingMs = it) }
@@ -244,6 +245,7 @@ private fun PressureCurveEditor(curve: PressureCurve, onChange: (PressureCurve) 
 private fun styleName(style: InkStyle): Int = when (style) {
     InkStyle.Ballpoint -> R.string.ink_style_ballpoint
     InkStyle.Fountain -> R.string.ink_style_fountain
+    InkStyle.Calligraphy -> R.string.ink_style_calligraphy
     InkStyle.Pencil -> R.string.ink_style_pencil
     InkStyle.Brush -> R.string.ink_style_brush
     InkStyle.Highlighter -> R.string.ink_style_highlighter
