@@ -1571,6 +1571,8 @@
     <string name="text_styles_scan">Analyze text styles</string>
     <string name="text_styles_scope">Large documents may take a while.</string>
     <string name="text_styles_loading">Analyzing text styles…</string>
+    <string name="text_styles_loading_page">Analyzing text styles: page %1$d of %2$d…</string>
+    <string name="text_styles_stopped">Analysis stopped. Analyze again to list the styles.</string>
     <string name="text_styles_failed">Could not analyze text styles. The document may restrict copying, or it changed during analysis. Try again.</string>
     <string name="text_styles_empty">No text styles found. Image-only pages need text recognition first.</string>
     <string name="text_styles_description">%1$s, %2$s pt · %3$d lines on %4$d pages</string>

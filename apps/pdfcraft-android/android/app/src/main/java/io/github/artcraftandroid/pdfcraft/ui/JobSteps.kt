@@ -114,3 +114,13 @@ internal fun textStylesLine(stage: String, done: Int, total: Int): JobLine? = wh
     stage == "reading" -> JobLine(R.string.text_styles_reading, listOf(minOf(done + 1, total), total))
     else -> null
 }
+
+/**
+ * The line for one step of `text_styles` (#723), Analyze text styles: `reading`, page [done] of
+ * [total] read for the styles.
+ */
+internal fun stylesLine(stage: String, done: Int, total: Int): JobLine? = when {
+    total <= 0 -> null
+    stage == "reading" -> JobLine(R.string.text_styles_loading_page, listOf(minOf(done + 1, total), total))
+    else -> null
+}

@@ -1349,6 +1349,8 @@
     <string name="text_styles_scan">Analizar estilos de texto</string>
     <string name="text_styles_scope">Los documentos grandes pueden tardar un poco.</string>
     <string name="text_styles_loading">Analizando estilos de texto…</string>
+    <string name="text_styles_loading_page">Analizando estilos de texto: página %1$d de %2$d…</string>
+    <string name="text_styles_stopped">Análisis detenido. Vuelve a analizar para ver los estilos.</string>
     <string name="text_styles_failed">No se pudieron analizar los estilos de texto. Puede que el documento restrinja la copia o que haya cambiado durante el análisis. Inténtalo de nuevo.</string>
     <string name="text_styles_empty">No se encontraron estilos de texto. Las páginas que solo tienen imágenes necesitan reconocimiento de texto primero.</string>
     <string name="text_styles_description">%1$s, %2$s pt · %3$d líneas en %4$d páginas</string>
