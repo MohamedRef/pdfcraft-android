@@ -447,6 +447,21 @@ class DocumentFiles(private val context: Context) {
      */
     fun existingCopy(uri: Uri): File? = PendingWorkingCopy.recoveryCopy(File(workDir, sha(uri.toString())))
 
+    /**
+     * Of [uris], the documents PdfCraft can no longer open (#712): no lasting access, no copy
+     * kept, no real file to read, and their provider refuses them. Opening one says the access
+     * was lost, so Recent and Search need not list it beside its file's current address.
+     */
+    fun unreachable(uris: Collection<String>): Set<String> {
+        val readable = resolver.persistedUriPermissions.filter { it.isReadPermission }.mapTo(HashSet()) { it.uri.toString() }
+        return uris.filterTo(LinkedHashSet()) { s ->
+            val uri = Uri.parse(s)
+            uri.scheme == ContentResolver.SCHEME_CONTENT && s !in readable && existingCopy(uri) == null &&
+                runCatching { directFile(uri) }.getOrNull() == null &&
+                runCatching { resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { it.moveToFirst() } }.getOrNull() != true
+        }
+    }
+
     /** The file name another app gives [uri], ending in `.pdf`. */
     fun displayName(uri: Uri): String {
         val name = runCatching {
@@ -646,7 +661,9 @@ class DocumentFiles(private val context: Context) {
     /**
      * Give back the lasting access taken by [keepAccess] for documents that left Recent, and keep
      * the rest within [MAX_DOCUMENT_GRANTS], so document grants never push the user's folder
-     * grants out of Android's per-app limit (#108). Folder (tree) grants are never released here.
+     * grants out of Android's per-app limit (#108). Folder (tree) grants are never released here,
+     * nor one taken in the last few minutes: its document may still be opening, not yet in
+     * Recent (#705).
      */
     fun releaseUnusedAccess(recent: Collection<String>, open: String?) {
         // the real paths of documents that left Recent are forgotten with their grants (#491)

@@ -719,6 +719,7 @@
     <string name="toolbar_label_password">كلمة المرور</string>
     <string name="toolbar_label_combine">دمج</string>
     <string name="toolbar_label_compress">ضغط</string>
+    <string name="toolbar_label_export">تصدير</string>
     <string name="toolbar_label_organize">تنظيم</string>
     <string name="toolbar_label_crop">اقتصاص</string>
     <string name="toolbar_label_recognize">التعرّف</string>

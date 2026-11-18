@@ -733,6 +733,7 @@
     <string name="toolbar_label_password">Mot de passe</string>
     <string name="toolbar_label_combine">Fusionner</string>
     <string name="toolbar_label_compress">Compresser</string>
+    <string name="toolbar_label_export">Exporter</string>
     <string name="toolbar_label_organize">Organiser</string>
     <string name="toolbar_label_crop">Rogner</string>
     <string name="toolbar_label_recognize">Reconnaître</string>

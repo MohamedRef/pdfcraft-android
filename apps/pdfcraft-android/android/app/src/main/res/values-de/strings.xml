@@ -795,8 +795,9 @@
     <!-- Bottom toolbar: short tool names under the icons (keep them short; two lines at most) -->
     <!-- Note: the Set password tool's short name on the toolbar -->
     <string name="toolbar_label_password">Passwort</string>
-    <string name="toolbar_label_combine">Zusammenfügen</string>
+    <string name="toolbar_label_combine">Verbinden</string>
     <string name="toolbar_label_compress">Komprimieren</string>
+    <string name="toolbar_label_export">Export</string>
     <string name="toolbar_label_organize">Organisieren</string>
     <string name="toolbar_label_crop">Zuschneiden</string>
     <!-- Note: the Recognize text tool's short name on the toolbar -->

@@ -1124,6 +1124,8 @@
     <string name="toolbar_label_password">Password</string>
     <string name="toolbar_label_combine">Combine</string>
     <string name="toolbar_label_compress">Compress</string>
+    <!-- Note: the Export PDF tool's short name on the toolbar; the tool keeps its full name in the lists and on its screen -->
+    <string name="toolbar_label_export">Export</string>
     <string name="toolbar_label_organize">Organize</string>
     <string name="toolbar_label_crop">Crop</string>
     <!-- Note: the Recognize text tool's short name on the toolbar -->

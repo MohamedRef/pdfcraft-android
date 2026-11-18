@@ -535,6 +535,7 @@
     <string name="toolbar_label_password">Senha</string>
     <string name="toolbar_label_combine">Combinar</string>
     <string name="toolbar_label_compress">Comprimir</string>
+    <string name="toolbar_label_export">Exportar</string>
     <string name="toolbar_label_organize">Organizar</string>
     <string name="toolbar_label_crop">Recortar</string>
     <string name="toolbar_label_recognize">Reconhecer</string>

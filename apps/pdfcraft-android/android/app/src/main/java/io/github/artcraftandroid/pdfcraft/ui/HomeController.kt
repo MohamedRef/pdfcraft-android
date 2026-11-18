@@ -169,10 +169,13 @@ class HomeController internal constructor(private val vm: AppViewModel) {
     /** Each recent file's thumbnail source and location, found with the list off the main thread (#94). */
     internal var recentPlaces by mutableStateOf<Map<String, Pair<String?, String>>>(emptyMap())
 
-    fun recentRows(): List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow> = vm.recentList.map { r ->
+    /** Recent's entries PdfCraft can no longer open (#712), found with the list off the main thread. */
+    internal var recentUnreachable by mutableStateOf<Set<String>>(emptySet())
+
+    fun recentRows(): List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow> = eachFileOnce(vm.recentList.map { r ->
         val (thumb, location) = recentPlaces[r.uri] ?: (null to text(R.string.files_location_this_device))
         io.github.artcraftandroid.pdfcraft.ui.home.FileRow(r.uri, r.name, thumb, location, r.opened, r.size, r.starred) { vm.open(Uri.parse(r.uri)) }
-    }
+    }, recentUnreachable)
 
     fun starredRows(): List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow> = recentRows().filter { it.starred }.let { l ->
         if (starSort == 1) l.sortedBy { it.name.lowercase() } else l.sortedByDescending { it.date }
@@ -188,14 +191,9 @@ class HomeController internal constructor(private val vm: AppViewModel) {
         }
     }
 
-    private fun sameFile(name: String, size: Long) = "$name|$size"
-
     /** Files whose names contain [query]: the phone's and Recent's, each file once. */
-    fun searchFiles(query: String): List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow> {
-        val q = query.trim().lowercase()
-        val all = localRows() + recentRows()
-        return all.filter { q in it.name.lowercase() }.distinctBy { it.key }.distinctBy { sameFile(it.name, it.size) }
-    }
+    fun searchFiles(query: String): List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow> =
+        filesMatching(localRows() + recentRows(), query, recentUnreachable)
 
     internal fun locationOf(uri: String): String = runCatching { vm.files.displayLocation(Uri.parse(uri)) }.getOrDefault(text(R.string.files_location_this_device))
 
@@ -395,4 +393,28 @@ class HomeController internal constructor(private val vm: AppViewModel) {
     fun onPhotosPicked(uris: List<Uri>) {
         if (uris.isNotEmpty()) vm.onFilesPicked(FilePickKind.Create, uris)
     }
+}
+
+/** A file as Search and stars match it across addresses: its name and size. */
+private fun sameFile(name: String, size: Long) = "$name|$size"
+
+/**
+ * [rows] without the ones PdfCraft can no longer open ([unreachable]) when a row it can open has
+ * the same name (#712): Recent keeps an entry per address, and a file the picker gave a new
+ * address (or whose old access was lost, #705) would be listed twice. Alone, such a row stays,
+ * so opening it can say what happened.
+ */
+internal fun eachFileOnce(rows: List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow>, unreachable: Set<String>): List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow> {
+    if (unreachable.isEmpty()) return rows
+    val listed = rows.filter { it.key !in unreachable }.mapTo(HashSet()) { it.name }
+    return rows.filter { it.key !in unreachable || it.name !in listed }
+}
+
+/**
+ * The [rows] (the device's files, then Recent's) whose names contain [query], each file once: the
+ * same address, or the same name and size, is listed once, and [eachFileOnce] applies (#712).
+ */
+internal fun filesMatching(rows: List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow>, query: String, unreachable: Set<String>): List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow> {
+    val q = query.trim().lowercase()
+    return eachFileOnce(rows.filter { q in it.name.lowercase() }, unreachable).distinctBy { it.key }.distinctBy { sameFile(it.name, it.size) }
 }
