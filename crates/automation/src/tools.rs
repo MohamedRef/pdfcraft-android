@@ -1113,13 +1113,14 @@ pub fn tools() -> Vec<ToolDef> {
                 "erase_highlights": { "type": "boolean", "default": false, "description": "Also erase freehand highlights (Android's marker)." },
                 "whole": { "type": "boolean", "default": false, "description": "Remove every stroke the eraser touches whole, instead of only the parts under it." }
             }), &["doc", "page", "path"])),
-        t("comments_edit_many", "Edit selected comments", "Android lasso: move (`move` [dx, dy] in points, y down), recolour (`color`) or delete (`delete`: true) several comments on one page as one undo step. `comments`: 1-based indices from comment_list. Locked and Fill & Sign comments are left alone and listed in `skipped`. Exactly one of move, color or delete.")
+        t("comments_edit_many", "Edit selected comments", "Android lasso: move (`move` [dx, dy] in points, y down), turn and scale (`transform` [anchor x, anchor y, scale, angle in degrees], y down so a positive angle turns clockwise as seen; drawings, lines and polygons turn and scale with their line width, rectangles, ovals, text boxes and stamps only scale), recolour (`color`) or delete (`delete`: true) several comments on one page as one undo step. `comments`: 1-based indices from comment_list. Locked and Fill & Sign comments are left alone and listed in `skipped`. Exactly one of move, transform, color or delete.")
             .destructive()
             .with(schema(json!({
                 "doc": doc(),
                 "page": { "type": "integer", "minimum": 1 },
                 "comments": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "maxItems": 1000 },
                 "move": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+                "transform": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
                 "color": color(),
                 "delete": { "type": "boolean" }
             }), &["doc", "page", "comments"])),
