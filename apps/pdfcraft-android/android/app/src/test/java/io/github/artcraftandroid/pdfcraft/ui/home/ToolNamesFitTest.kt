@@ -6,12 +6,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.material3.LocalTextStyle
 import androidx.test.core.app.ApplicationProvider
 import io.github.artcraftandroid.pdfcraft.ui.PdfcraftTheme
 import io.github.artcraftandroid.pdfcraft.ui.ThemeChoice
@@ -45,19 +51,31 @@ class ToolNamesFitTest {
         val cell = toolsCellMinWidth(753)
         assertEquals(104f, cell.value, 0.01f)
         assertEquals(80f, toolsCellMinWidth(384).value, 0.01f)
+        var measurer: TextMeasurer? = null
+        var style = TextStyle.Default
+        var room = 0
         rule.setContent {
             PdfcraftTheme(ThemeChoice.Light) {
-                Column { for (t in QuickTool.entries) Box(Modifier.width(cell)) { ToolCell(t, context.getString(t.title)) {} } }
+                // as ToolCell sets its name (12 sp on 15 sp lines, centred, in the theme's font), in
+                // the room a cell leaves it (its 2 dp padding each side)
+                measurer = rememberTextMeasurer()
+                style = LocalTextStyle.current.merge(TextStyle(fontSize = 12.sp, lineHeight = 15.sp, textAlign = TextAlign.Center))
+                room = with(LocalDensity.current) { (cell - 4.dp).roundToPx() }
+                // and some cells as the Tools tab draws them, so ToolCell is laid out too
+                Column { for (t in QuickTool.entries.take(3)) Box(Modifier.width(cell)) { ToolCell(t, context.getString(t.title)) {} } }
             }
         }
         rule.waitForIdle()
-        val nodes = rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true).fetchSemanticsNodes()
-        assertEquals("one name per tool", QuickTool.entries.size, nodes.size)
-        for (node in nodes) {
-            val found = mutableListOf<TextLayoutResult>()
-            node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(found)
-            val t = found.single()
-            val what = "\"${t.layoutInput.text}\" in a ${cell.value.toInt()} dp cell"
+        // A TextMeasurer, not the layout semantics hands back: that is redone at the node's own
+        // height, which makes a last line look cut though nothing is cut on a device.
+        val results = rule.runOnIdle {
+            QuickTool.entries.map { t ->
+                val name = context.getString(t.title)
+                name to requireNotNull(measurer).measure(name, style, overflow = TextOverflow.Ellipsis, maxLines = TOOL_NAME_LINES, constraints = Constraints(maxWidth = room))
+            }
+        }
+        for ((name, t) in results) {
+            val what = "\"$name\" in a ${cell.value.toInt()} dp cell"
             assertTrue("$what takes ${t.lineCount} lines", t.lineCount <= TOOL_NAME_LINES)
             assertFalse("$what is cut", t.isLineEllipsized(t.lineCount - 1))
         }
