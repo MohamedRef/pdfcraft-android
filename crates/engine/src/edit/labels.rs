@@ -244,6 +244,8 @@ impl Edit {
             Edit::LockAnnotation { locked: true, .. } => Label::of("Lock comment"),
             Edit::LockAnnotation { .. } => Label::of("Unlock comment"),
             Edit::MoveAnnotation { .. } => Label::of("Move comment"),
+            Edit::TransformAnnotation { angle, .. } if *angle != 0.0 => Label::of("Turn comment"),
+            Edit::TransformAnnotation { .. } => Label::of("Resize comment"),
             Edit::ReshapeAnnotation { .. } => Label::of("Reshape comment"),
             Edit::SetAnnotationPopup { rect: Some(_), .. } => Label::of("Move comment pop-up"),
             Edit::SetAnnotationPopup { open: Some(true), .. } => Label::of("Open comment pop-up"),

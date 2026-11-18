@@ -77,6 +77,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -770,7 +771,15 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var moveOffset by remember { mutableStateOf(Offset.Zero) }
     val lassoDrag = remember { LassoDragDiag() }
     var moving by remember { mutableStateOf(false) }
-    fun clearSelection() { selected.clear(); savedSelected.clear(); lassoPage = null; lassoPoints.clear(); moving = false; moveAnchor = null; moveOffset = Offset.Zero }
+    // The selection's resize or turn handle being dragged (#689): about [transformPivot] (page
+    // points), from [transformFrom], by [transformScale] or [transformAngle] (degrees, clockwise as seen).
+    var transformHandle by remember { mutableStateOf<LassoHandle?>(null) }
+    var transformPivot by remember { mutableStateOf(Offset.Zero) }
+    var transformFrom by remember { mutableStateOf(Offset.Zero) }
+    var transformScale by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    var transformAngle by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    fun endTransform() { transformHandle = null; transformScale = 1f; transformAngle = 0f }
+    fun clearSelection() { selected.clear(); savedSelected.clear(); lassoPage = null; lassoPoints.clear(); moving = false; moveAnchor = null; moveOffset = Offset.Zero; endTransform() }
     /** Every selected outline in page points: draft stroke points and saved comments' rectangles. */
     fun selectionPaths(): List<List<Offset>> = selected.map { it.points.toList() } + savedSelected.mapNotNull { lassoRectOutline(it.rect) }
     // Worked out once per selection, not on every frame of a drag (#85): the points do not change
@@ -1297,6 +1306,17 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         val existing = lassoPage
         if (existing == at.page && (selected.isNotEmpty() || savedSelected.isNotEmpty())) {
             val b = selectionBounds
+            // a handle first (#689): the resize handle is a corner of the box, which a move would take
+            val perPt = doc.viewer.pixelsPerPoint(at.page).takeIf { it > 0f } ?: 1f
+            val handle = b?.let { lassoHandleAt(it, Offset(at.x, at.y), LASSO_HANDLE_SLOP_DP * density.density / perPt, LASSO_TURN_HANDLE_DP * density.density / perPt) }
+            if (b != null && handle != null) {
+                transformHandle = handle
+                transformPivot = lassoPivot(b, handle)
+                transformFrom = lassoHandlePosition(b, handle, LASSO_TURN_HANDLE_DP * density.density / perPt)
+                transformScale = 1f
+                transformAngle = 0f
+                return
+            }
             if (b?.contains(Offset(at.x, at.y), 6f) == true) {
                 moving = true
                 moveAnchor = Offset(at.x, at.y)
@@ -1313,6 +1333,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         val page = lassoPage ?: return
         val at = doc.viewer.screenToPageOf(page, p) ?: return
         val point = Offset(at.x, at.y)
+        when (transformHandle) {
+            LassoHandle.Resize -> { transformScale = lassoResizeScale(transformPivot, transformFrom, point); return }
+            LassoHandle.Turn -> { transformAngle = lassoTurnAngle(transformPivot, transformFrom, point); return }
+            null -> Unit
+        }
         if (moving) {
             val anchor = moveAnchor ?: return
             val pageSize = doc.viewer.pages.getOrNull(page) ?: return
@@ -1345,9 +1370,56 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         else lassoPoints.clear()
     }
 
+    /**
+     * The handle was let go (#689): drafts are replaced by turned and scaled copies (one Undo step),
+     * saved comments are turned and scaled by the engine (one undo step); rectangles, ovals, text
+     * and stamps are scaled but not turned.
+     */
+    fun finishTransform(page: Int, handle: LassoHandle) {
+        val scale = if (handle == LassoHandle.Resize) transformScale else 1f
+        val angle = if (handle == LassoHandle.Turn) transformAngle else 0f
+        val pivot = transformPivot
+        endTransform()
+        if (kotlin.math.abs(scale - 1f) < 1e-3f && kotlin.math.abs(angle) < 0.05f) return
+        val draftCount = selected.size
+        val savedCount = savedSelected.size
+        if (selected.isNotEmpty()) {
+            val before = strokes.toList()
+            val changed = selected.associateWith { lassoTransformedDraft(it, pivot, scale, angle) }
+            // the eraser's edit: every draft before and after, so Undo puts the old ones back
+            val edit = DraftInkEdit.Erased(before, before.map { changed[it] ?: it })
+            applyDraftInkEdit(strokes, edit, forward = true)
+            edits.add(edit)
+            undone.clear()
+            steps.drafted()
+            selected.clear()
+            selected.addAll(changed.values)
+        }
+        var notTurned = 0
+        if (savedSelected.isNotEmpty()) {
+            val targets = if (angle != 0f) savedSelected.filter { it.subtype in LASSO_TURNABLE_SUBTYPES } else savedSelected.toList()
+            notTurned = savedSelected.size - targets.size
+            if (targets.isNotEmpty()) {
+                documentEdit("comments_edit_many", mapOf(
+                    "page" to page + 1, "comments" to targets.map { it.index.toInt() + 1 },
+                    "transform" to listOf(pivot.x.toDouble(), pivot.y.toDouble(), scale.toDouble(), angle.toDouble()),
+                ))
+            }
+            // their rectangles refresh with the document, so the saved part of the selection ends here
+            savedSelected.clear()
+            if (selected.isEmpty()) lassoPage = null
+            if (notTurned > 0) vm.tell(text(R.string.ink_lasso_not_turned))
+        }
+        PenDiag.lassoTransform(handle.name.lowercase(), scale, angle, draftCount, savedCount, notTurned)
+    }
+
     fun finishLasso(p: Offset) {
         val page = lassoPage ?: return
         moveLasso(p)
+        transformHandle?.let { handle ->
+            finishTransform(page, handle)
+            return
+        }
         if (moving) {
             lassoDrag.end(selected.size, savedSelected.size, moveOffset != Offset.Zero)
             if (moveOffset != Offset.Zero) {
@@ -1675,6 +1747,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             },
             onCancel = {
                 if (doc.controller.lassoMode) {
+                    // a handle let go of by a cancel changes nothing (#689)
+                    endTransform()
                     if (moving) {
                         lassoDrag.end(selected.size, savedSelected.size, moved = false)
                         moving = false
@@ -1765,7 +1839,17 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     continue
                 }
                 val s = all[i]
-                drawDraft(s, if (moving && s in selectedSet) moveOffset else Offset.Zero)
+                val handle = transformHandle
+                if (handle != null && s in selectedSet) {
+                    // the selection where the handle takes it (#689): its line widths scale with it, as on lift
+                    val pivot = doc.viewer.pageToScreen(s.page, transformPivot.x, transformPivot.y)
+                    withTransform({
+                        rotate(transformAngle, pivot)
+                        scale(transformScale, transformScale, pivot)
+                    }) { drawDraft(s) }
+                } else {
+                    drawDraft(s, if (moving && s in selectedSet) moveOffset else Offset.Zero)
+                }
                 i++
             }
             // The live eraser (#521): along the eraser's path, the page without its erasable ink
@@ -1838,18 +1922,56 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         drawPath(path, Color(0xFF1A85CA), style = Stroke(width = 1.5.dp.toPx()))
                     }
                     // Saved comments do not move until the finger lifts: their frames follow it.
+                    val handle = transformHandle
+                    // where a page point is shown while a handle is dragged (#689): turned and scaled about the pivot
+                    fun shown(p: Offset): Offset {
+                        val q = if (handle != null) {
+                            lassoTransformPoint(p, transformPivot, if (handle == LassoHandle.Resize) transformScale else 1f, if (handle == LassoHandle.Turn) transformAngle else 0f)
+                        } else p + moveOffset
+                        return doc.viewer.pageToScreen(page, q.x, q.y)
+                    }
+                    fun frame(outline: List<Offset>, fill: Color?, stroke: Color, width: Float, still: Boolean = false) {
+                        val path = Path()
+                        outline.forEachIndexed { i, pt ->
+                            val o = if (still) doc.viewer.pageToScreen(page, pt.x, pt.y) else shown(pt)
+                            if (i == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
+                        }
+                        path.close()
+                        if (fill != null) drawPath(path, fill)
+                        drawPath(path, stroke, style = Stroke(width = width))
+                    }
                     for (c in savedSelected) {
                         val o = lassoRectOutline(c.rect) ?: continue
-                        val a = doc.viewer.pageToScreen(page, o[0].x + moveOffset.x, o[0].y + moveOffset.y)
-                        val b = doc.viewer.pageToScreen(page, o[2].x + moveOffset.x, o[2].y + moveOffset.y)
-                        drawRect(Color(0xFF1A85CA).copy(alpha = 0.6f), a, Size(b.x - a.x, b.y - a.y), style = Stroke(width = 1.dp.toPx()))
+                        // a rectangle, oval, text box or stamp is not turned: its frame only scales
+                        if (handle == LassoHandle.Turn && c.subtype !in LASSO_TURNABLE_SUBTYPES) {
+                            frame(o, null, Color(0xFF1A85CA).copy(alpha = 0.3f), 1.dp.toPx(), still = true)
+                            continue
+                        }
+                        frame(o, null, Color(0xFF1A85CA).copy(alpha = 0.6f), 1.dp.toPx())
                     }
                     val bounds = selectionBounds
-                    if (bounds != null) {
+                    if (bounds != null && handle != null) {
+                        val outline = lassoRectOutline(listOf(bounds.left, bounds.top, bounds.right, bounds.bottom))
+                        if (outline != null) frame(outline, Color(0xFF1A85CA).copy(alpha = 0.12f), Color(0xFF1A85CA), 1.5.dp.toPx())
+                    } else if (bounds != null) {
                         val a = doc.viewer.pageToScreen(page, bounds.left + moveOffset.x, bounds.top + moveOffset.y)
                         val b = doc.viewer.pageToScreen(page, bounds.right + moveOffset.x, bounds.bottom + moveOffset.y)
                         drawRect(Color(0xFF1A85CA).copy(alpha = 0.12f), a, Size(b.x - a.x, b.y - a.y))
                         drawRect(Color(0xFF1A85CA), a, Size(b.x - a.x, b.y - a.y), style = Stroke(width = 1.5.dp.toPx()))
+                        // the resize handle at the corner and the turn handle above (#689), while the selection stands still
+                        if (!moving && lassoPoints.isEmpty()) {
+                            val perPt = doc.viewer.pixelsPerPoint(page).takeIf { it > 0f } ?: 1f
+                            val turnOffset = LASSO_TURN_HANDLE_DP * density.density / perPt
+                            val corner = lassoHandlePosition(bounds, LassoHandle.Resize, turnOffset).let { doc.viewer.pageToScreen(page, it.x, it.y) }
+                            val turn = lassoHandlePosition(bounds, LassoHandle.Turn, turnOffset).let { doc.viewer.pageToScreen(page, it.x, it.y) }
+                            val top = doc.viewer.pageToScreen(page, (bounds.left + bounds.right) / 2f, bounds.top)
+                            drawLine(Color(0xFF1A85CA), top, turn, strokeWidth = 1.5.dp.toPx())
+                            for (o in listOf(corner, turn)) {
+                                drawCircle(Color.White, 7.dp.toPx(), o)
+                                drawCircle(Color(0xFF1A85CA), 7.dp.toPx(), o, style = Stroke(width = 2.dp.toPx()))
+                            }
+                            drawCircle(Color(0xFF1A85CA), 2.5.dp.toPx(), turn)
+                        }
                     }
                 }
             }
@@ -1906,7 +2028,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         // Lasso actions under the selection: Delete (drafts and saved), and Recolour saved
         // comments with the current pen colour. Saved edits are one native undo step each.
         val selPage = lassoPage
-        if (doc.controller.lassoMode && selPage != null && !moving && (selected.isNotEmpty() || savedSelected.isNotEmpty())) {
+        if (doc.controller.lassoMode && selPage != null && !moving && transformHandle == null && (selected.isNotEmpty() || savedSelected.isNotEmpty())) {
             val b = selectionBounds
             if (b != null) {
                 val anchor = doc.viewer.pageToScreen(selPage, b.left, b.bottom)

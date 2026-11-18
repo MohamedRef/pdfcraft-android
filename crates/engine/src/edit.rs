@@ -247,6 +247,16 @@ pub enum Edit {
         dx: f64,
         dy: f64,
     },
+    /// Android adaptation (#689): turn a comment by `angle` degrees (counter-clockwise in user
+    /// space) and scale it by `scale` about `anchor` (user space), as the lasso's handles do; see
+    /// `pdfcraft_annot::transform_annotation`.
+    TransformAnnotation {
+        page: usize,
+        index: usize,
+        anchor: [f64; 2],
+        scale: f64,
+        angle: f64,
+    },
     /// Reshape a line, connected lines, a polygon or a cloud: its points in user space (a line's
     /// two ends, the others' corners).
     ReshapeAnnotation {

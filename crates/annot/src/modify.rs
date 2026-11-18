@@ -650,6 +650,91 @@ pub fn move_annotation(doc: &mut Document, page: usize, index: usize, dx: f64, d
     Ok(())
 }
 
+/// Android adaptation (#689): turn comment `(page, index)` by `angle_deg` (counter-clockwise in
+/// user space) and scale it by `scale` about `anchor` (user space): the lasso's resize and turn
+/// handles. A drawing's stroke points, a line's ends and connected lines' and polygons' corners
+/// move, and the line width scales with them, so shrunk handwriting is not drawn bolder; the
+/// appearance is drawn again. Rectangles, ovals, text boxes and stamps are scaled only (their
+/// rectangle, through [`set_rect`]): turning them is refused, their appearance being upright.
+pub fn transform_annotation(doc: &mut Document, page: usize, index: usize, anchor: [f64; 2], scale: f64, angle_deg: f64, meta: &Meta) -> Result<(), AnnotError> {
+    if !finite(&[anchor[0], anchor[1], scale, angle_deg]) || !(0.02..=50.0).contains(&scale) {
+        return Err(AnnotError::Invalid("invalid turn or scale".into()));
+    }
+    let (_, r) = annot_ref(doc, page, index)?;
+    unlocked(doc, r)?;
+    let d = annot_dict(doc, r);
+    let subtype = String::from_utf8_lossy(d.name(b"Subtype").unwrap_or_default()).into_owned();
+    let (sin, cos) = angle_deg.to_radians().sin_cos();
+    let map = |p: [f64; 2]| {
+        let (x, y) = (p[0] - anchor[0], p[1] - anchor[1]);
+        [anchor[0] + scale * (x * cos - y * sin), anchor[1] + scale * (x * sin + y * cos)]
+    };
+    let turned = {
+        let a = angle_deg.rem_euclid(360.0);
+        a.min(360.0 - a) > 1e-9
+    };
+    // the width as the appearance draws it, scaled; `/BS` replaces a `/Border` array
+    let scaled_width = |d: &mut Dict, w: f64| {
+        let mut bs = d.get(b"BS").and_then(|b| b.as_dict()).cloned().unwrap_or_default();
+        bs.set(b"W".to_vec(), Object::Real(w * scale));
+        d.set(b"BS".to_vec(), Object::Dict(bs));
+        d.remove(b"Border");
+    };
+    let width = border_width_of(&d).max(0.0);
+    match subtype.as_str() {
+        "Ink" => {
+            let strokes = ink_strokes(doc, &d)?;
+            let moved: Vec<Vec<[f64; 2]>> = strokes.iter().map(|s| s.iter().map(|p| map(*p)).collect()).collect();
+            // the widest point of a pressure drawing (`/PCWidths`) sets the room around it
+            let widest = d
+                .get(b"PCWidths")
+                .map(|l| doc.resolve(l))
+                .and_then(|l| l.as_array().cloned())
+                .map(|l| l.iter().flat_map(|s| doc.resolve(s).as_array().cloned().unwrap_or_default()).filter_map(|x| doc.resolve(&x).as_f64()).fold(1.0_f64, f64::max))
+                .unwrap_or(1.0);
+            let inner = bounds(moved.iter().flatten().copied()).ok_or_else(|| AnnotError::Invalid("the drawing has no strokes".into()))?;
+            let rect = grow(inner, width * scale * widest / 2.0 + 1.0);
+            let before = d;
+            doc.update_dict(r, |d| {
+                d.set(b"InkList".to_vec(), Object::Array(moved.iter().map(|s| num_array(&s.concat())).collect()));
+                scaled_width(d, width);
+                d.set(b"Rect".to_vec(), num_array(&rect));
+                touch(d, meta);
+            })?;
+            redraw_or_restore(doc, r, before)
+        }
+        "Line" | "PolyLine" | "Polygon" => {
+            let key: &[u8] = if subtype == "Line" { b"L" } else { b"Vertices" };
+            let nums: Vec<f64> = d
+                .get(key)
+                .map(|o| doc.resolve(o))
+                .and_then(|o| o.as_array().cloned())
+                .ok_or_else(|| AnnotError::Invalid(format!("the {subtype} has no points")))?
+                .iter()
+                .map(|x| doc.resolve(x).as_f64())
+                .collect::<Option<_>>()
+                .ok_or_else(|| AnnotError::Invalid(format!("the {subtype}'s points can't be read")))?;
+            let points: Vec<[f64; 2]> = nums.as_chunks::<2>().0.iter().map(|p| map(*p)).collect();
+            // the wider line first, so the new rectangle has room for it
+            let before = d;
+            doc.update_dict(r, |d| scaled_width(d, width))?;
+            if let Err(e) = set_points(doc, page, index, &points, meta) {
+                doc.set(r, Object::Dict(before));
+                return Err(e);
+            }
+            Ok(())
+        }
+        _ if turned => Err(AnnotError::Unsupported(format!("{subtype} comments are scaled, not turned"))),
+        _ => {
+            let old = d.get(b"Rect").map(|o| doc.resolve(o)).and_then(|o| o.as_array().cloned()).unwrap_or_default();
+            let old: Vec<f64> = old.iter().filter_map(|v| doc.resolve(v).as_f64()).collect();
+            let [a, b, c, e] = old[..] else { return Err(AnnotError::Invalid("the comment has no rectangle".into())) };
+            let (p, q) = (map([a, b]), map([c, e]));
+            set_rect(doc, page, index, normalize([p[0], p[1], q[0], q[1]]), meta)
+        }
+    }
+}
+
 /// Resize a rectangle, oval, text box, stamp or drawing to `rect`. Stamps keep their appearance,
 /// which PDF viewers scale from its bounding box into the new rectangle; drawings scale their
 /// strokes and get a new one.
