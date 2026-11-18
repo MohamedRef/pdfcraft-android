@@ -79,12 +79,19 @@ val BottomBarHeight = 70.dp
 /** The Contents button of the top bar, for layout tests (#647). */
 const val TOP_BAR_CONTENTS_TAG = "top_bar_contents"
 
+/** The place the top bars give their back button: its 46 dp target with 3 dp either side (#706: was 56 dp). */
+private val TopBarBackWidth = 52.dp
+
 /**
  * The top bar in plain viewing: back, the document's name with its save state under it (#525),
  * then Undo, Contents (#647), Find, Share and More. On a window too narrow to hold them all
  * beside the name, Share's place goes to Contents and Share is in More ([showShare]). Read aloud starts from More tools, the bottom bar or the
  * selection menu; while it reads, a divider and its switch (to stop it) follow Back. With a tool active the back arrow becomes a check mark (Done), the switch goes, and Undo
  * and Redo take fixed slots, disabled while there is nothing to undo or redo.
+ *
+ * Every button keeps its 46 dp; the name has the rest (#706): no padding around it beyond its
+ * tap area's own, Back's place only 3 dp wider than Back, a 4 dp gap after More. On a 384 dp
+ * phone that is 136 dp for its letters, 112 dp at 360 dp.
  */
 @Composable
 fun ViewerTopBar(
@@ -126,7 +133,7 @@ fun ViewerTopBar(
         }.padding(bottom = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(TopBarBackWidth), contentAlignment = Alignment.Center) {
             if (toolActive && doneIsCheck) {
                 BarIcon(LucideIcons.Check, stringResource(R.string.common_done), onBack, tint = c.toolAccent)
             } else {
@@ -145,8 +152,10 @@ fun ViewerTopBar(
             Spacer(Modifier.width(14.dp))
             // only while reading: the owner moved Read aloud out of the bar (#525)
             ReadAloudSwitch(readingAloud, onReadAloud)
+            Spacer(Modifier.width(6.dp))
         }
-        Box(Modifier.weight(1f).padding(horizontal = 6.dp), contentAlignment = Alignment.CenterStart) {
+        // no padding of its own (#706): the name's tap area keeps 4 dp from Back and from Undo
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (!toolActive) DocNameAndState(docName, onDocName, saveState.takeIf { !readingAloud }, onSaveState)
         }
         // while reading aloud the bar holds only back and the switch, as the reference's
@@ -169,7 +178,8 @@ fun ViewerTopBar(
         if (onSearch != null) BarIcon(LucideIcons.Search, stringResource(R.string.viewer_find_in_document), onSearch)
         if (showShare || onContents == null) BarIcon(LucideIcons.Share2, stringResource(R.string.common_share), onShare)
         BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.common_more_options), onMore, selected = moreOpen)
-        Spacer(Modifier.width(10.dp))
+        // More's dots sit 27 dp from the edge, as Back's arrow 26 dp from the other (#706: was 10 dp)
+        Spacer(Modifier.width(4.dp))
     }
 }
 
@@ -275,7 +285,8 @@ fun SearchBar(
         }.padding(bottom = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) { BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.viewer_collapse), onClose, iconSize = 27.dp) }
+        // where the reading bar's Back is, so the arrow doesn't move when Find opens (#706)
+        Box(Modifier.width(TopBarBackWidth), contentAlignment = Alignment.Center) { BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.viewer_collapse), onClose, iconSize = 27.dp) }
         Box(
             Modifier.weight(1f).padding(horizontal = 8.dp).height(40.dp).drawBehind {
                 drawLine(c.textSecondary, Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), 1.5f)
@@ -668,23 +679,41 @@ internal fun saveState(edited: Boolean, saving: Boolean, dirty: Boolean, notWrit
     else -> SaveState.Unsaved
 }
 
+/** The document's name on the top bar, and the size a name too wide for it steps down to before it is cut (#706). */
+private val DocNameSize = 15.sp
+private val DocNameSmallerSize = 14.sp
+
 /**
  * The document's name on one line, cut in the middle when long so its start and end both show,
  * and the save state under it in small type (#525). Either may be missing; the name opens
- * File details, the save state keeps its own Save now tap.
+ * File details, the save state keeps its own Save now tap. A name a little too wide at 15 sp is
+ * shown at 14 sp before it is cut (#706): "PdfCraft sample" whole on a 360 dp phone.
  */
 @Composable
 private fun DocNameAndState(name: String?, onName: () -> Unit, state: SaveState?, onSaveState: () -> Unit) {
     val c = pdfColors
     androidx.compose.foundation.layout.Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
         if (!name.isNullOrBlank()) {
-            Text(
-                name, color = c.label, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.MiddleEllipsis,
-                modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
-                    .clickable(onClickLabel = stringResource(R.string.file_details_title), role = Role.Button, onClick = onName)
-                    .padding(horizontal = 4.dp, vertical = if (state != null) 1.dp else 8.dp),
+            val style = androidx.compose.material3.LocalTextStyle.current.merge(
+                TextStyle(color = c.label, fontSize = DocNameSize, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
             )
+            val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+            val inset = 4.dp
+            val insetPx = with(androidx.compose.ui.platform.LocalDensity.current) { inset.roundToPx() } * 2
+            androidx.compose.foundation.layout.BoxWithConstraints {
+                val room = constraints.maxWidth
+                val fitted = remember(name, style, room, insetPx) {
+                    val wide = measurer.measure(name, style, softWrap = false, maxLines = 1).size.width
+                    if (room == androidx.compose.ui.unit.Constraints.Infinity || wide <= room - insetPx) style
+                    else style.copy(fontSize = DocNameSmallerSize)
+                }
+                Text(
+                    name, style = fitted, maxLines = 1, softWrap = false, overflow = TextOverflow.MiddleEllipsis,
+                    modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                        .clickable(onClickLabel = stringResource(R.string.file_details_title), role = Role.Button, onClick = onName)
+                        .padding(horizontal = inset, vertical = if (state != null) 1.dp else 8.dp),
+                )
+            }
         }
         if (state != null) SaveStateLabel(state, onSaveState, compact = !name.isNullOrBlank())
     }
