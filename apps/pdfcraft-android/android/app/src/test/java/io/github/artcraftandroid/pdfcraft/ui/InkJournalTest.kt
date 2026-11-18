@@ -162,7 +162,8 @@ class InkJournalTest {
         assertFalse(inkJournalName("content://doc/secret.pdf").contains("secret"))
     }
 
-    private fun drafted(page: Int, vararg pts: Offset) = InkStroke(page, InkAppearance(0xFF000000.toInt(), 1f, 2f, null)).also { s ->
+    // Offset is a value class, which a vararg cannot be
+    private fun drafted(page: Int, pts: List<Offset>) = InkStroke(page, InkAppearance(0xFF000000.toInt(), 1f, 2f, null)).also { s ->
         s.points.addAll(pts)
         repeat(pts.size) { s.scales.add(1f) }
     }
@@ -172,8 +173,8 @@ class InkJournalTest {
         val file = journalFile()
         val drafts = InkDrafts()
         val doc = DocInkJournal(InkJournal(file) { it() }, drafts).apply { restoring = false }
-        val a = drafted(0, Offset(1f, 1f), Offset(5f, 5f))
-        val b = drafted(1, Offset(2f, 2f), Offset(9f, 3f))
+        val a = drafted(0, listOf(Offset(1f, 1f), Offset(5f, 5f)))
+        val b = drafted(1, listOf(Offset(2f, 2f), Offset(9f, 3f)))
         drafts.strokes.addAll(listOf(a, b))
         drafts.edits.addAll(listOf(DraftInkEdit.Added(listOf(a)), DraftInkEdit.Added(listOf(b))))
         doc.sync()
@@ -187,7 +188,7 @@ class InkJournalTest {
         assertEquals(2, file.read().strokes.size)
         assertEquals("the hand-over keeps the order: nothing rewritten", written, doc.journal.writes)
         // a stroke drawn while the save runs stays after it
-        val c = drafted(0, Offset(3f, 3f), Offset(4f, 8f))
+        val c = drafted(0, listOf(Offset(3f, 3f), Offset(4f, 8f)))
         val mark = doc.saveStarted()
         drafts.strokes.add(c)
         doc.saved(mark)
@@ -216,7 +217,7 @@ class InkJournalTest {
         assertEquals(0, doc.journal.writes)
         // the engine refused the second: it is a draft now, in the same place
         doc.refused(found.drop(1))
-        val back = drafted(1, *file.read().strokes[1].points.toTypedArray())
+        val back = drafted(1, file.read().strokes[1].points)
         drafts.strokes.add(back)
         doc.sync()
         assertEquals(2, file.read().strokes.size)
