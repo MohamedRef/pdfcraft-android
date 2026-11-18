@@ -995,6 +995,7 @@
     <string name="msg_undone">%1$s annullato</string>
     <string name="msg_redone">%1$s ripristinato</string>
     <string name="msg_ink_kept">L\'inchiostro non salvato è stato conservato. Apri Disegna e tocca Fine per salvarlo di nuovo.</string>
+    <string name="msg_ink_restored">Sono stati riaggiunti %1$d tratti non salvati alla chiusura dell\'app.</string>
 
     <!-- Strumenti del visualizzatore -->
 
@@ -1416,6 +1417,8 @@
     <string name="pen_lab_group_drawing">Disegno</string>
     <string name="pen_lab_draft_picture">Tieni i tratti finiti come immagine</string>
     <string name="pen_lab_draft_picture_body">Mentre scrivi, i tratti già scritti sono mostrati da un’immagine invece di essere ridisegnati a ogni fotogramma. Disattiva per confrontare, o se i tratti appaiono sbagliati.</string>
+    <string name="pen_lab_ink_journal">Conserva l\'inchiostro non salvato in caso di arresto</string>
+    <string name="pen_lab_ink_journal_body">Tiene ogni tratto non ancora salvato in un piccolo file e lo riaggiunge quando il documento si apre dopo una chiusura imprevista dell\'app.</string>
     <string name="pen_lab_written">Valori delle penne scritti nel registro</string>
     <string name="ink_shapes">Forme</string>
     <string name="ink_toolbar_guides">Guide</string>
