@@ -945,8 +945,19 @@ pub fn set_points(doc: &mut Document, page: usize, index: usize, points: &[[f64;
 /// Most stroke points a stored drawing may have for resizing or erasing it. Counted as each
 /// stroke is resolved, so one stroke array referenced again and again can't expand past it.
 const MAX_STORED_INK_POINTS: usize = 1_000_000;
-/// Most points the eraser densifies a drawing into before testing them against its path.
-const MAX_ERASE_SAMPLES: usize = 4_000_000;
+/// Android adaptation: most segment pairs (a stroke's segment and the eraser's) the eraser searches
+/// for its exact cut in one call before refusing the drawing; each search is about 150 distance
+/// tests, so this bounds one call to about a second.
+const MAX_ERASE_CUTS: usize = 1_000_000;
+/// Android adaptation: a piece the eraser leaves shorter than this (in points) is dropped, so a
+/// cut that lands at a vertex leaves no crumb drawn as a dot of the stroke's width.
+const MIN_ERASED_PIECE_PT: f64 = 0.05;
+/// Search steps for an exact cut: about 1e-10 of the segment for its lowest point, 4e-15 for its ends.
+const ERASE_SEARCH_STEPS: usize = 48;
+/// Android adaptation: the eraser cuts a segment only when it reaches this far (in points) into
+/// it. A piece the eraser just cut ends on its reach, and the eraser's next step starts where this
+/// one ended: without it that step would cut the piece again at the same place.
+const ERASE_TOUCH_PT: f64 = 1e-3;
 
 /// The strokes of an ink annotation's `/InkList`, at most [`MAX_STORED_INK_POINTS`] points.
 fn ink_strokes(doc: &Document, d: &Dict) -> Result<Vec<Vec<[f64; 2]>>, AnnotError> {
@@ -1574,6 +1585,11 @@ fn point_segment_distance(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     (p[0] - (a[0] + t * dx)).hypot(p[1] - (a[1] + t * dy))
 }
 
+#[cfg(test)]
+pub(crate) fn point_segment_distance_for_tests(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+    point_segment_distance(p, a, b)
+}
+
 /// Shortest distance between segments `a`–`b` and `c`–`d` (zero when they cross).
 fn segment_distance(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> f64 {
     let cross = |o: [f64; 2], p: [f64; 2], q: [f64; 2]| (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
@@ -1582,6 +1598,103 @@ fn segment_distance(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> f64 {
         return 0.0;
     }
     point_segment_distance(a, c, d).min(point_segment_distance(b, c, d)).min(point_segment_distance(c, a, b)).min(point_segment_distance(d, a, b))
+}
+
+/// Android adaptation: the part of segment `p`–`q` (from `t0` to `t1`, 0 at `p`, 1 at `q`) within
+/// the eraser's reach of its segment `a`–`b`, the reach going from `r0` at `p` to `r1` at `q`.
+/// The distance from a point moving along `p`–`q` to `a`–`b` is convex in `t`, and so is that
+/// distance less the reach (which changes linearly): the part is one span (or none). Its lowest
+/// point is found by golden-section search and each end by bisection; the ends returned lie just
+/// outside the reach, so a piece left by the cut has no point under the eraser. `None` when the
+/// eraser does not reach the segment.
+fn erased_span(p: [f64; 2], q: [f64; 2], r0: f64, r1: f64, a: [f64; 2], b: [f64; 2]) -> Option<(f64, f64)> {
+    let point = |t: f64| {
+        if t <= 0.0 {
+            p
+        } else if t >= 1.0 {
+            q
+        } else {
+            [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]
+        }
+    };
+    let gap = |t: f64| point_segment_distance(point(t), a, b) - (r0 + (r1 - r0) * t);
+    const GOLDEN: f64 = 0.618_033_988_749_894_9;
+    let (mut lo, mut hi) = (0.0_f64, 1.0_f64);
+    let (mut x1, mut x2) = (hi - GOLDEN * (hi - lo), lo + GOLDEN * (hi - lo));
+    let (mut g1, mut g2) = (gap(x1), gap(x2));
+    for _ in 0..ERASE_SEARCH_STEPS {
+        if g1 <= g2 {
+            hi = x2;
+            (x2, g2) = (x1, g1);
+            x1 = hi - GOLDEN * (hi - lo);
+            g1 = gap(x1);
+        } else {
+            lo = x1;
+            (x1, g1) = (x2, g2);
+            x2 = lo + GOLDEN * (hi - lo);
+            g2 = gap(x2);
+        }
+    }
+    let (g0, gend) = (gap(0.0), gap(1.0));
+    let mut deep = if g1 <= g2 { (x1, g1) } else { (x2, g2) };
+    for c in [(0.0, g0), (1.0, gend)] {
+        if c.1 < deep.1 {
+            deep = c;
+        }
+    }
+    // a bad number (NaN) reaches nothing; an eraser that only touches the reach leaves the segment
+    if deep.1.is_nan() || deep.1 > -ERASE_TOUCH_PT {
+        return None;
+    }
+    // from a point outside the reach and one inside it, the boundary between them (its outside)
+    let edge = |mut outside: f64, mut inside: f64| {
+        for _ in 0..ERASE_SEARCH_STEPS {
+            let m = (outside + inside) / 2.0;
+            if gap(m) <= 0.0 {
+                inside = m;
+            } else {
+                outside = m;
+            }
+        }
+        outside
+    };
+    let t0 = if g0 <= 0.0 { 0.0 } else { edge(0.0, deep.0) };
+    let t1 = if gend <= 0.0 { 1.0 } else { edge(1.0, deep.0) };
+    Some((t0, t1))
+}
+
+/// Android adaptation: `spans` sorted, with the ones that overlap or touch merged.
+fn merged_spans(mut spans: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+    spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut out: Vec<(f64, f64)> = Vec::with_capacity(spans.len());
+    for (t0, t1) in spans {
+        match out.last_mut() {
+            Some(last) if t0 <= last.1 => last.1 = last.1.max(t1),
+            _ => out.push((t0, t1)),
+        }
+    }
+    out
+}
+
+/// Android adaptation: one piece of a stroke the eraser leaves, with each point's width factor
+/// (`/PCWidths`) and density (`/PCDensity`).
+#[derive(Default)]
+struct InkPiece {
+    points: Vec<[f64; 2]>,
+    factors: Vec<f64>,
+    densities: Vec<f64>,
+}
+
+impl InkPiece {
+    fn push(&mut self, p: [f64; 2], factor: f64, density: f64) {
+        self.points.push(p);
+        self.factors.push(factor);
+        self.densities.push(density);
+    }
+
+    fn length(&self) -> f64 {
+        self.points.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum()
+    }
 }
 
 /// The Eraser (Draw tools): remove the parts of drawing `(page, index)` within `radius` points
@@ -1631,7 +1744,8 @@ pub fn erase_ink_strokes(doc: &mut Document, page: usize, index: usize, path: &[
     let mut kept_factors: Vec<Vec<f64>> = Vec::new();
     let mut kept_dens: Vec<Vec<f64>> = Vec::new();
     let mut erased = false;
-    let mut samples = 0usize;
+    // exact-cut searches so far, against MAX_ERASE_CUTS
+    let mut searches = 0usize;
     for (si, s) in strokes.iter().enumerate() {
         let f = factors.as_ref().map(|f| &f[si]);
         let factor = |i: usize| f.map_or(1.0, |f| f[i]);
@@ -1653,70 +1767,79 @@ pub fn erase_ink_strokes(doc: &mut Document, page: usize, index: usize, path: &[
             kept_dens.push((0..s.len()).map(density).collect());
             continue;
         }
-        let near = |p: [f64; 2], r: f64| local.iter().any(|(a, b)| point_segment_distance(p, *a, *b) <= r);
-        // Densify only the segments the eraser can reach, so they are cut where it crosses
-        // them; elsewhere the stroke keeps its original vertices.
-        let mut pts: Vec<([f64; 2], f64, f64)> = Vec::new();
+        // Android adaptation: each segment the eraser reaches is cut exactly where the eraser's
+        // circle meets the stroke's painted edge (a span of the segment found by search), instead
+        // of being sampled every half radius and cut at the samples: a piece ends at the
+        // eraser's edge, and the only points added are the two at each cut.
+        let mut spans: Vec<Vec<(f64, f64)>> = Vec::with_capacity(s.len().saturating_sub(1));
+        let mut touched = s.len() == 1 && local.iter().any(|(a, b)| point_segment_distance(s[0], *a, *b) <= reach(factor(0)));
         for (i, w) in s.windows(2).enumerate() {
-            let r = reach(factor(i).max(factor(i + 1)));
-            if !local.iter().any(|(a, b)| segment_distance(w[0], w[1], *a, *b) <= r) {
-                pts.push((w[0], factor(i), density(i)));
-                continue;
+            let (r0, r1) = (reach(factor(i)), reach(factor(i + 1)));
+            let mut cut: Vec<(f64, f64)> = Vec::new();
+            for (a, b) in &local {
+                if segment_distance(w[0], w[1], *a, *b) > r0.max(r1) {
+                    continue;
+                }
+                searches = searches.saturating_add(1);
+                if searches > MAX_ERASE_CUTS {
+                    return Err(AnnotError::Invalid("the drawing is too large to erase in one stroke of the eraser".into()));
+                }
+                if let Some(span) = erased_span(w[0], w[1], r0, r1, *a, *b) {
+                    cut.push(span);
+                }
             }
-            let n = ((w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]) / (radius / 2.0)).ceil().clamp(1.0, 2000.0) as usize;
-            samples = samples.saturating_add(n);
-            if samples > MAX_ERASE_SAMPLES {
-                return Err(AnnotError::Invalid("the drawing is too large to erase at this eraser size".into()));
-            }
-            for k in 0..n {
-                let t = k as f64 / n as f64;
-                let fw = factor(i) + (factor(i + 1) - factor(i)) * t;
-                let dv = density(i) + (density(i + 1) - density(i)) * t;
-                pts.push(([w[0][0] + (w[1][0] - w[0][0]) * t, w[0][1] + (w[1][1] - w[0][1]) * t], fw, dv));
-            }
+            touched |= !cut.is_empty();
+            spans.push(merged_spans(cut));
         }
-        if let Some(last) = s.last() {
-            // The final point is a sample too.
-            samples = samples.saturating_add(1);
-            if samples > MAX_ERASE_SAMPLES {
-                return Err(AnnotError::Invalid("the drawing is too large to erase at this eraser size".into()));
-            }
-            pts.push((*last, factor(s.len() - 1), density(s.len() - 1)));
-        }
-        if !pts.iter().any(|(p, fw, _)| near(*p, reach(*fw))) {
+        if !touched {
             kept.push(s.clone());
             kept_factors.push((0..s.len()).map(factor).collect());
             kept_dens.push((0..s.len()).map(density).collect());
             continue;
         }
         erased = true;
-        if whole {
+        if whole || s.len() == 1 {
             continue;
         }
-        let mut run: Vec<[f64; 2]> = Vec::new();
-        let mut run_f: Vec<f64> = Vec::new();
-        let mut run_d: Vec<f64> = Vec::new();
-        for (p, fw, dv) in pts {
-            if near(p, reach(fw)) {
-                if run.len() >= 2 {
-                    kept.push(std::mem::take(&mut run));
-                    kept_factors.push(std::mem::take(&mut run_f));
-                    kept_dens.push(std::mem::take(&mut run_d));
+        let at = |i: usize, t: f64| {
+            let (p, q) = (s[i], s[i + 1]);
+            (
+                [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t],
+                factor(i) + (factor(i + 1) - factor(i)) * t,
+                density(i) + (density(i + 1) - density(i)) * t,
+            )
+        };
+        let mut run = InkPiece::default();
+        let mut close = |run: &mut InkPiece| {
+            let piece = std::mem::take(run);
+            if piece.points.len() >= 2 && piece.length() >= MIN_ERASED_PIECE_PT {
+                kept.push(piece.points);
+                kept_factors.push(piece.factors);
+                kept_dens.push(piece.densities);
+            }
+        };
+        // the first point starts a piece unless the eraser takes it
+        if spans.first().and_then(|c| c.first()).is_none_or(|&(t0, _)| t0 > 0.0) {
+            run.push(s[0], factor(0), density(0));
+        }
+        for (i, cut) in spans.iter().enumerate() {
+            for &(t0, t1) in cut {
+                if t0 > 0.0 {
+                    let (p, f, d) = at(i, t0);
+                    run.push(p, f, d);
                 }
-                run.clear();
-                run_f.clear();
-                run_d.clear();
-            } else {
-                run.push(p);
-                run_f.push(fw);
-                run_d.push(dv);
+                close(&mut run);
+                if t1 < 1.0 {
+                    let (p, f, d) = at(i, t1);
+                    run.push(p, f, d);
+                }
+            }
+            // the segment's end point stays unless the eraser's last span on it reaches it
+            if cut.last().is_none_or(|&(_, t1)| t1 < 1.0) {
+                run.push(s[i + 1], factor(i + 1), density(i + 1));
             }
         }
-        if run.len() >= 2 {
-            kept.push(run);
-            kept_factors.push(run_f);
-            kept_dens.push(run_d);
-        }
+        close(&mut run);
     }
     if !erased {
         return Ok(false);

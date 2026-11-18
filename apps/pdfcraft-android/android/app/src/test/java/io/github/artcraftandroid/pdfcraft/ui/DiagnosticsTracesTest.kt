@@ -13,8 +13,7 @@ class DiagnosticsTracesTest {
         val t = StrokeTrace()
         t.down(time = 1_000, eraser = false, active = true)
         repeat(10) { t.move(count = 4) }
-        listOf(8L, 10L, 12L, 30L).forEach { t.latency(front = false, ms = it) }
-        listOf(3L, 4L).forEach { t.latency(front = true, ms = it) }
+        listOf(8L, 10L, 12L, 30L).forEach { t.latency(ms = it) }
         val s = t.up(time = 1_200, cancelled = false)!!
         assertEquals(200, s.durationMs)
         assertEquals(10, s.events)
@@ -23,8 +22,6 @@ class DiagnosticsTracesTest {
         assertEquals(4, s.normal!!.count)
         assertEquals(10, s.normal!!.medianMs)
         assertEquals(30, s.normalMaxMs)
-        assertEquals(2, s.front!!.count)
-        assertEquals(4, s.frontMaxMs)
         // the pen lifted: a second up is not a stroke
         assertNull(t.up(time = 1_300, cancelled = false))
     }
@@ -55,7 +52,7 @@ class DiagnosticsTracesTest {
         val t = StrokeTrace()
         t.down(time = 0, eraser = true, active = false)
         t.move(5)
-        t.latency(front = false, ms = 9)
+        t.latency(ms = 9)
         assertNull(t.up(time = 100, cancelled = true))
     }
 
