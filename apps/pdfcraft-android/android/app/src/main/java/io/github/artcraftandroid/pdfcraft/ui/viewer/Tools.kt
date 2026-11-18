@@ -994,7 +994,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 // The drafts stay drawn until the engine has them; the ones it refuses stay drafts (#73).
                 vm.runToolBatch(doc, "comment_add", groups) { applied ->
                     PenDiag.draftsSaved(taken.size, taken.sumOf { it.points.size }, groups.sumOf { it.size }, applied, android.os.SystemClock.uptimeMillis() - savedAt)
-                    val kept = drafts.settle(taken, strokeGroups.take(applied).sumOf { it.size })
+                    // the engine took the first [applied] groups: a dashed line is one group of many strokes (#682)
+                    val savedStrokes = strokeGroups.take(applied).sumOf { it.size }
+                    val kept = drafts.settle(taken, savedStrokes)
+                    // in the engine now, but not in the file until the next save (#680)
+                    doc.inkJournal?.committed(taken.take(savedStrokes))
                     steps.finished(groups.take(applied).sumOf { it.size })
                     if (kept > 0) vm.inkKept(doc, kept)
                 }

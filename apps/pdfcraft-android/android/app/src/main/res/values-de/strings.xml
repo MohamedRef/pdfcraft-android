@@ -1002,6 +1002,7 @@
     <string name="msg_undone">%1$s rückgängig gemacht</string>
     <string name="msg_redone">%1$s wiederhergestellt</string>
     <string name="msg_ink_kept">Nicht gespeicherte Tinte wurde behalten. Öffne Zeichnen und tippe auf Fertig, um sie erneut zu speichern.</string>
+    <string name="msg_ink_restored">%1$d Striche, die beim Beenden der App nicht gespeichert waren, wurden wieder hinzugefügt.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">Dieses Werkzeug ist aufgrund der Sicherheitseinstellungen des Dokuments nicht verfügbar.</string>
@@ -1430,6 +1431,8 @@
     <string name="pen_lab_group_drawing">Zeichnen</string>
     <string name="pen_lab_draft_picture">Fertige Striche als Bild behalten</string>
     <string name="pen_lab_draft_picture_body">Beim Schreiben werden bereits geschriebene Striche aus einem Bild gezeigt, statt in jedem Frame neu gezeichnet zu werden. Zum Vergleichen ausschalten, oder falls Striche einmal falsch erscheinen.</string>
+    <string name="pen_lab_ink_journal">Ungespeicherte Tinte bei Absturz behalten</string>
+    <string name="pen_lab_ink_journal_body">Hält jeden noch nicht gespeicherten Strich in einer kleinen Datei und fügt ihn wieder hinzu, wenn das Dokument nach einem unerwarteten Ende der App geöffnet wird.</string>
     <string name="pen_lab_written">Stiftwerte ins Protokoll geschrieben</string>
     <string name="ink_shapes">Formen</string>
     <string name="ink_toolbar_guides">Hilfen</string>

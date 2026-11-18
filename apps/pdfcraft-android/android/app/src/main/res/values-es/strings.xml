@@ -1010,6 +1010,7 @@
     <string name="msg_undone">%1$s deshecho</string>
     <string name="msg_redone">%1$s rehecho</string>
     <string name="msg_ink_kept">Se conservó la tinta que no se guardó. Abre Dibujar y toca Listo para guardarla de nuevo.</string>
+    <string name="msg_ink_restored">Se volvieron a añadir %1$d trazos que no se habían guardado cuando se cerró la app.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">Esta herramienta no está disponible por la configuración de seguridad del documento.</string>
@@ -1438,6 +1439,8 @@
     <string name="pen_lab_group_drawing">Dibujo</string>
     <string name="pen_lab_draft_picture">Guardar los trazos terminados como imagen</string>
     <string name="pen_lab_draft_picture_body">Mientras escribes, los trazos ya escritos se muestran desde una imagen en lugar de dibujarse de nuevo en cada fotograma. Desactívalo para comparar, o si los trazos se ven mal.</string>
+    <string name="pen_lab_ink_journal">Conservar la tinta sin guardar si la app se cierra</string>
+    <string name="pen_lab_ink_journal_body">Guarda cada trazo aún sin guardar en un archivo pequeño y lo vuelve a añadir cuando el documento se abre tras un cierre inesperado de la app.</string>
     <string name="pen_lab_written">Valores de los lápices escritos en el registro</string>
     <string name="ink_shapes">Formas</string>
     <string name="ink_toolbar_guides">Guías</string>

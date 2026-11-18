@@ -182,6 +182,7 @@ internal fun PenLabSettings(vm: AppViewModel) {
 
     SettingsHeader(stringResource(R.string.pen_lab_group_drawing))
     SettingsSwitch(stringResource(R.string.pen_lab_draft_picture), tuning.draftPicture, { tuning.updateDraftPicture(it) }, summary = stringResource(R.string.pen_lab_draft_picture_body))
+    SettingsSwitch(stringResource(R.string.pen_lab_ink_journal), tuning.inkJournal, { tuning.updateInkJournal(it) }, summary = stringResource(R.string.pen_lab_ink_journal_body))
 
     SettingsHeader(stringResource(R.string.pen_lab_group_save))
     SettingsRow(stringResource(R.string.pen_lab_reset), { tuning.reset(style); strokes.clear() }, icon = LucideIcons.RotateCcw, enabled = tuning.tuned(style))
