@@ -216,7 +216,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val started = android.os.SystemClock.elapsedRealtime()
             // documents open in other tabs keep their access and working copies (#138)
             val tabUris = tabs.sources()
-            val (list, places) = withContext(Dispatchers.IO) {
+            val hot = tabs.tabs.filter { it.doc != null }.mapTo(HashSet()) { it.key }
+            val (list, places, unreachable) = withContext(Dispatchers.IO) {
                 val list = recents.list().also { list ->
                     val uris = list.map { it.uri }
                     // access to documents that left Recent is given back (#108), before the copies
@@ -235,12 +236,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
                 // each row's thumbnail source lists a folder and its location may ask the package
                 // manager: worked out here, never while Home composes (#94)
-                list to list.associate { it.uri to (home.thumbPathFor(it.uri) to home.locationOf(it.uri)) }
+                val places = list.associate { it.uri to (home.thumbPathFor(it.uri) to home.locationOf(it.uri)) }
+                // entries that can no longer open, not listed beside a row of the same name (#712)
+                val unreachable = runCatching { files.unreachable(list.map { it.uri }.filter { it != open && it !in hot }) }.getOrDefault(emptySet())
+                Triple(list, places, unreachable)
             }
             home.recentPlaces = places
+            home.recentUnreachable = unreachable
             recentList = list
             // #94: the Home list's sources and locations, worked out off the main thread
-            Diag.event(DiagArea.Home, "recents", "files" to list.size, "ms" to android.os.SystemClock.elapsedRealtime() - started)
+            Diag.event(DiagArea.Home, "recents", "files" to list.size, "unreachable" to unreachable.size, "ms" to android.os.SystemClock.elapsedRealtime() - started)
         }
     }
 

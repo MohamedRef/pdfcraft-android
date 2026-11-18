@@ -447,6 +447,21 @@ class DocumentFiles(private val context: Context) {
      */
     fun existingCopy(uri: Uri): File? = PendingWorkingCopy.recoveryCopy(File(workDir, sha(uri.toString())))
 
+    /**
+     * Of [uris], the documents PdfCraft can no longer open (#712): no lasting access, no copy
+     * kept, no real file to read, and their provider refuses them. Opening one says the access
+     * was lost, so Recent and Search need not list it beside its file's current address.
+     */
+    fun unreachable(uris: Collection<String>): Set<String> {
+        val readable = resolver.persistedUriPermissions.filter { it.isReadPermission }.mapTo(HashSet()) { it.uri.toString() }
+        return uris.filterTo(LinkedHashSet()) { s ->
+            val uri = Uri.parse(s)
+            uri.scheme == ContentResolver.SCHEME_CONTENT && s !in readable && existingCopy(uri) == null &&
+                runCatching { directFile(uri) }.getOrNull() == null &&
+                runCatching { resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { it.moveToFirst() } }.getOrNull() != true
+        }
+    }
+
     /** The file name another app gives [uri], ending in `.pdf`. */
     fun displayName(uri: Uri): String {
         val name = runCatching {
