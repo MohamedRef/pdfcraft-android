@@ -512,6 +512,9 @@ class SharingController internal constructor(private val vm: AppViewModel) {
         var left = false
         vm.openMutex.withLock {
             if (vm.document !== doc) return@withLock
+            // a save of this visit still waiting for the close would write the copy's later edits
+            // over the original as it closes (#724): the copy has them all
+            val droppedAtClose = doc.lent?.dropWriteAtClose() == true
             vm.closeQuietly(eng, doc)
             // the working copy's changes are in the copy: the original keeps its own bytes
             withContext(Dispatchers.IO) {
@@ -519,7 +522,7 @@ class SharingController internal constructor(private val vm: AppViewModel) {
                     if (src.scheme == "content") vm.files.discardWorkingCopy(src) else { vm.files.clearPendingWriteBack(src); true }
                 }.getOrDefault(false)
             }.let { discarded ->
-                Diag.event(DiagArea.Save, "copy_continue", "doc" to doc.diagNumber, "wrote_original" to doc.wroteOriginal, "working_copy_discarded" to discarded, "scheme" to src.scheme)
+                Diag.event(DiagArea.Save, "copy_continue", "doc" to doc.diagNumber, "wrote_original" to doc.wroteOriginal, "working_copy_discarded" to discarded, "scheme" to src.scheme, "dropped_write_at_close" to droppedAtClose)
                 if (!discarded) vm.tell(text(R.string.discard_kept_recovery))
             }
             vm.document = null
