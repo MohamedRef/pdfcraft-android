@@ -2,12 +2,14 @@ package io.github.artcraftandroid.pdfcraft.ui
 
 import androidx.compose.ui.geometry.Offset
 import io.github.artcraftandroid.pdfcraft.ui.viewer.CATALOG_FLAT_SHAPES
+import io.github.artcraftandroid.pdfcraft.ui.viewer.CATALOG_INK_STEP
 import io.github.artcraftandroid.pdfcraft.ui.viewer.CATALOG_SOLIDS
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode
 import io.github.artcraftandroid.pdfcraft.ui.viewer.SnappedShape
 import io.github.artcraftandroid.pdfcraft.ui.viewer.catalogHiddenDash
 import io.github.artcraftandroid.pdfcraft.ui.viewer.catalogShapeCommands
 import io.github.artcraftandroid.pdfcraft.ui.viewer.catalogShapeParts
+import io.github.artcraftandroid.pdfcraft.ui.viewer.densified
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkShapeGeometry
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkShapeOutline
 import io.github.artcraftandroid.pdfcraft.ui.viewer.isAnnotation
@@ -86,5 +88,41 @@ class InkShapeCatalogTest {
         assertEquals(face.first(), face.last())
         // a fine pen still dashes visibly
         assertEquals(listOf(2.0, 2.0), catalogHiddenDash(0.3f))
+    }
+
+    /**
+     * #701: a solid's saved drawings hold a point at least every [CATALOG_INK_STEP] page points along
+     * each edge, every corner of its parts among them and every point on its parts' own lines, so the
+     * smoothing saved ink gets keeps a cube's edges straight and its corners sharp. Before #701 a cube
+     * edge was its two corners only, and the saved cube came out with bowed edges and rounded corners.
+     */
+    @Test fun aSolidsSavedEdgesStayStraight() {
+        for (mode in CATALOG_SOLIDS) {
+            val parts = catalogShapeParts(mode, box.left, box.top, box.right, box.bottom)!!
+            @Suppress("UNCHECKED_CAST")
+            val strokes = catalogShapeCommands(mode, box, 0, "#000000", 1f, 1.5f, null)!!
+                .flatMap { it["strokes"] as List<List<List<Double>>> }
+                .map { s -> s.map { Offset(it[0].toFloat(), it[1].toFloat()) } }
+            // the visible parts first, then the hidden ones, each its own stroke
+            val lines = parts.sortedBy { it.hidden }.map { if (it.closed) it.points + it.points.first() else it.points }
+            assertEquals("$mode", lines.size, strokes.size)
+            for ((line, stroke) in lines.zip(strokes)) {
+                stroke.zipWithNext().forEach { (a, b) ->
+                    assertTrue("$mode: a piece ${(b - a).getDistance()} pt long", (b - a).getDistance() <= CATALOG_INK_STEP + 1e-3f)
+                }
+                line.forEach { c -> assertTrue("$mode keeps its corner $c", stroke.any { (it - c).getDistance() < 1e-3f }) }
+                stroke.forEach { q -> assertTrue("$mode: $q is off its edges", line.zipWithNext().any { (a, b) -> distanceToSegment(q, a, b) < 1e-2f }) }
+            }
+        }
+        // a long edge gets its points, a short one stays as it was
+        assertEquals(11, densified(listOf(Offset(0f, 0f), Offset(30f, 0f))).size)
+        assertEquals(2, densified(listOf(Offset(0f, 0f), Offset(2f, 0f))).size)
+    }
+
+    private fun distanceToSegment(p: Offset, a: Offset, b: Offset): Float {
+        val ab = b - a
+        val len2 = ab.getDistanceSquared()
+        val t = if (len2 == 0f) 0f else (((p - a).x * ab.x + (p - a).y * ab.y) / len2).coerceIn(0f, 1f)
+        return (p - (a + ab * t)).getDistance()
     }
 }
