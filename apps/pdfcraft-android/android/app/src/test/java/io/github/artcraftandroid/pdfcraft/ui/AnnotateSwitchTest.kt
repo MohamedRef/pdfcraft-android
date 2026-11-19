@@ -96,7 +96,8 @@ class AnnotateSwitchTest {
         val viewer = File("src/main/java/io/github/artcraftandroid/pdfcraft/ui/viewer")
         val draw = File(viewer, "DrawToolbar.kt").readText()
         for (m in listOf("Highlight", "Underline", "Strikethrough", "Squiggly")) assertTrue(m, "onMarkup(TextMarkup.$m)" in draw)
-        val tools = File(viewer, "Tools.kt").readText()
+        // the sub-toolbars moved to ToolPickers.kt (#730)
+        val tools = File(viewer, "ToolPickers.kt").readText()
         assertTrue("onPen = { switchAnnotateTool(vm, doc) }" in tools)
         assertTrue("onEraser = { switchAnnotateTool(vm, doc, eraser = true) }" in tools)
     }
