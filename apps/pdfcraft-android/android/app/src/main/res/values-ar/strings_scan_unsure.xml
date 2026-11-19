@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The pages whose page was not found or is unsure, offered for a check (#758) -->
+<resources>
+    <string name="scan_lab_check_unsure">اقتراح مراجعة الصفحات غير المؤكدة</string>
+    <plurals name="scan_unsure_offer">
+        <item quantity="zero">لا توجد صفحات حوافها غير مؤكدة</item>
+        <item quantity="one">قد تكون حواف صفحة واحدة غير صحيحة</item>
+        <item quantity="two">قد تكون حواف صفحتين غير صحيحة</item>
+        <item quantity="few">قد تكون حواف %1$d صفحات غير صحيحة</item>
+        <item quantity="many">قد تكون حواف %1$d صفحة غير صحيحة</item>
+        <item quantity="other">قد تكون حواف %1$d صفحة غير صحيحة</item>
+    </plurals>
+</resources>

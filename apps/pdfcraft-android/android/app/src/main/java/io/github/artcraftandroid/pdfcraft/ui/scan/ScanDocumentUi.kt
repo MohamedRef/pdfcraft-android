@@ -237,6 +237,24 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
                 },
             )
         }
+        // pages whose page wasn't found or is unsure (#758): those, and only those, checked in one pass
+        val unsure = pages.filter { scanPageUnsure(it) }
+        val unsureKeys = unsure.map { it.key }.toSet()
+        val unsureLab = vm.scanLab.options
+        if (!selecting && scanUnsureOffers(unsureLab.checkUnsure, unsureLab.batchBorders, unsureLab.steps, unsureKeys, vm.scanBatch.unsureDismissed, offer)) {
+            LaunchedEffect(unsureKeys) {
+                Diag.event(DiagArea.Scan, "unsure_offer", *scanUnsureOfferDiag(unsure.size, unsure.count { it.found == null }, pages.size))
+            }
+            ScanBatchOfferRow(
+                unsure.size,
+                onCheck = { vm.startScanBatch(ScanBatchWhat.Borders, unsureKeys, "unsure") },
+                onDismiss = {
+                    vm.scanBatch.unsureDismissed = vm.scanBatch.unsureDismissed + unsureKeys
+                    Diag.event(DiagArea.Scan, "unsure_offer_dismissed", "pages" to unsureKeys.size)
+                },
+                text = R.plurals.scan_unsure_offer,
+            )
+        }
         // every page made in the background here too (#494): a page rotated from the selection bar,
         // or imported, is made again without opening Enhance
         val lab = vm.scanLab.options
