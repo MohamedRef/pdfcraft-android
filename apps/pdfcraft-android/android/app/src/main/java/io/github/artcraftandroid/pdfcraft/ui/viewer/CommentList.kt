@@ -94,6 +94,54 @@ internal val LISTED = setOf(
 /** The markups whose row shows a picture of the text they mark. */
 private val SNIPPETS = setOf("Highlight", "Underline", "StrikeOut")
 
+/** One piece of a text markup's preview strip (#735): a tile of the page at the preview's scale, in pixels. */
+internal data class SnippetTile(val x: Int, val y: Int, val width: Int, val height: Int)
+
+/** A text markup's boxes (#735): one per marked line ([lines], `x0, y0, x1, y1, …`), or its [rect] when it has none. */
+private fun markupBoxes(lines: List<Float>, rect: List<Float>): List<List<Float>> =
+    lines.chunked(4).filter { b -> b.size == 4 && b.all(Float::isFinite) }.ifEmpty { listOf(rect).filter { b -> b.size == 4 && b.all(Float::isFinite) } }
+
+/** The height of a text markup's tallest line in points (#735): the preview draws its lines this tall. */
+internal fun markupLineHeight(lines: List<Float>, rect: List<Float>): Float =
+    markupBoxes(lines, rect).maxOfOrNull { b -> kotlin.math.abs(b[3] - b[1]) }?.coerceAtLeast(1f) ?: 1f
+
+/**
+ * The tiles a text markup's preview is made of (#735), in reading order: one per marked line
+ * ([lines], boxes `x0, y0, x1, y1, …` in page points, top-left origin), or the mark's own [rect]
+ * when it has none, each exactly as wide as what is marked. At [scale] pixels per point, kept on
+ * the page ([pageWidth] × [pageHeight] points) and cut to [maxWidth] pixels in all, [gap] pixels
+ * apart. Before #735 the one tile ran from the mark to the comment card's edge, so the words
+ * beside a highlight came along, and a mark over several lines showed their unmarked ends too.
+ */
+internal fun markupSnippetTiles(
+    lines: List<Float>,
+    rect: List<Float>,
+    scale: Float,
+    pageWidth: Float,
+    pageHeight: Float,
+    maxWidth: Int,
+    gap: Int,
+): List<SnippetTile> {
+    val pageW = kotlin.math.floor(pageWidth * scale).toInt()
+    val pageH = kotlin.math.floor(pageHeight * scale).toInt()
+    val tiles = ArrayList<SnippetTile>()
+    var used = 0
+    for (b in markupBoxes(lines, rect)) {
+        val left = kotlin.math.floor(minOf(b[0], b[2]) * scale).toInt().coerceIn(0, pageW)
+        val right = kotlin.math.ceil(maxOf(b[0], b[2]) * scale).toInt().coerceIn(0, pageW)
+        val top = kotlin.math.floor(minOf(b[1], b[3]) * scale).toInt().coerceIn(0, pageH)
+        val bottom = kotlin.math.ceil(maxOf(b[1], b[3]) * scale).toInt().coerceIn(0, pageH)
+        if (right - left < 1 || bottom - top < 1) continue
+        val lead = if (tiles.isEmpty()) 0 else gap
+        val room = maxWidth - used - lead
+        if (room < 1) break
+        val width = minOf(right - left, room)
+        tiles += SnippetTile(left, top, width, bottom - top)
+        used += lead + width
+    }
+    return tiles
+}
+
 /** What a comment did, in the list's italic line (a string resource). */
 @StringRes
 internal fun commentActionLabel(c: CommentInfo): Int = when (c.subtype) {
@@ -590,16 +638,30 @@ internal fun CommentRow(
                     LaunchedEffect(cm.page, cm.index, doc.info.generation) {
                         if (snippet != null) return@LaunchedEffect
                         val eng = vm.engine ?: return@LaunchedEffect
-                        val r = cm.rect
-                        val h = (r[3] - r[1]).coerceAtLeast(1f)
-                        // rendered so the mark is 30 dp tall, then shown 16 dp tall
-                        val scale = (with(density) { 30.dp.toPx() } / h).coerceIn(0.2f, 12f)
-                        val pageW = doc.info.pages.getOrNull(cm.page.toInt())?.width ?: return@LaunchedEffect
-                        val x = (r[0] * scale).toInt().coerceAtLeast(0)
-                        val w = minOf((widthPx * 30f / 16f).toInt(), (pageW * scale).toInt() - x).coerceAtLeast(1)
-                        val tile = TileRect(x.toUInt(), (r[1] * scale).toInt().coerceAtLeast(0).toUInt(), w.toUInt(), (h * scale).toInt().coerceAtLeast(1).toUInt())
+                        // rendered so a marked line is 30 dp tall, then shown 16 dp tall
+                        val lineHeight = markupLineHeight(cm.lines, cm.rect)
+                        val scale = (with(density) { 30.dp.toPx() } / lineHeight).coerceIn(0.2f, 12f)
+                        val page = doc.info.pages.getOrNull(cm.page.toInt()) ?: return@LaunchedEffect
+                        // only what is marked, line by line, a wide space apart (#735)
+                        val gap = (lineHeight * scale * 0.35f).toInt().coerceAtLeast(1)
+                        val tiles = markupSnippetTiles(cm.lines, cm.rect, scale, page.width, page.height, (widthPx * 30f / 16f).toInt(), gap)
+                        if (tiles.isEmpty()) return@LaunchedEffect
                         val img = runCatching {
-                            withContext(eng.thumbnails) { eng.session.renderPage(doc.id, cm.page, scale, tile).toBitmap().asImageBitmap() }
+                            withContext(eng.thumbnails) {
+                                val out = android.graphics.Bitmap.createBitmap(
+                                    tiles.sumOf { it.width } + gap * (tiles.size - 1), tiles.maxOf { it.height }, android.graphics.Bitmap.Config.ARGB_8888,
+                                )
+                                val canvas = android.graphics.Canvas(out)
+                                canvas.drawColor(android.graphics.Color.WHITE)
+                                var at = 0f
+                                for (t in tiles) {
+                                    val part = eng.session.renderPage(doc.id, cm.page, scale, TileRect(t.x.toUInt(), t.y.toUInt(), t.width.toUInt(), t.height.toUInt())).toBitmap()
+                                    canvas.drawBitmap(part, at, (out.height - part.height) / 2f, null)
+                                    part.recycle()
+                                    at += t.width + gap
+                                }
+                                out.asImageBitmap()
+                            }
                         }.getOrNull()
                         if (img != null) onSnippet(img)
                     }
