@@ -1153,7 +1153,7 @@ fun ScanScreen(vm: AppViewModel) {
         // every page made in the background, the page on screen first (#465)
         vm.pageQueue.shownIndex = shownAt
         LaunchedEffect(pages.toList(), lab, autoUpright, vm.scanCanFlatten) { vm.pageQueue.kick() }
-        val wanted = page?.let { ScanPreviewKey.of(it, flattening, lab, autoUpright, autoFlatten = vm.scanAutoFlattens(it, lab)) }
+        val wanted = page?.let { ScanPreviewKey.of(it, flattening, lab, autoUpright, autoFlatten = vm.scanAutoFlattens(it, lab), paperHint = vm.scanPaperHint(it, lab), cardPaper = vm.scanCardPaper(it, lab)) }
         val exact = vm.scanPreview?.takeIf { wanted != null && it.key == wanted }
         // while a new look or strength is made, the page in its last look stays on screen (#301)
         val preview = exact ?: vm.scanPreview?.takeIf { wanted != null && wanted.samePage(it.key) }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A scan's pages share one paper size; ID card only from a sure outline (#759) -->
+<resources>
+    <string name="scan_lab_paper_shared">صفحات السكان الواحد بنفس مقاس الورق</string>
+    <string name="scan_lab_card_sure">مقاس البطاقة فقط لحواف مؤكدة</string>
+</resources>

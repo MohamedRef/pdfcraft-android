@@ -59,7 +59,7 @@ pub mod upright;
 pub mod upright_pages;
 pub mod warp;
 
-pub use aspect::{AspectSource, Focal, Paper, Proportions, proportions, proportions_by_sides};
+pub use aspect::{AspectSource, Focal, Paper, PaperMatch, Proportions, proportions, proportions_by_sides, proportions_by_sides_matched, proportions_matched};
 pub use capture::{MergeFrame, MergeOutcome, MergeRequest, PhotoSharpness, merge_frames, photo_sharpness};
 pub use detect::{Detection, Finder, QuadSource, detect, detect_with};
 pub use encode::Format;

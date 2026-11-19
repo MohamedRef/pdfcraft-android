@@ -2,7 +2,7 @@
 //! the resolution written into the files, and the lens data read from a photo.
 
 use crate::Quad;
-use crate::aspect::{AspectSource, Focal, Paper, focal_px, proportions, proportions_by_sides};
+use crate::aspect::{AspectSource, Focal, HINT_SNAP, Paper, PaperMatch, focal_px, proportions, proportions_by_sides, proportions_matched};
 use crate::encode::{Raster, encode_jpeg, encode_png_grey};
 use crate::exif::{Camera, camera};
 
@@ -530,4 +530,35 @@ fn a_whole_photo_in_original_keeps_its_bytes() {
     assert!(inside.width < 800);
     // a 4000-pixel photo is 342 dots per inch
     assert_eq!(crate::aspect::dpi_without_paper(4000.0), 342);
+}
+
+#[test]
+fn a_page_near_the_scans_paper_takes_it_and_an_unsure_outline_is_never_a_card() {
+    // the owner's scan of 2026-11-19 (#759): one A4 page came out Letter (1.294), another at 1.51,
+    // and parts of a pile were taken for ID cards (1.586)
+    let paper = |w: f64, h: f64, matched| proportions_matched(&frontal(w, h), PHOTO.0, PHOTO.1, None, matched).paper;
+    let a4 = PaperMatch { on: true, hint: Some(Paper::A4), card: true };
+    assert_eq!(paper(1000.0, 1294.0, PaperMatch::plain(true)), Paper::Letter);
+    assert_eq!(paper(1000.0, 1294.0, a4), Paper::A4);
+    assert_eq!(paper(1000.0, 1510.0, PaperMatch::plain(true)), Paper::Custom);
+    assert_eq!(paper(1510.0, 1000.0, a4), Paper::A4);
+    // further than the hint's reach the page keeps its own match: a card's shape is 12 % from A4
+    assert!((1.586 / std::f64::consts::SQRT_2 - 1.0) > HINT_SNAP);
+    assert_eq!(paper(1586.0, 1000.0, a4), Paper::IdCard);
+    assert_eq!(paper(1000.0, 1700.0, a4), Paper::Custom);
+    // a page snapped to the hint has the hint's exact ratio, in its own orientation
+    let p = proportions_matched(&frontal(1510.0, 1000.0), PHOTO.0, PHOTO.1, None, a4);
+    assert_eq!(p.ratio, std::f64::consts::SQRT_2);
+    // an unsure outline is never an ID card, even when the scan is of cards; Legal is still there
+    let unsure = PaperMatch { on: true, hint: None, card: false };
+    assert_eq!(paper(1586.0, 1000.0, unsure), Paper::Custom);
+    assert_eq!(paper(1586.0, 1000.0, PaperMatch { hint: Some(Paper::IdCard), ..unsure }), Paper::Custom);
+    assert_eq!(paper(1000.0, 1640.0, unsure), Paper::Legal);
+    assert_eq!(paper(1000.0, 1400.0, unsure), Paper::A4);
+    // a sure card in a scan of cards stays a card
+    assert_eq!(paper(1560.0, 1000.0, PaperMatch { on: true, hint: Some(Paper::IdCard), card: true }), Paper::IdCard);
+    // matching off: nothing changes that
+    assert_eq!(paper(1000.0, 1294.0, PaperMatch { on: false, ..a4 }), Paper::Custom);
+    // the old entry point is the plain match
+    assert_eq!(proportions(&frontal(1000.0, 1294.0), PHOTO.0, PHOTO.1, None, true).paper, Paper::Letter);
 }

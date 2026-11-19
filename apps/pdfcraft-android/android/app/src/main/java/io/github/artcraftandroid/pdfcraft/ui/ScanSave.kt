@@ -101,6 +101,10 @@ internal fun scanPageRequest(
     markup: io.github.artcraftandroid.pdfcraft.core.ScanMarkup? = null,
     /** The size chosen at Save (#505), as the engine names it; only Save and Share pass one, a preview never does. */
     size: String = "best",
+    /** The scan's own paper (#759): a page within 10 % of it takes it; null for none. */
+    paperHint: io.github.artcraftandroid.pdfcraft.core.ScanPaper? = null,
+    /** Whether the page may be matched to ID card (#759). */
+    cardPaper: Boolean = true,
 ): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest = scanTurnAsk(turns, autoUpright, lab.upright).let { ask ->
     io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
     photoPath = photoPath,
@@ -108,6 +112,8 @@ internal fun scanPageRequest(
     look = scanLookOf(scanLookWord(filter, lab)),
     strength = scanLookStrength(io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(filter, strength), lab).toUByte(),
     paper = paper.word,
+    paperHint = paperHint,
+    cardPaper = cardPaper,
     outputPath = outputPath,
     snapPaper = lab.snapPaper,
     // the scan screen's switch flattens the page as asked; the testing option flattens every page
@@ -238,6 +244,9 @@ internal data class ScanPreviewKey(
     val autoFlatten: Boolean = false,
     /** The page's marks made by hand (#495), with the testing option on; null for none. */
     val marks: io.github.artcraftandroid.pdfcraft.ui.scan.ScanMarks? = null,
+    /** The scan's own paper the page is asked to take, and whether it may be an ID card (#759): both change its shape. */
+    val paperHint: io.github.artcraftandroid.pdfcraft.core.ScanPaper? = null,
+    val cardPaper: Boolean = true,
 ) {
     /** The look this preview shows, as the page keeps it. */
     val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook get() = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(filter, strength, paper)
@@ -250,8 +259,8 @@ internal data class ScanPreviewKey(
 
     companion object {
         /** The preview of [page] in [look] (by default the page's own). */
-        fun of(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true, look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = page.look, autoFlatten: Boolean = false) =
-            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false, inspect = false, removeFingers = io.github.artcraftandroid.pdfcraft.ui.scan.scanRemovesFingers(lab, page.auto)), page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), look.strength, look.paper, autoFlatten, io.github.artcraftandroid.pdfcraft.ui.scan.scanMarksFor(page, lab))
+        fun of(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true, look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = page.look, autoFlatten: Boolean = false, paperHint: io.github.artcraftandroid.pdfcraft.core.ScanPaper? = null, cardPaper: Boolean = true) =
+            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false, inspect = false, removeFingers = io.github.artcraftandroid.pdfcraft.ui.scan.scanRemovesFingers(lab, page.auto)), page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), look.strength, look.paper, autoFlatten, io.github.artcraftandroid.pdfcraft.ui.scan.scanMarksFor(page, lab), paperHint, cardPaper)
     }
 }
 

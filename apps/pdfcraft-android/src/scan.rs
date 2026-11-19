@@ -63,6 +63,14 @@ pub struct ScanPageRequest {
     /// Match the page to standard paper sizes (A4, Letter, …) when its shape is within 3 %.
     #[uniffi(default = true)]
     pub snap_paper: bool,
+    /// With `snap_paper`: the paper most of the scan's other pages were matched to (#759). A page
+    /// within 10 % of its shape takes it. `None` for none.
+    #[uniffi(default = None)]
+    pub paper_hint: Option<ScanPaper>,
+    /// With `snap_paper`: whether the page may be matched to ID card (#759). Off for an outline
+    /// the detector was not sure of, which so easily has a card's shape.
+    #[uniffi(default = true)]
+    pub card_paper: bool,
     /// Flatten a curled, sagging or folded page with the flattening network (#302) instead of
     /// the perspective warp. Off unless asked for; see [`scan_can_flatten`].
     #[uniffi(default = false)]
@@ -976,6 +984,8 @@ fn page_request<'a>(
         threads: std::thread::available_parallelism().map_or(1, usize::from).min(pdfcraft_scan::warp::MAX_THREADS),
         focal_35mm: request.focal_35mm,
         snap_paper: request.snap_paper,
+        paper_hint: request.paper_hint.map(paper_of),
+        card_paper: request.card_paper,
         flatten: request.flatten,
         flatten_check: request.flatten_check,
         flatten_trim: request.flatten_trim,
@@ -1125,6 +1135,8 @@ pub struct ScanPreview {
     pub turns: u8,
     /// The page was flattened by the network (#302).
     pub flattened: bool,
+    /// The paper the page was matched to (#759): the app works out a scan's own paper from these.
+    pub paper: ScanPaper,
     /// The kind of document the Auto look took the page for (#299).
     pub kind: Option<ScanPageKind>,
     /// What the finger step did (#466); `None` when it did not run.
@@ -1161,6 +1173,9 @@ struct PreviewKey {
     corners: [u32; 8],
     focal: Option<u32>,
     snap_paper: bool,
+    /// The scan's own paper and the card rule (#759) change the page's shape.
+    paper_hint: Option<ScanPaper>,
+    card_paper: bool,
     side_proportions: bool,
     flatten: bool,
     flatten_check: bool,
@@ -1194,6 +1209,8 @@ fn preview_key(photo: PathBuf, request: &ScanPageRequest, corners: [f32; 8], max
         corners: corners.map(f32::to_bits),
         focal: request.focal_35mm.map(f32::to_bits),
         snap_paper: request.snap_paper,
+        paper_hint: request.paper_hint,
+        card_paper: request.card_paper,
         side_proportions: request.side_proportions,
         flatten: request.flatten,
         flatten_check: request.flatten_check,
@@ -1471,6 +1488,7 @@ pub(crate) fn preview_stoppable(
         orientation: base.orientation.map(orientation_of),
         turns: base.turns,
         flattened: base.flattened,
+        paper: scan_paper(base.paper),
         kind: kind.as_ref().map(kind_of),
         fingers: applied.fingers.map(Into::into),
         markup: applied.markup.map(Into::into),
@@ -1482,6 +1500,32 @@ pub(crate) fn preview_stoppable(
         light_reused: applied.light_reused,
         timings,
     })
+}
+
+/// The engine's paper as the app names it.
+fn scan_paper(paper: Paper) -> ScanPaper {
+    match paper {
+        Paper::A4 => ScanPaper::A4,
+        Paper::A5 => ScanPaper::A5,
+        Paper::Letter => ScanPaper::Letter,
+        Paper::Legal => ScanPaper::Legal,
+        Paper::IdCard => ScanPaper::IdCard,
+        Paper::Square => ScanPaper::Square,
+        Paper::Custom => ScanPaper::Custom,
+    }
+}
+
+/// The app's paper as the engine names it (#759).
+fn paper_of(paper: ScanPaper) -> Paper {
+    match paper {
+        ScanPaper::A4 => Paper::A4,
+        ScanPaper::A5 => Paper::A5,
+        ScanPaper::Letter => Paper::Letter,
+        ScanPaper::Legal => Paper::Legal,
+        ScanPaper::IdCard => Paper::IdCard,
+        ScanPaper::Square => Paper::Square,
+        ScanPaper::Custom => Paper::Custom,
+    }
 }
 
 fn orientation_of(found: pdfcraft_scan::Upright) -> ScanOrientation {
@@ -1790,6 +1834,27 @@ mod tests {
         p
     }
 
+    #[test]
+    fn a_scans_own_paper_and_a_card_only_when_sure_reach_the_page() {
+        // #759: the scan's paper and the card rule are passed on, and a straightened preview is kept by them
+        let root = temp("paper-hint");
+        let shot = root.join("wide.jpg");
+        image::RgbImage::from_fn(1600, 1200, |x, y| image::Rgb([(x / 8) as u8, (y / 6) as u8, 180])).save(&shot).unwrap();
+        let corners = |w: f32, h: f32| vec![0.1, 0.1, 0.1 + w / 1600.0, 0.1, 0.1 + w / 1600.0, 0.1 + h / 1200.0, 0.1, 0.1 + h / 1200.0];
+        let letter = ScanPageRequest { corners: corners(1100.0, 850.0), ..request(&shot, &root.join("letter")) };
+        assert_eq!(process_in(&root, &letter).unwrap().paper, ScanPaper::Letter);
+        assert_eq!(process_in(&root, &ScanPageRequest { paper_hint: Some(ScanPaper::A4), ..letter.clone() }).unwrap().paper, ScanPaper::A4);
+        // a card's shape is a card only from a sure outline
+        let card = ScanPageRequest { corners: corners(856.0, 540.0), ..request(&shot, &root.join("card")) };
+        assert_eq!(process_in(&root, &card).unwrap().paper, ScanPaper::IdCard);
+        assert_eq!(process_in(&root, &ScanPageRequest { card_paper: false, ..card.clone() }).unwrap().paper, ScanPaper::Custom);
+        // the preview says its paper, and the hint straightens the page again
+        assert_eq!(preview_in(&root, &letter, 640).unwrap().paper, ScanPaper::Letter);
+        let hinted = preview_in(&root, &ScanPageRequest { paper_hint: Some(ScanPaper::A4), ..letter.clone() }, 640).unwrap();
+        assert!(!hinted.reused);
+        assert_eq!(hinted.paper, ScanPaper::A4);
+    }
+
     fn request(photo: &Path, out: &Path) -> ScanPageRequest {
         ScanPageRequest {
             photo_path: photo.to_string_lossy().into_owned(),
@@ -1799,6 +1864,8 @@ mod tests {
             output_path: out.to_string_lossy().into_owned(),
             focal_35mm: None,
             snap_paper: true,
+            paper_hint: None,
+            card_paper: true,
             flatten: false,
             flatten_check: false,
             flatten_trim: false,

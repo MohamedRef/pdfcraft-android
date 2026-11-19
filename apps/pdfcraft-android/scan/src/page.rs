@@ -3,7 +3,7 @@
 
 use std::time::Instant;
 
-use crate::aspect::{AspectSource, Focal, Paper, dpi_without_paper, proportions, proportions_by_sides};
+use crate::aspect::{AspectSource, Focal, Paper, PaperMatch, dpi_without_paper, proportions_by_sides_matched, proportions_matched};
 use crate::encode::{Format, stamp_jpeg_density};
 use crate::enhance::DEFAULT_SHARPEN;
 use crate::enhance::Shape;
@@ -59,6 +59,12 @@ pub struct PageRequest<'a> {
     pub focal_35mm: Option<f32>,
     /// Match the page to standard paper sizes (A4, Letter, …) when its shape is within 3 %.
     pub snap_paper: bool,
+    /// With `snap_paper`: the paper most of the scan's other pages were matched to (#759). A page
+    /// within 10 % of its shape takes it. `None` for none.
+    pub paper_hint: Option<Paper>,
+    /// With `snap_paper`: whether the page may be matched to ID card (#759). Off for an outline the
+    /// detector was not sure of.
+    pub card_paper: bool,
     /// Take the page's proportions from the lengths of its sides alone, as before #293 (a testing
     /// choice, #288).
     pub side_proportions: bool,
@@ -183,6 +189,8 @@ impl<'a> PageRequest<'a> {
             threads: 1,
             focal_35mm: None,
             snap_paper: true,
+            paper_hint: None,
+            card_paper: true,
             side_proportions: false,
             flatten: false,
             flatten_check: false,
@@ -676,9 +684,11 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         Some(f) => Focal::from_35mm(Some(f), None, photo.width, photo.height),
         None => Focal::from_35mm(lens.focal_35mm, lens.digital_zoom, photo.width, photo.height),
     };
+    // the scan's own paper first, ID card only for a sure outline (#759)
+    let matched = PaperMatch { on: request.snap_paper, hint: request.paper_hint, card: request.card_paper };
     let shape = match request.side_proportions {
-        true => proportions_by_sides(&quad, photo.width, photo.height, request.snap_paper),
-        false => proportions(&quad, photo.width, photo.height, camera, request.snap_paper),
+        true => proportions_by_sides_matched(&quad, photo.width, photo.height, matched),
+        false => proportions_matched(&quad, photo.width, photo.height, camera, matched),
     };
     let scale = match (request.max_side, request.look) {
         // a preview: shrunk to fit and never enlarged, whatever the look, so that one

@@ -87,6 +87,9 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SettingsHeader(stringResource(R.string.scan_lab_group_borders))
     Sw(R.string.scan_lab_perspective, o.perspective) { lab.update(o.copy(perspective = it)) }
     Sw(R.string.scan_lab_snap_paper, o.snapPaper) { lab.update(o.copy(snapPaper = it)) }
+    // a scan's pages share one paper size, and a card only from a sure outline (#759)
+    Sw(R.string.scan_lab_paper_shared, o.paperShared) { lab.update(o.copy(paperShared = it)) }
+    Sw(R.string.scan_lab_card_sure, o.cardSure) { lab.update(o.copy(cardSure = it)) }
     // a dragged corner or side is pulled onto the paper's edge while the finger moves (#514)
     Sw(R.string.scan_lab_snap_drag, o.snapWhileDragging) { lab.update(o.copy(snapWhileDragging = it)) }
     Sw(R.string.scan_lab_crop, o.cropTools) { lab.update(o.copy(cropTools = it)) }
