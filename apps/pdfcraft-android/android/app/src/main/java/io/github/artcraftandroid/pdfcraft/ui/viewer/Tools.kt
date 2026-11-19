@@ -70,6 +70,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.boundsInParent
@@ -829,10 +830,25 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         // A refused edit or a no-op (an eraser that met no ink) answers without the document summary.
         vm.runTool(doc, name, args, onSettled = { steps.finished(made); settled(made > 0) }) { r -> if (r.has("doc")) made = 1 }
     }
-    fun savedEdit(page: Int, extra: Map<String, Any?>) {
+    /**
+     * An edit of the selected saved comments. [journal] makes the same change to the strokes the
+     * crash journal keeps for them (#703); null when it changes nothing the journal keeps.
+     */
+    fun savedEdit(page: Int, extra: Map<String, Any?>, journal: ((InkSaveStroke) -> InkSaveStroke?)? = null) {
         val indices = savedSelected.map { it.index.toInt() + 1 }
         if (indices.isEmpty()) return
-        documentEdit("comments_edit_many", mapOf("page" to page + 1, "comments" to indices) + extra)
+        val inkRects = savedSelected.filter { it.subtype == "Ink" }.map { it.rect }
+        documentEdit("comments_edit_many", mapOf("page" to page + 1, "comments" to indices) + extra) { made ->
+            if (made && journal != null && inkRects.isNotEmpty()) doc.inkJournal?.savedInkChanged(page, inkRects, journal)
+        }
+    }
+    /** An eraser cut saved ink along [path] on [page]: the crash journal can't cut its strokes the same way, so it says so (#703). */
+    fun eraseTouchesJournal(page: Int, path: List<Offset>, radius: Float) {
+        if (path.isEmpty()) return
+        val area = androidx.compose.ui.geometry.Rect(
+            path.minOf { it.x } - radius, path.minOf { it.y } - radius, path.maxOf { it.x } + radius, path.maxOf { it.y } + radius,
+        )
+        doc.inkJournal?.savedInkTouched(page, area)
     }
     val prefs = vm.settings.toolPrefs
     // The finished drafts as one picture (#609), so a frame of writing does not fill every draft again.
@@ -958,7 +974,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     steps.drafted()
                 }
                 if (saved.isNotEmpty()) {
-                    documentEdit("comments_edit_many", mapOf("page" to s.page + 1, "comments" to saved.map { it.index.toInt() + 1 }, "delete" to true))
+                    documentEdit("comments_edit_many", mapOf("page" to s.page + 1, "comments" to saved.map { it.index.toInt() + 1 }, "delete" to true)) { made ->
+                        // the crash journal drops the strokes it kept for them (#703)
+                        if (made) doc.inkJournal?.savedInkChanged(s.page, saved.map { it.rect }) { null }
+                    }
                 }
                 vm.tell(text(R.string.pen_gesture_scratched, victims.size + saved.size))
             }
@@ -1341,7 +1360,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         appendEraserPoint(eraserPoints, Offset(at.x, at.y), activeEraserRadius)?.let { chunk ->
             // A very long gesture erases its finished part now; the rest follows on lift (#76).
             eraserChunks[0]++
-            documentEdit("comment_erase", inkEraseCommand(page, chunk, activeEraserRadius.toDouble(), activeEraseWhole))
+            val radius = activeEraserRadius
+            documentEdit("comment_erase", inkEraseCommand(page, chunk, radius.toDouble(), activeEraseWhole)) { made ->
+                if (made) eraseTouchesJournal(page, chunk, radius)
+            }
         }
         // the whole-stroke eraser tests each step of the path the edit gets, as the edit will (#655)
         eraserPoints.lastOrNull()?.takeIf { it != before }?.let { live?.passed(it, android.os.SystemClock.uptimeMillis()) }
@@ -1396,7 +1418,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         logEraseGesture(path.size, eraserChunks[0], radius)
         if (path.isNotEmpty() && savedInk) {
             // One native Edit::Batch per gesture, including freehand marker Ink.
-            documentEdit("comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble(), activeEraseWhole)) { made ->
+            val radius = activeEraserRadius
+            documentEdit("comment_erase", inkEraseCommand(page, path, radius.toDouble(), activeEraseWhole)) { made ->
+                if (made) eraseTouchesJournal(page, path, radius)
                 // nothing erased (or the edit failed): nothing changes on the page, so the live
                 // view goes now, also when a newer gesture has started meanwhile (#655)
                 if (!made && le != null && (liveErase === le || liveErasePrev === le)) {
@@ -1590,10 +1614,14 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             val targets = if (angle != 0f) savedSelected.filter { it.subtype in LASSO_TURNABLE_SUBTYPES } else savedSelected.toList()
             notTurned = savedSelected.size - targets.size
             if (targets.isNotEmpty()) {
+                val inkRects = targets.filter { it.subtype == "Ink" }.map { it.rect }
                 documentEdit("comments_edit_many", mapOf(
                     "page" to page + 1, "comments" to targets.map { it.index.toInt() + 1 },
                     "transform" to listOf(pivot.x.toDouble(), pivot.y.toDouble(), scale.toDouble(), angle.toDouble()),
-                ))
+                )) { made ->
+                    // the crash journal turns and scales the strokes it keeps for them the same way (#703)
+                    if (made && inkRects.isNotEmpty()) doc.inkJournal?.savedInkChanged(page, inkRects) { s -> lassoTransformedSaved(s, pivot, scale, angle) }
+                }
             }
             // their rectangles refresh with the document, so the saved part of the selection ends here
             savedSelected.clear()
@@ -1623,7 +1651,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 // Saved comments move natively, all in one undo step; their rectangles refresh
                 // with the document, so the saved part of the selection ends here.
                 if (savedSelected.isNotEmpty()) {
-                    savedEdit(page, mapOf("move" to listOf(moveOffset.x.toDouble(), moveOffset.y.toDouble())))
+                    val by = moveOffset
+                    savedEdit(page, mapOf("move" to listOf(by.x.toDouble(), by.y.toDouble()))) { s -> s.copy(points = s.points.map { it + by }) }
                     savedSelected.clear()
                     if (selected.isEmpty()) lassoPage = null
                 }
@@ -2273,7 +2302,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                             undone.clear()
                             steps.drafted()
                         }
-                        savedEdit(selPage, mapOf("delete" to true))
+                        savedEdit(selPage, mapOf("delete" to true)) { null }
                         clearSelection()
                     })
                     // link the selected handwriting to a page or web address (#159)
@@ -2284,7 +2313,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     })
                     if (savedSelected.isNotEmpty()) {
                         SubTool(LucideIcons.Palette, stringResource(R.string.ink_lasso_recolor), false, {
-                            savedEdit(selPage, mapOf("color" to prefs.color(StyledTool.Ink).hex()))
+                            val colour = prefs.color(StyledTool.Ink)
+                            savedEdit(selPage, mapOf("color" to colour.hex())) { s -> s.copy(appearance = s.appearance.copy(argb = colour.toArgb())) }
                             clearSelection()
                         })
                     }

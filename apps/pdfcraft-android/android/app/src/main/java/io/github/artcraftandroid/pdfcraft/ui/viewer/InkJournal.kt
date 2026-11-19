@@ -17,7 +17,9 @@ import java.util.zip.CRC32
  *
  * The file is append-only: a header (magic, version, the document's page fingerprint), then
  * records of [type][payload length][CRC32 of the payload][payload]. A record keeps the first k
- * strokes ([REC_KEEP]) or adds one ([REC_ADD]); replaying them in order gives the strokes. Each
+ * strokes ([REC_KEEP]) or adds one ([REC_ADD]); replaying them in order gives the strokes. A
+ * [REC_TOUCHED] record says an edit changed some of them in a way the journal did not follow
+ * (#703), so a restore can say that changes may be missing. Each
  * write is flushed to the disk, so only the gesture being written when the app died can be lost,
  * and a torn or damaged record ends the replay there (the records before it stand).
  */
@@ -26,6 +28,7 @@ private const val JOURNAL_MAGIC = 0x50434A4C // "PCJL"
 private const val JOURNAL_VERSION = 1
 private const val REC_KEEP: Byte = 1
 private const val REC_ADD: Byte = 2
+private const val REC_TOUCHED: Byte = 3
 
 /** How long after a gesture ends the journal is written: a burst of edits is written once. */
 internal const val INK_JOURNAL_SYNC_MS = 250L
@@ -106,6 +109,8 @@ internal data class InkJournalRead(
     val records: Int = 0,
     val torn: Boolean = false,
     val bytes: Long = 0L,
+    /** An edit changed some of the strokes afterwards in a way the journal did not follow (#703). */
+    val touched: Boolean = false,
 )
 
 /**
@@ -124,6 +129,7 @@ internal class InkJournalFile(val file: File, private val fingerprint: String) {
         val strokes = ArrayList<InkSaveStroke>()
         var records = 0
         var torn = false
+        var touched = false
         try {
             DataInputStream(file.inputStream().buffered()).use { input ->
                 val header = try {
@@ -152,6 +158,7 @@ internal class InkJournalFile(val file: File, private val fingerprint: String) {
                                 require(strokes.size < INK_JOURNAL_MAX_STROKES)
                                 strokes.add(decodeInkJournalStroke(payload))
                             }
+                            REC_TOUCHED -> touched = true
                             else -> error("unknown record $type")
                         }
                         records++
@@ -165,11 +172,11 @@ internal class InkJournalFile(val file: File, private val fingerprint: String) {
         } catch (_: Exception) {
             return InkJournalRead(emptyList(), "damaged", bytes = size)
         }
-        return InkJournalRead(strokes, "read", records, torn, size)
+        return InkJournalRead(strokes, "read", records, torn, size, touched)
     }
 
-    /** The file holds the header and [strokes] only (written to a temporary file, then renamed over it). */
-    fun rewrite(strokes: List<ByteArray>) {
+    /** The file holds the header and [strokes] only, marked [touched] (written to a temporary file, then renamed over it). */
+    fun rewrite(strokes: List<ByteArray>, touched: Boolean = false) {
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".tmp")
         FileOutputStream(tmp).use { out ->
@@ -177,6 +184,7 @@ internal class InkJournalFile(val file: File, private val fingerprint: String) {
             data.writeInt(JOURNAL_MAGIC)
             data.writeInt(JOURNAL_VERSION)
             data.writeUTF(fingerprint)
+            if (touched) record(data, REC_TOUCHED, ByteArray(0))
             for (s in strokes) record(data, REC_ADD, s)
             data.flush()
             out.fd.sync()
@@ -188,11 +196,12 @@ internal class InkJournalFile(val file: File, private val fingerprint: String) {
         }
     }
 
-    /** Keep the first [keep] strokes, then add [added]. */
-    fun append(keep: Int?, added: List<ByteArray>) {
-        if (!file.isFile) return rewrite(added)
+    /** Mark the strokes [touched] if asked, keep the first [keep] of them, then add [added]. */
+    fun append(keep: Int?, added: List<ByteArray>, touched: Boolean = false) {
+        if (!file.isFile) return rewrite(added, touched)
         FileOutputStream(file, true).use { out ->
             val data = DataOutputStream(out.buffered())
+            if (touched) record(data, REC_TOUCHED, ByteArray(0))
             if (keep != null) record(data, REC_KEEP, ByteArrayOutputStream(4).also { DataOutputStream(it).writeInt(keep) }.toByteArray())
             for (s in added) record(data, REC_ADD, s)
             data.flush()
@@ -247,6 +256,7 @@ internal fun inkJournalItem(stroke: InkStroke, shape: List<Any> = inkStrokeShape
 internal class InkJournal(private val file: InkJournalFile, private val run: (() -> Unit) -> Unit) {
     /** What the file holds now, as far as [sync] knows. */
     private var written: List<InkJournalItem> = emptyList()
+    private var writtenTouched = false
 
     /** Writes made, the longest one and failed ones, for the log. */
     @Volatile var writes = 0
@@ -259,23 +269,30 @@ internal class InkJournal(private val file: InkJournalFile, private val run: (()
     @Volatile private var failed = false
 
     /** The strokes the file already held when the document opened ([read]): they become [written]. */
-    fun adopt(items: List<InkJournalItem>) {
+    fun adopt(items: List<InkJournalItem>, touched: Boolean = false) {
         written = items
+        writtenTouched = touched
     }
 
     fun read(): InkJournalRead = file.read()
 
     /**
-     * The strokes the file should hold, in order. Strokes that are the same objects with the same
-     * shape as the start of what was written stay; the rest is written after a "keep" record.
+     * The strokes the file should hold, in order, and whether they are [touched] (#703). Strokes that
+     * are the same objects with the same shape as the start of what was written stay; the rest is
+     * written after a "keep" record.
      */
-    fun sync(items: List<InkJournalItem>) {
+    fun sync(items: List<InkJournalItem>, touched: Boolean = false) {
         var same = 0
         if (!failed) while (same < items.size && same < written.size && items[same].key === written[same].key && items[same].shape == written[same].shape) same++
-        if (!failed && same == items.size && same == written.size) return
+        val mark = touched && items.isNotEmpty()
+        if (!failed && same == items.size && same == written.size && mark == writtenTouched) return
         val keep = if (same < written.size) same else null
+        // a mark is only ever added to the file: taking it back starts the file over
+        val unmark = writtenTouched && !mark
+        val newMark = mark && !writtenTouched
         val all = items.map { it.data }
         written = items.toList()
+        writtenTouched = mark
         failed = false
         run {
             val started = System.nanoTime()
@@ -283,8 +300,8 @@ internal class InkJournal(private val file: InkJournalFile, private val run: (()
                 when {
                     all.isEmpty() -> file.delete()
                     // the file is gone or was never written: all of it, not only what is new
-                    keep == 0 || !file.file.isFile -> file.rewrite(all.map { encodeInkJournalStroke(it()) })
-                    else -> file.append(keep, all.subList(same, all.size).map { encodeInkJournalStroke(it()) })
+                    keep == 0 || unmark || !file.file.isFile -> file.rewrite(all.map { encodeInkJournalStroke(it()) }, mark)
+                    else -> file.append(keep, all.subList(same, all.size).map { encodeInkJournalStroke(it()) }, newMark)
                 }
                 writes++
             } catch (_: Exception) {
@@ -299,6 +316,7 @@ internal class InkJournal(private val file: InkJournalFile, private val run: (()
     /** Nothing is unsaved any more, or the changes were discarded: the file goes. */
     fun delete() {
         written = emptyList()
+        writtenTouched = false
         run { runCatching { file.delete() } }
     }
 
@@ -318,6 +336,14 @@ internal class DocInkJournal(val journal: InkJournal, private val drafts: InkDra
     /** While the strokes found at open are being added back nothing is written: the file still holds them. */
     var restoring = true
 
+    /**
+     * An edit changed strokes the engine took from the journal in a way it could not follow (an
+     * eraser cut, Undo or Redo, an edit of part of a stroke): a restore says changes may be missing
+     * (#703). Cleared once a save has written every such stroke.
+     */
+    var touched = false
+        private set
+
     /** Strokes the file does not have yet. */
     val unsaved: Int get() = committed.size + drafts.saving.size + drafts.strokes.size
 
@@ -330,10 +356,11 @@ internal class DocInkJournal(val journal: InkJournal, private val drafts: InkDra
     /** Write what changed (each gesture's end, a save, a restore). */
     fun sync() {
         if (restoring) return
+        if (committed.isEmpty()) touched = false
         val live = committed + drafts.saving.map(::item) + drafts.strokes.map(::item)
         // forget the copies of strokes that are gone
         if (items.size > live.size) items.keys.retainAll(live.mapNotNull { it.key as? InkStroke }.toSet())
-        journal.sync(live)
+        journal.sync(live, touched)
     }
 
     /** The engine took these drafts; they stay journaled until a save writes them. */
@@ -345,10 +372,52 @@ internal class DocInkJournal(val journal: InkJournal, private val drafts: InkDra
     /** Its gesture watcher, stopped when the document closes. */
     var watcher: kotlinx.coroutines.Job? = null
 
-    /** The strokes read back at open, now being added back as ink: journaled as the engine's. */
-    fun adoptRestored(restored: List<InkJournalItem>) {
-        journal.adopt(restored)
+    /** The strokes read back at open, now being added back as ink: journaled as the engine's, still [touched] if they were. */
+    fun adoptRestored(restored: List<InkJournalItem>, touched: Boolean = false) {
+        journal.adopt(restored, touched)
         committed.addAll(restored)
+        this.touched = touched
+    }
+
+    /**
+     * The engine moved, turned, scaled, recoloured or deleted the saved annotations at [rects] on
+     * [page] (#703). A stroke it took from the journal and saved as annotations that are all among
+     * them is changed the same way here ([change]; null deletes it); one that only overlaps them
+     * marks the journal [touched]. Returns the strokes changed.
+     */
+    fun savedInkChanged(page: Int, rects: List<List<Float>>, change: (InkSaveStroke) -> InkSaveStroke?): Int {
+        if (committed.isEmpty() || rects.isEmpty()) return 0
+        var changed = 0
+        val each = committed.listIterator()
+        while (each.hasNext()) {
+            val s = each.next().data()
+            if (s.page != page) continue
+            when (inkJournalMatch(s, rects)) {
+                InkJournalMatch.All -> {
+                    changed++
+                    val next = change(s)
+                    if (next == null) each.remove() else each.set(InkJournalItem(Any(), listOf("changed")) { next })
+                }
+                InkJournalMatch.Some -> touched = true
+                InkJournalMatch.None -> Unit
+            }
+        }
+        sync()
+        return changed
+    }
+
+    /** The engine changed ink on [page] within [area] (page points) in a way the journal cannot follow, such as an eraser cut (#703). */
+    fun savedInkTouched(page: Int, area: androidx.compose.ui.geometry.Rect) {
+        if (committed.none { it.data().let { s -> s.page == page && inkJournalArea(s)?.overlaps(area) == true } }) return
+        touched = true
+        sync()
+    }
+
+    /** An Undo or Redo of the document while it has strokes from the journal: what it changed is not followed (#703). */
+    fun documentStepped() {
+        if (committed.isEmpty()) return
+        touched = true
+        sync()
     }
 
     /** Of the strokes read back, these the engine refused: they become drafts instead. */
@@ -371,6 +440,7 @@ internal class DocInkJournal(val journal: InkJournal, private val drafts: InkDra
         watcher = null
         if (discarded || unsaved == 0) {
             committed.clear()
+            touched = false
             journal.delete()
         } else if (!restoring) {
             // the last gesture's write may still have been waiting
@@ -380,3 +450,59 @@ internal class DocInkJournal(val journal: InkJournal, private val drafts: InkDra
         restoring = true
     }
 }
+
+/** How the annotations a journaled stroke was saved as compare with those an edit changed (#703). */
+internal enum class InkJournalMatch { All, Some, None }
+
+/**
+ * The rectangles [x0, y0, x1, y1] (page points) of the annotations [s] is saved as ([inkSaveCommands]),
+ * as the engine gives them: the points' bounds grown by half the widest width and a point. Each comes
+ * with the slack a match allows, since the engine rounds and widens them a little differently.
+ */
+internal fun inkJournalRects(s: InkSaveStroke): List<Pair<List<Float>, Float>> =
+    inkSaveCommands(listOf(s)) { "" }.mapNotNull { command ->
+        @Suppress("UNCHECKED_CAST")
+        val lines = command["strokes"] as? List<List<List<Double>>> ?: return@mapNotNull null
+        val points = lines.flatten().filter { it.size == 2 }
+        if (points.isEmpty()) return@mapNotNull null
+        @Suppress("UNCHECKED_CAST")
+        val widths = (command["widths"] as? List<List<Double>>)?.flatten()
+        val widest = (widths?.maxOrNull() ?: (command["width"] as? Double) ?: 1.0).toFloat()
+        val grow = widest / 2f + 1f
+        val rect = listOf(
+            points.minOf { it[0] }.toFloat() - grow, points.minOf { it[1] }.toFloat() - grow,
+            points.maxOf { it[0] }.toFloat() + grow, points.maxOf { it[1] }.toFloat() + grow,
+        )
+        rect to (2f + widest / 2f)
+    }
+
+/** Where [s] is drawn, grown by its width (page points); null for a stroke with no points. */
+internal fun inkJournalArea(s: InkSaveStroke): androidx.compose.ui.geometry.Rect? {
+    val rects = inkJournalRects(s).map { it.first }
+    if (rects.isEmpty()) return null
+    return androidx.compose.ui.geometry.Rect(rects.minOf { it[0] }, rects.minOf { it[1] }, rects.maxOf { it[2] }, rects.maxOf { it[3] })
+}
+
+/**
+ * Whether [s] is among the annotations at [rects] (page points, as the engine reports them, either
+ * corner first): [InkJournalMatch.All] when each annotation it is saved as has its rectangle there,
+ * [InkJournalMatch.None] when it overlaps none of them, [InkJournalMatch.Some] otherwise.
+ */
+internal fun inkJournalMatch(s: InkSaveStroke, rects: List<List<Float>>): InkJournalMatch {
+    val own = inkJournalRects(s)
+    if (own.isEmpty()) return InkJournalMatch.None
+    val theirs = rects.filter { it.size == 4 && it.all(Float::isFinite) }.map { r ->
+        listOf(minOf(r[0], r[2]), minOf(r[1], r[3]), maxOf(r[0], r[2]), maxOf(r[1], r[3]))
+    }
+    if (own.all { (mine, slack) -> theirs.any { r -> (0..3).all { kotlin.math.abs(r[it] - mine[it]) <= slack } } }) return InkJournalMatch.All
+    val area = inkJournalArea(s) ?: return InkJournalMatch.None
+    val touches = theirs.any { r -> r[0] <= area.right && r[2] >= area.left && r[1] <= area.bottom && r[3] >= area.top }
+    return if (touches) InkJournalMatch.Some else InkJournalMatch.None
+}
+
+/** [s] as the lasso's resize and turn handles leave it (#689, #703): as [lassoTransformedDraft] leaves a draft. */
+internal fun lassoTransformedSaved(s: InkSaveStroke, pivot: Offset, scale: Float, angleDeg: Float): InkSaveStroke =
+    s.copy(
+        appearance = s.appearance.copy(width = (s.appearance.width * scale).coerceIn(0.1f, 30f)),
+        points = s.points.map { lassoTransformPoint(it, pivot, scale, angleDeg) },
+    )

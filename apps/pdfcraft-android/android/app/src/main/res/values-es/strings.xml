@@ -1012,6 +1012,7 @@
     <string name="msg_redone">%1$s rehecho</string>
     <string name="msg_ink_kept">Se conservó la tinta que no se guardó. Abre Dibujar y toca Listo para guardarla de nuevo.</string>
     <string name="msg_ink_restored">Se volvieron a añadir %1$d trazos que no se habían guardado cuando se cerró la app.</string>
+    <string name="msg_ink_restored_changed">Se volvieron a añadir %1$d trazos que no se habían guardado cuando se cerró la app. Puede que falten los cambios que les hiciste después (mover, borrar, deshacer).</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">Esta herramienta no está disponible por la configuración de seguridad del documento.</string>
