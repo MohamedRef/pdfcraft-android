@@ -235,7 +235,8 @@ impl Automation {
         // A save that adds or removes encryption, or must not keep the old revision (Sanitize,
         // redaction), is rewritten in full even when an incremental save was asked for.
         let incremental = !full && bytes.starts_with(&self.doc(a)?.saved_bytes());
-        let mut out = self.publish_save_traced(id, &target, bytes, incremental, write, &trace)?;
+        // the bytes are the session's own save of the document as shown (#595)
+        let mut out = self.publish_save_traced(id, &target, bytes, incremental, write, true, &trace)?;
         if recording {
             out["save_timings"] = json!(trace.snapshot().iter().map(|s| json!({"stage": s.name, "duration_ms": s.duration_ms})).collect::<Vec<_>>());
         }
@@ -280,11 +281,12 @@ impl Automation {
         incremental: bool,
         write: impl FnOnce(&Path, &[u8]) -> Result<()>,
     ) -> Result<Value> {
-        self.publish_save_traced(id, target, bytes, incremental, write, &pdfcraft_render::OpenTrace::default())
+        self.publish_save_traced(id, target, bytes, incremental, write, false, &pdfcraft_render::OpenTrace::default())
     }
 
     /// [`Self::publish_save`], timing the check, the write (`save_write`) and the reopen when
-    /// `trace` records (Android adaptation, #595).
+    /// `trace` records (Android adaptation, #595); `as_shown` as [`pdfcraft_engine::Session::mark_saved_traced`].
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn publish_save_traced(
         &mut self,
         id: DocId,
@@ -292,12 +294,13 @@ impl Automation {
         bytes: pdfcraft_cos::PdfBytes,
         incremental: bool,
         write: impl FnOnce(&Path, &[u8]) -> Result<()>,
+        as_shown: bool,
         trace: &pdfcraft_render::OpenTrace,
     ) -> Result<Value> {
         self.session.check_save_traced(id, &bytes, trace).map_err(failed)?;
         trace.measure("save_write", || write(target, &bytes))?;
         let path = target.to_string_lossy().into_owned();
-        self.session.mark_saved_traced(id, bytes.clone(), Some(path.clone()), trace).map_err(failed)?;
+        self.session.mark_saved_traced(id, bytes.clone(), Some(path.clone()), as_shown, trace).map_err(failed)?;
         let doc = self.session.get(id).ok_or_else(|| failed("the saved document is no longer open"))?;
         Ok(json!({ "path": path, "bytes": bytes.len(), "incremental": incremental, "document": summary(doc) }))
     }

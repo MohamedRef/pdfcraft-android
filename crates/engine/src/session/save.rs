@@ -1,6 +1,6 @@
 use super::{
     Arc, DocId, Document, EditError, Keys, OpenError, RecoverySnapshot, RenderPool, SaveOptions, Session, SignOptions, StatusCaptions, TrustStore,
-    display_bytes, display_config, guard, render_threads, signatures_of, writable, write_incremental, xfa_sync_datasets,
+    display_bytes, display_config, guard, render_threads, signatures_of, sync_xfa_state, writable, write_incremental, xfa_sync_datasets,
 };
 
 impl Session {
@@ -100,20 +100,27 @@ impl Session {
     /// Record a successful save of `bytes` (to `path`, if any): rebase editing on the saved file
     /// so the next save appends only newer edits. Undo history is kept.
     pub fn mark_saved(&mut self, id: DocId, bytes: pdfcraft_cos::PdfBytes, path: Option<String>) -> Result<(), EditError> {
-        self.mark_saved_traced(id, bytes, path, &pdfcraft_render::OpenTrace::default())
+        self.mark_saved_traced(id, bytes, path, false, &pdfcraft_render::OpenTrace::default())
     }
 
     /// [`Self::mark_saved`], timing the reopen of the saved bytes as `save_reopen` and the view
     /// rebuilt from them (inspection, fields, signatures, renderer) as `save_refresh` when
-    /// `trace` records. Android adaptation (#595), as [`Self::check_save_traced`].
+    /// `trace` records. Android adaptation (#595), as [`Self::check_save_traced`]. `as_shown`:
+    /// the bytes are this document's own save of what it shows ([`Self::save_bytes`]), so an
+    /// incremental one is not inspected again; signing, stamping and other writers of new bytes
+    /// pass false, since what they wrote is not in the view yet.
     pub fn mark_saved_traced(
         &mut self,
         id: DocId,
         bytes: pdfcraft_cos::PdfBytes,
         path: Option<String>,
+        as_shown: bool,
         trace: &pdfcraft_render::OpenTrace,
     ) -> Result<(), EditError> {
         let doc = self.doc_mut(id)?;
+        // Android adaptation (#595): an incremental save keeps every object of the document as it
+        // is shown, so the view is rebuilt from the saved bytes without inspecting them again.
+        let mut kept_objects = false;
         if let Some(editor) = doc.editor.as_mut() {
             // An encrypted file needs the password it is protected with now (the owner
             // password when known, so saving never downgrades this session's rights).
@@ -129,6 +136,7 @@ impl Session {
             if !preserves_objects {
                 crate::js::replace_runtime(&mut doc.js_runtime);
             }
+            kept_objects = preserves_objects;
             editor.cos = reopened;
             pdfcraft_forms::restore_password_values(&mut editor.cos, &typed).map_err(|e| EditError::Reopen(e.to_string()))?;
             if !typed.is_empty() && doc.info.xfa.is_some() {
@@ -145,7 +153,34 @@ impl Session {
         }
         doc.dirty = false;
         doc.generation += 1;
-        trace.measure("save_refresh", || Self::refresh(doc)).inspect_err(|_| Self::show_released(doc))
+        // As refresh_scoped: a change of encryption is always inspected again.
+        let light = as_shown && kept_objects && doc.editor.as_ref().is_some_and(|e| e.cos.output_handler().is_some() == doc.info.encrypted);
+        trace.measure("save_refresh", || if light { Self::refresh_saved(doc) } else { Self::refresh(doc) }).inspect_err(|_| Self::show_released(doc))
+    }
+
+    /// The view after an incremental save (Android adaptation, #595). The saved file is the
+    /// document as shown plus one appended revision that keeps every object, so its pages,
+    /// comments, fields, links, outline and fonts are what the view already holds; only what
+    /// depends on the file's bytes is rebuilt, as after a content-only edit: the working and
+    /// display bytes, the signatures' verdicts and the renderer. The full inspection this skips
+    /// took seconds after every save of a 353 MB, 869-page book.
+    fn refresh_saved(doc: &mut Document) -> Result<(), EditError> {
+        Self::release_working(doc);
+        sync_xfa_state(doc);
+        let Some(editor) = doc.editor.as_mut() else { return Ok(()) };
+        // restored Password-field values (or XFA data) make the working graph differ from the file
+        let bytes = if editor.cos.is_modified() {
+            pdfcraft_cos::write_incremental_shared(&editor.cos, &SaveOptions::default()).map_err(|e| EditError::Write(e.to_string()))?
+        } else {
+            editor.cos.bytes().clone()
+        };
+        doc.info.file_size = bytes.len();
+        let mut signatures = if doc.signatures.is_empty() { Vec::new() } else { signatures_of(&editor.cos, &bytes, &doc.trust, &doc.sig_cache) };
+        doc.display = display_bytes(Some(editor), &bytes, &mut signatures, &doc.captions);
+        doc.signatures = Arc::new(signatures);
+        doc.renderer = RenderPool::new(doc.display.clone(), render_threads(), display_config(&doc.config));
+        doc.bytes = bytes;
+        Ok(())
     }
 
     /// Enter the permissions (owner) password of a document opened with its user password,
