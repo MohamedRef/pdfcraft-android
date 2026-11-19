@@ -64,7 +64,24 @@ fun presentationTap(x: Float, width: Float): Int = when {
 }
 
 /**
- * Presentation mode over the page (#157): a tap on the left or right third turns the page, a
+ * Presentation mode's page turn for a finger's swipe (#742): [dx], [dy] pixels in [durationMs] on
+ * a screen [width] wide. A quick sideways swipe across a fifth of the screen turns the page, as
+ * on a phone's photo viewer: towards the start goes on, towards the end goes back. A slower or
+ * shorter drag stays the laser pointer.
+ */
+fun presentationSwipe(dx: Float, dy: Float, durationMs: Long, width: Float): Int = when {
+    width <= 0f || durationMs > PRESENT_SWIPE_MS -> 0
+    kotlin.math.abs(dx) < width * 0.2f || kotlin.math.abs(dx) < 2f * kotlin.math.abs(dy) -> 0
+    dx < 0f -> 1
+    else -> -1
+}
+
+/** How quick a swipe must be to turn the page in Present (#742); a slower drag is the laser pointer. */
+const val PRESENT_SWIPE_MS = 350L
+
+/**
+ * Presentation mode over the page (#157): a tap on the left or right third turns the page, a quick
+ * sideways swipe turns it too (#742), a
  * finger's drag is a laser pointer whose trail fades within [LASER_FADE_MS], and a pen writes
  * temporary ink that fades a few seconds after it lifts (#327). Nothing is written to the PDF.
  */
@@ -110,9 +127,16 @@ fun BoxScope.PresentationLayer(viewer: ViewerState, trail: LaserTrail, ink: Temp
                         continue
                     }
                     if (!change.pressed) {
+                        val moved = change.position - down.position
+                        val swipe = if (laser) presentationSwipe(moved.x, moved.y, change.uptimeMillis - down.uptimeMillis, size.width.toFloat()) else 0
                         if (!laser) presentationTap(change.position.x, size.width.toFloat()).takeIf { it != 0 }?.let {
                             viewer.turnPage(it)
                             onGesture(if (it > 0) PresentGesture.TapNext else PresentGesture.TapPrevious)
+                        } else if (swipe != 0) {
+                            // a swipe, not a pointer: its trail goes, and the page turns (#742)
+                            trail.points.removeAll { p -> p.page == page && p.time >= down.uptimeMillis }
+                            viewer.turnPage(swipe)
+                            onGesture(if (swipe > 0) PresentGesture.TapNext else PresentGesture.TapPrevious)
                         } else onGesture(PresentGesture.Laser)
                         break
                     }

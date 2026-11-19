@@ -65,7 +65,8 @@ fun AdaptiveViewer(vm: AppViewModel, doc: OpenDocument) {
         isDesktop(context, configuration),
     )
     val ctl = doc.controller
-    val shown = if (vm.tabs.splitWith == null && !vm.settings.readingMode && !ctl.pagesOpen) place else ContentsPlace.Sheet
+    // Present is the page alone: no strip or panel beside it on a tablet (#742)
+    val shown = if (vm.tabs.splitWith == null && !vm.settings.readingMode && !ctl.pagesOpen && !ctl.presenting) place else ContentsPlace.Sheet
     // the top bar's Contents button opens the panel where there is one, the sheet where there is not (#647, #659)
     SideEffect {
         ctl.contentsPlace = shown
