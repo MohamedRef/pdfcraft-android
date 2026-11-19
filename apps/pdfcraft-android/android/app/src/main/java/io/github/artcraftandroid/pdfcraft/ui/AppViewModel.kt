@@ -1784,10 +1784,27 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 val thumbs = HashMap<String, androidx.compose.ui.graphics.ImageBitmap?>()
                 session.pages.mapNotNull { p -> File(p.path).let { f -> thumbs.getOrPut(p.path) { scanThumb(f) }?.let { ScanPage(f, it, p.corners, p.found, turns = p.turns, preset = p.preset, book = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), flatten = p.flatten ?: true.takeIf { session.flatten }, look = p.look ?: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(), auto = p.auto, marks = p.marks, uncropped = io.github.artcraftandroid.pdfcraft.ui.scan.scanRestoredUncropped(p.corners, p.found, io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(p.path)?.straightened == true)) } } }
             }
+            // the scanner's models before any reopened page is made (#764): after the app starts
+            // again only a searched photo prepared them, so a scan opened from Recent scans or the
+            // viewer was made with no automatic turn and no flattening network
+            prepareScanModels()
             scanPages.addAll(pages)
             scanRestoring = null
             // back on the Scan screen with its pages (with none, it would open the camera itself)
             if (pages.isNotEmpty() && tools.toolScreen == null) tools.toolScreen = ToolScreen.Scan
+        }
+    }
+
+    /**
+     * The scanner's models unpacked and handed to the engine (the log's `model_files` and
+     * `model_states`), and whether flattening is among them (#764). Cheap once done: the files are
+     * only copied when they changed. Nothing without an engine.
+     */
+    internal suspend fun prepareScanModels() {
+        val eng = engine ?: application.engine.await().getOrNull() ?: return
+        withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
+        if (!scanCanFlatten) {
+            scanCanFlatten = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanCanFlatten() }.getOrDefault(false) }
         }
     }
 
