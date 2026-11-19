@@ -207,27 +207,38 @@ impl Automation {
         // Saving to a new file is a full rewrite unless asked otherwise, like Save As.
         let full = a.opt_bool("full")?.unwrap_or(!same_file);
         let flatten_fill_sign = a.opt_bool("flatten_fill_sign")?.unwrap_or(false);
+        // Android adaptation (#595): opt-in stage times, as `doc_open`'s `open_timings`.
+        let recording = a.opt_bool("save_timings")?.unwrap_or(false);
+        let trace = if recording { pdfcraft_render::OpenTrace::recording() } else { pdfcraft_render::OpenTrace::default() };
         if flatten_fill_sign {
             self.apply(a, Edit::FlattenFillSign)?;
         }
         // The document's Will Save actions run first: what they change is saved (#269).
         let scripts = self.session.run_document_actions(id, pdfcraft_engine::js::DocumentScriptEvent::WillSave);
-        let bytes = if full {
-            // A full rewrite is told object by object and can be stopped (#646): for a protected
-            // copy it encrypts and writes the whole file. Nothing is written before it ends, so a
-            // stop leaves no file; the document keeps what it was given before this save.
-            let watch = self.job_watch.clone();
-            self.session.save_full_bytes_watched(id, &mut |done, total| {
-                watch.as_ref().is_none_or(|w| w(crate::JobStep { stage: "saving", done, total, fraction: 0.9 * Self::part(done, total), attempt: 1 }))
+        let bytes = trace
+            .measure("save_build", || {
+                if full {
+                    // A full rewrite is told object by object and can be stopped (#646): for a protected
+                    // copy it encrypts and writes the whole file. Nothing is written before it ends, so a
+                    // stop leaves no file; the document keeps what it was given before this save.
+                    let watch = self.job_watch.clone();
+                    self.session.save_full_bytes_watched(id, &mut |done, total| {
+                        watch
+                            .as_ref()
+                            .is_none_or(|w| w(crate::JobStep { stage: "saving", done, total, fraction: 0.9 * Self::part(done, total), attempt: 1 }))
+                    })
+                } else {
+                    self.session.save_bytes(id)
+                }
             })
-        } else {
-            self.session.save_bytes(id)
-        }
-        .map_err(failed)?;
+            .map_err(failed)?;
         // A save that adds or removes encryption, or must not keep the old revision (Sanitize,
         // redaction), is rewritten in full even when an incremental save was asked for.
         let incremental = !full && bytes.starts_with(&self.doc(a)?.saved_bytes());
-        let mut out = self.publish_save(id, &target, bytes, incremental, write)?;
+        let mut out = self.publish_save_traced(id, &target, bytes, incremental, write, &trace)?;
+        if recording {
+            out["save_timings"] = json!(trace.snapshot().iter().map(|s| json!({"stage": s.name, "duration_ms": s.duration_ms})).collect::<Vec<_>>());
+        }
         if !scripts.is_empty()
             && let Some(o) = out.as_object_mut()
         {
@@ -269,10 +280,24 @@ impl Automation {
         incremental: bool,
         write: impl FnOnce(&Path, &[u8]) -> Result<()>,
     ) -> Result<Value> {
-        self.session.check_save(id, &bytes).map_err(failed)?;
-        write(target, &bytes)?;
+        self.publish_save_traced(id, target, bytes, incremental, write, &pdfcraft_render::OpenTrace::default())
+    }
+
+    /// [`Self::publish_save`], timing the check, the write (`save_write`) and the reopen when
+    /// `trace` records (Android adaptation, #595).
+    pub(crate) fn publish_save_traced(
+        &mut self,
+        id: DocId,
+        target: &Path,
+        bytes: pdfcraft_cos::PdfBytes,
+        incremental: bool,
+        write: impl FnOnce(&Path, &[u8]) -> Result<()>,
+        trace: &pdfcraft_render::OpenTrace,
+    ) -> Result<Value> {
+        self.session.check_save_traced(id, &bytes, trace).map_err(failed)?;
+        trace.measure("save_write", || write(target, &bytes))?;
         let path = target.to_string_lossy().into_owned();
-        self.session.mark_saved(id, bytes.clone(), Some(path.clone())).map_err(failed)?;
+        self.session.mark_saved_traced(id, bytes.clone(), Some(path.clone()), trace).map_err(failed)?;
         let doc = self.session.get(id).ok_or_else(|| failed("the saved document is no longer open"))?;
         Ok(json!({ "path": path, "bytes": bytes.len(), "incremental": incremental, "document": summary(doc) }))
     }

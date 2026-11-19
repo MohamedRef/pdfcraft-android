@@ -75,18 +75,44 @@ impl Session {
     /// document before they are written (#1698): [`Self::mark_saved`] only finds out after the
     /// file has been replaced. Same error as `mark_saved`.
     pub fn check_save(&self, id: DocId, bytes: &pdfcraft_cos::PdfBytes) -> Result<(), EditError> {
+        self.check_save_traced(id, bytes, &pdfcraft_render::OpenTrace::default())
+    }
+
+    /// [`Self::check_save`], timing its two reads as `save_check_open` (the object parser) and
+    /// `save_check_pages` (the renderer's page tree) when `trace` records. Android adaptation
+    /// (#595): saving a few strokes to a 353 MB book took 4-5 s while writing them to the
+    /// original took 20 ms, and the log could not say which stage of the save it was.
+    pub fn check_save_traced(&self, id: DocId, bytes: &pdfcraft_cos::PdfBytes, trace: &pdfcraft_render::OpenTrace) -> Result<(), EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         if doc.preparing() {
             return Err(EditError::ReadOnly("Document preparation is still running".into()));
         }
         let Some(editor) = doc.editor.as_ref() else { return Ok(()) };
-        pdfcraft_cos::Document::open_with_password(bytes.clone(), editor.keys.reopen.as_deref()).map_err(|e| EditError::Reopen(e.to_string()))?;
-        pdfcraft_render::check_pages(bytes.clone(), doc.password.as_deref(), doc.info.pages.len()).map_err(|e| EditError::Reopen(e.to_string()))
+        // `drop` inside the stage: freeing the parsed document is part of what the check costs.
+        trace
+            .measure("save_check_open", || pdfcraft_cos::Document::open_with_password(bytes.clone(), editor.keys.reopen.as_deref()).map(drop))
+            .map_err(|e| EditError::Reopen(e.to_string()))?;
+        trace
+            .measure("save_check_pages", || pdfcraft_render::check_pages(bytes.clone(), doc.password.as_deref(), doc.info.pages.len()))
+            .map_err(|e| EditError::Reopen(e.to_string()))
     }
 
     /// Record a successful save of `bytes` (to `path`, if any): rebase editing on the saved file
     /// so the next save appends only newer edits. Undo history is kept.
     pub fn mark_saved(&mut self, id: DocId, bytes: pdfcraft_cos::PdfBytes, path: Option<String>) -> Result<(), EditError> {
+        self.mark_saved_traced(id, bytes, path, &pdfcraft_render::OpenTrace::default())
+    }
+
+    /// [`Self::mark_saved`], timing the reopen of the saved bytes as `save_reopen` and the view
+    /// rebuilt from them (inspection, fields, signatures, renderer) as `save_refresh` when
+    /// `trace` records. Android adaptation (#595), as [`Self::check_save_traced`].
+    pub fn mark_saved_traced(
+        &mut self,
+        id: DocId,
+        bytes: pdfcraft_cos::PdfBytes,
+        path: Option<String>,
+        trace: &pdfcraft_render::OpenTrace,
+    ) -> Result<(), EditError> {
         let doc = self.doc_mut(id)?;
         if let Some(editor) = doc.editor.as_mut() {
             // An encrypted file needs the password it is protected with now (the owner
@@ -97,8 +123,9 @@ impl Session {
             // An incremental save keeps the old byte prefix and its object identities. A
             // rewrite can reuse the same numbers for unrelated fields and icons.
             let preserves_objects = bytes.starts_with(editor.saved.as_slice()) || bytes.starts_with(editor.cos.bytes().as_slice());
-            let reopened =
-                pdfcraft_cos::Document::open_with_password(bytes.clone(), keys.reopen.as_deref()).map_err(|e| EditError::Reopen(e.to_string()))?;
+            let reopened = trace
+                .measure("save_reopen", || pdfcraft_cos::Document::open_with_password(bytes.clone(), keys.reopen.as_deref()))
+                .map_err(|e| EditError::Reopen(e.to_string()))?;
             if !preserves_objects {
                 crate::js::replace_runtime(&mut doc.js_runtime);
             }
@@ -118,7 +145,7 @@ impl Session {
         }
         doc.dirty = false;
         doc.generation += 1;
-        Self::refresh(doc).inspect_err(|_| Self::show_released(doc))
+        trace.measure("save_refresh", || Self::refresh(doc)).inspect_err(|_| Self::show_released(doc))
     }
 
     /// Enter the permissions (owner) password of a document opened with its user password,
