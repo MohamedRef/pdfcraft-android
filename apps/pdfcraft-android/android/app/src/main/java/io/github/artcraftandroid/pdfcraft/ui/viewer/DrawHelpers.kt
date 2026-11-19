@@ -114,7 +114,10 @@ internal fun activeRuler(doc: OpenDocument): Ruler? = doc.controller.ruler?.take
 internal fun activeProtractor(doc: OpenDocument): Protractor? =
     doc.controller.protractor?.takeIf { doc.controller.protractorOn }?.let { it.copy(angleDeg = rulerDisplayAngle(it.angleDeg)) }
 
-/** The eraser over draft strokes on [page], from [a] to [b]: they are cut here, at once. */
+/**
+ * The eraser over draft strokes on [page], from [a] to [b]: they are cut here, at once. [radius] and
+ * [whole] ("Erase whole strokes") are the gesture's, fixed when it touched down.
+ */
 internal fun eraseDrafts(strokes: MutableList<InkStroke>, page: Int, a: Offset, b: Offset, radius: Float, whole: Boolean) {
     var i = 0
     while (i < strokes.size) {
@@ -206,6 +209,8 @@ internal fun layPattern(strokes: MutableList<InkStroke>, lines: List<InkStroke>)
  * What the lasso's turn handle has to keep clear of on [page] (#709), in its points: the part of
  * the page shown under the top bar and the tab strip and above the toolbar and the zoom pad, and
  * the selection's buttons. Null before the layer is laid out (the handle is then above the box).
+ * [layerSize] is the Draw layer's size, [padHeightPx] the zoom pad's height, [lassoMenuBounds] where the
+ * selection's buttons are in the layer, and [pxPerDp] the screen's pixels per dp.
  */
 internal fun lassoTurnRoom(
     doc: OpenDocument, page: Int, layerSize: androidx.compose.ui.geometry.Size, padHeightPx: Float,
