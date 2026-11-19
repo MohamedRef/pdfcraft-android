@@ -2415,7 +2415,15 @@ private suspend fun resolveMarkupWhy(
         }
         val a = letter(start, slopPoints) ?: return@withContext null to "no_start_letter"
         val b = letter(end, (slopPoints * 2f).coerceAtMost(40f)) ?: return@withContext null to "no_end_letter"
-        markupLetterRange(page, a, b) ?: return@withContext null to "too_long"
+        // the word a letter is in, found from the letter's own middle (#739)
+        fun wordOf(glyph: UInt): TextRange? {
+            val r = eng.session.glyphRect(doc.id, page, glyph).toList()
+            if (r.size != 4) return null
+            return eng.session.wordAt(doc.id, page, (r[0] + r[2]) / 2f, (r[1] + r[3]) / 2f, 0.5f)
+        }
+        // a drag that starts or ends inside a word takes the whole word (#739)
+        val (lo, hi) = markupWholeWords(minOf(a, b), maxOf(a, b), wordOf(minOf(a, b)), wordOf(maxOf(a, b)))
+        markupLetterRange(page, lo, hi) ?: return@withContext null to "too_long"
     }
     val rects = markupLineRects(eng.session.textRects(doc.id, range).toList())
     if (rects.isEmpty()) null to "no_lines" else MarkupDrag(range, rects) to null

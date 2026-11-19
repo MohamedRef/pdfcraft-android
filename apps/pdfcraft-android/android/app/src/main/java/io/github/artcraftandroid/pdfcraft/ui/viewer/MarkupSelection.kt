@@ -38,6 +38,18 @@ internal fun markupLetterRange(page: UInt, a: UInt, b: UInt): TextRange? {
     return TextRange(page, start, end)
 }
 
+/**
+ * A markup drag's first and last letters [lo]..[hi] widened to the words they are in (#739): a
+ * fingertip can't land on a letter's edge, so a drag that starts or ends inside a word takes the
+ * whole word, as a tap does. [loWord] and [hiWord] are those words as the engine finds them (end
+ * not included); a letter in no word (a space, punctuation) stays as it is.
+ */
+internal fun markupWholeWords(lo: UInt, hi: UInt, loWord: TextRange?, hiWord: TextRange?): Pair<UInt, UInt> {
+    val from = loWord?.takeIf { lo >= it.start && lo < it.end }?.start ?: lo
+    val to = hiWord?.takeIf { hi >= it.start && hi < it.end && it.end > 0u }?.let { it.end - 1u } ?: hi
+    return minOf(from, lo) to maxOf(to, hi)
+}
+
 /** How far beside a line, in points, a markup drag may start or end and still take its nearest letter (#657): about a page margin. */
 internal const val MARKUP_SIDE_REACH_PT = 72f
 
