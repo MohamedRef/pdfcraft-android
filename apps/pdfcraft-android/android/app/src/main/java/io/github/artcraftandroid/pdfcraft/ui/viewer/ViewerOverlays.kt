@@ -98,6 +98,15 @@ class NotePrompt(
 )
 
 /**
+ * Whether the bar of a markup just made goes (#741), as the viewer changes from [previous] to
+ * [tool]: another tool than Highlight, Done on the Highlight tool (Highlight to none), Present
+ * and Read aloud all end it. A markup made from the text selection's menu, with no tool open,
+ * keeps its bar until one of those.
+ */
+internal fun markupFollowUpEnds(previous: ViewerTool?, tool: ViewerTool, presenting: Boolean, readingAloud: Boolean): Boolean =
+    presenting || readingAloud || (tool != ViewerTool.None && tool != ViewerTool.Markup) || (previous == ViewerTool.Markup && tool == ViewerTool.None)
+
+/**
  * A text markup just added from the selection menu: [page] and [index] (0-based) as the comment
  * tools number it, [bounds] (points) to place its bar by, and its [color] (#197).
  */

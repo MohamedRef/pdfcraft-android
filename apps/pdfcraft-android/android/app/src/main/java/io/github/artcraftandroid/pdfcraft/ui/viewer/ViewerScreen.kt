@@ -648,11 +648,18 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         }
         // the markup just added from that menu: colours, Add note, Delete (#197)
         // and the markup just made with the Highlight tool, above it (#650)
-        if (selection.selection == null) vm.commenting.markupFollowUp?.takeIf { it.doc === doc && (ctl.tool == ViewerTool.None || ctl.tool == ViewerTool.Markup) }
-            ?.let { MarkupFollowUpBar(vm, it, above = ctl.tool == ViewerTool.Markup) }
-        // another tool has no use for it, and it must not come back by an old markup afterwards
-        LaunchedEffect(ctl.tool) {
-            if (ctl.tool != ViewerTool.None && ctl.tool != ViewerTool.Markup) vm.commenting.markupFollowUp = null
+        // never over Present or Read aloud (#741)
+        val readingAloud = vm.sharing.readAloud != null
+        if (selection.selection == null && !ctl.presenting && !readingAloud) {
+            vm.commenting.markupFollowUp?.takeIf { it.doc === doc && (ctl.tool == ViewerTool.None || ctl.tool == ViewerTool.Markup) }
+                ?.let { MarkupFollowUpBar(vm, it, above = ctl.tool == ViewerTool.Markup) }
+        }
+        // another tool, Done on the Highlight tool, Present and Read aloud end it, and it must not
+        // come back by an old markup afterwards (#741)
+        var followUpTool by remember { mutableStateOf<ViewerTool?>(null) }
+        LaunchedEffect(ctl.tool, ctl.presenting, readingAloud) {
+            if (markupFollowUpEnds(followUpTool, ctl.tool, ctl.presenting, readingAloud)) vm.commenting.markupFollowUp = null
+            followUpTool = ctl.tool
         }
 
         // Sheets and dialogs.
