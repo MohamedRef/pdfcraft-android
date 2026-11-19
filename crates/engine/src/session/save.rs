@@ -100,17 +100,21 @@ impl Session {
     /// Record a successful save of `bytes` (to `path`, if any): rebase editing on the saved file
     /// so the next save appends only newer edits. Undo history is kept.
     pub fn mark_saved(&mut self, id: DocId, bytes: pdfcraft_cos::PdfBytes, path: Option<String>) -> Result<(), EditError> {
-        self.mark_saved_traced(id, bytes, path, &pdfcraft_render::OpenTrace::default())
+        self.mark_saved_traced(id, bytes, path, false, &pdfcraft_render::OpenTrace::default())
     }
 
     /// [`Self::mark_saved`], timing the reopen of the saved bytes as `save_reopen` and the view
     /// rebuilt from them (inspection, fields, signatures, renderer) as `save_refresh` when
-    /// `trace` records. Android adaptation (#595), as [`Self::check_save_traced`].
+    /// `trace` records. Android adaptation (#595), as [`Self::check_save_traced`]. `as_shown`:
+    /// the bytes are this document's own save of what it shows ([`Self::save_bytes`]), so an
+    /// incremental one is not inspected again; signing, stamping and other writers of new bytes
+    /// pass false, since what they wrote is not in the view yet.
     pub fn mark_saved_traced(
         &mut self,
         id: DocId,
         bytes: pdfcraft_cos::PdfBytes,
         path: Option<String>,
+        as_shown: bool,
         trace: &pdfcraft_render::OpenTrace,
     ) -> Result<(), EditError> {
         let doc = self.doc_mut(id)?;
@@ -150,7 +154,7 @@ impl Session {
         doc.dirty = false;
         doc.generation += 1;
         // As refresh_scoped: a change of encryption is always inspected again.
-        let light = kept_objects && doc.editor.as_ref().is_some_and(|e| e.cos.output_handler().is_some() == doc.info.encrypted);
+        let light = as_shown && kept_objects && doc.editor.as_ref().is_some_and(|e| e.cos.output_handler().is_some() == doc.info.encrypted);
         trace.measure("save_refresh", || if light { Self::refresh_saved(doc) } else { Self::refresh(doc) }).inspect_err(|_| Self::show_released(doc))
     }
 
