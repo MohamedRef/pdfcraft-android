@@ -7,6 +7,8 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.CommentListRow
 import io.github.artcraftandroid.pdfcraft.ui.viewer.CommentStatusFilter
 import io.github.artcraftandroid.pdfcraft.ui.viewer.filterThreads
 import io.github.artcraftandroid.pdfcraft.ui.viewer.pageRows
+import io.github.artcraftandroid.pdfcraft.ui.viewer.threadsTitle
+import io.github.artcraftandroid.pdfcraft.ui.viewer.titleCounts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,6 +23,26 @@ class CommentFilterTest {
     )
 
     private fun ink() = listOf(comment("Ink"))
+
+    private fun title(threads: List<List<CommentInfo>>): String = titleCounts(threads).let { (written, drawings) ->
+        threadsTitle(written, drawings, "No comments", { if (it == 1) "1 comment thread" else "$it comment threads" }) {
+            if (it == 1) "1 drawing" else "$it drawings"
+        }
+    }
+
+    /** #740: one highlight and four strokes are one thread and four drawings, not "5 comment threads". */
+    @Test
+    fun theTitleCountsDrawingsApartFromThreads() {
+        val highlight = listOf(comment("Highlight"))
+        assertEquals("1 comment thread · 4 drawings", title(listOf(highlight) + List(4) { ink() }))
+        assertEquals("1 comment thread", title(listOf(highlight)))
+        assertEquals("1 drawing", title(listOf(ink())))
+        assertEquals("No comments", title(emptyList()))
+        // a drawing someone wrote on, or replied to, is a thread like any other
+        val written = listOf(comment("Ink", contents = "Look here"))
+        val replied = listOf(comment("Ink"), comment("Text", contents = "Agreed", replyTo = "c1"))
+        assertEquals("2 comment threads · 1 drawing", title(listOf(written, replied, ink())))
+    }
 
     @Test
     fun aPageOfHandwritingFoldsAfterItsNotes() {

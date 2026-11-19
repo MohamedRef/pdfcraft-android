@@ -106,6 +106,24 @@ internal fun pageRows(page: Int, threads: List<CommentThread>, expanded: Boolean
 }
 
 /**
+ * What the list's title counts (#740): the threads people wrote, and apart from them the drawings
+ * nobody wrote on or replied to, which the list folds into "N drawings" rows. Before #740 every
+ * drawing counted as a comment thread ("5 comment threads" for one highlight and four strokes).
+ */
+internal fun titleCounts(threads: List<CommentThread>): Pair<Int, Int> {
+    val drawings = threads.count { it.size == 1 && isDrawing(it.first()) }
+    return (threads.size - drawings) to drawings
+}
+
+/** The list's title from [titleCounts] (#740): "N comment threads", "N drawings", both joined by " · ", or [none]. */
+internal fun threadsTitle(threads: Int, drawings: Int, none: String, threadsText: (Int) -> String, drawingsText: (Int) -> String): String = when {
+    threads == 0 && drawings == 0 -> none
+    drawings == 0 -> threadsText(threads)
+    threads == 0 -> drawingsText(drawings)
+    else -> threadsText(threads) + " · " + drawingsText(drawings)
+}
+
+/**
  * The review status of each comment in a `comment_list` result, by (0-based page, 0-based
  * index). Comments nobody set a status on are left out.
  */

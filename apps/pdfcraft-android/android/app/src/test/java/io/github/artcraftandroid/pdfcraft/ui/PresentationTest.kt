@@ -12,6 +12,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.TempStroke
 import io.github.artcraftandroid.pdfcraft.ui.viewer.tempInkAlpha
 import org.junit.Assert.assertNull
 import io.github.artcraftandroid.pdfcraft.ui.viewer.laserAlpha
+import io.github.artcraftandroid.pdfcraft.ui.viewer.presentationSwipe
 import io.github.artcraftandroid.pdfcraft.ui.viewer.presentationTap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -73,5 +74,18 @@ class PresentationTest {
         ink.fade(1000L + TEMP_INK_GONE_MS)
         // the lifted stroke is gone; the one still being drawn stays
         assertEquals(listOf(drawing), ink.strokes.toList())
+    }
+
+    /** #742: a quick sideways swipe turns the page in Present; a slow or short drag stays the laser pointer. */
+    @Test
+    fun aQuickSidewaysSwipeTurnsThePage() {
+        // right to left goes on, left to right goes back
+        assertEquals(1, presentationSwipe(-400f, 20f, 200, 1600f))
+        assertEquals(-1, presentationSwipe(400f, -30f, 200, 1600f))
+        // too slow, too short or too steep: the laser pointer
+        assertEquals(0, presentationSwipe(-400f, 20f, 900, 1600f))
+        assertEquals(0, presentationSwipe(-200f, 0f, 150, 1600f))
+        assertEquals(0, presentationSwipe(-400f, 300f, 200, 1600f))
+        assertEquals(0, presentationSwipe(-400f, 0f, 200, 0f))
     }
 }
