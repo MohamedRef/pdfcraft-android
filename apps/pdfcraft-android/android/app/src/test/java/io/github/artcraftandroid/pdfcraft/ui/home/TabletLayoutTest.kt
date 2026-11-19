@@ -10,6 +10,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -63,6 +64,13 @@ class TabletLayoutTest {
             check(System.currentTimeMillis() < until) { "recents=${vm.recentList.size}" }
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
             Thread.sleep(20)
+        }
+        rule.waitForIdle()
+        // Home's own refresh, started as it was composed, can land after the test's and empty the
+        // list again (#749): wait until the files are shown, refreshing while the list is short
+        rule.waitUntil(10_000) {
+            if (vm.recentList.size < 8) rule.runOnUiThread { vm.refreshRecents() }
+            rule.onAllNodesWithText("Recent file 1", substring = true).fetchSemanticsNodes().isNotEmpty()
         }
         rule.waitForIdle()
     }

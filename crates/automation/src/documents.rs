@@ -203,6 +203,23 @@ impl Automation {
                 self.resolve(&own, true)?
             }
         };
+        // Android adaptation (#738): Export a copy. The document as it is now, edits included, is
+        // written to `path` as Save would write it, and the document stays as it was: not marked
+        // saved, at its own path, with its undo history; no Will Save script runs (it would edit it).
+        if a.opt_bool("copy")?.unwrap_or(false) {
+            if explicit.is_none() {
+                return Err(ToolError::InvalidArgs("copy needs a path".into()));
+            }
+            if a.opt_bool("flatten_fill_sign")?.unwrap_or(false) {
+                return Err(ToolError::InvalidArgs("a copy can't flatten Fill & Sign: that would change the document".into()));
+            }
+            let bytes =
+                if a.opt_bool("full")?.unwrap_or(false) { self.session.save_full_bytes(id) } else { self.session.save_bytes(id) }.map_err(failed)?;
+            self.session.check_save(id, &bytes).map_err(failed)?;
+            write(&target, &bytes)?;
+            let doc = self.session.get(id).ok_or_else(|| failed("the document is no longer open"))?;
+            return Ok(json!({ "path": target.to_string_lossy(), "bytes": bytes.len(), "copy": true, "document": summary(doc) }));
+        }
         let same_file = explicit.is_none() || doc.path.as_deref().is_some_and(|p| Path::new(p) == target);
         // Saving to a new file is a full rewrite unless asked otherwise, like Save As.
         let full = a.opt_bool("full")?.unwrap_or(!same_file);

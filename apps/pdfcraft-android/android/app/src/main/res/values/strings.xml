@@ -26,6 +26,7 @@
     <string name="common_done">Done</string>
     <string name="common_save">Save</string>
     <string name="common_save_copy">Save a copy</string>
+    <string name="common_export_copy">Export a copy</string>
     <string name="common_delete">Delete</string>
     <string name="common_back">Back</string>
     <string name="common_share">Share</string>
@@ -1359,6 +1360,7 @@
 
     <!-- Messages: saving. %1$s is a file name; %2$s is its size (for example "1.2 MB"). -->
     <string name="msg_saved_copy">Saved a copy</string>
+    <string name="msg_exported_copy">Exported a copy. You\'re still in this document.</string>
     <string name="msg_saved_downloads">Saved as %1$s in Downloads</string>
     <string name="msg_saved_downloads_size">Saved as %1$s in Downloads (%2$s)</string>
 

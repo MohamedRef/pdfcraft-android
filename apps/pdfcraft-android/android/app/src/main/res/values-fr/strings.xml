@@ -11,6 +11,7 @@
     <string name="common_done">Terminé</string>
     <string name="common_save">Enregistrer</string>
     <string name="common_save_copy">Enregistrer une copie</string>
+    <string name="common_export_copy">Exporter une copie</string>
     <string name="common_delete">Supprimer</string>
     <string name="common_back">Retour</string>
     <string name="common_share">Partager</string>
@@ -926,6 +927,7 @@
 
     <!-- Messages: saving. %1$s is a file name; %2$s is its size (for example "1.2 MB"). -->
     <string name="msg_saved_copy">Copie enregistrée</string>
+    <string name="msg_exported_copy">Une copie a été exportée. Vous restez dans ce document.</string>
     <string name="msg_saved_downloads">Enregistré sous %1$s dans Téléchargements</string>
     <string name="msg_saved_downloads_size">Enregistré sous %1$s dans Téléchargements (%2$s)</string>
 
