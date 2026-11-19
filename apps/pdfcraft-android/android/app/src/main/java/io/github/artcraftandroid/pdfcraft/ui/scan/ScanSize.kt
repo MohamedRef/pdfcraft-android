@@ -59,6 +59,7 @@ import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import io.github.artcraftandroid.pdfcraft.ui.saveScan
 
 /*
  * The size choice at Save PDF and Share (#505): Best quality, Balanced, Small, Smallest, with this
