@@ -157,15 +157,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        // a failed request is logged and the next one still taken (#716): one exception used to end
+        // the loop, and Scan from photos then did nothing until the app was restarted
         lifecycleScope.launch {
-            for (f in vm.cameraShots) scanCamera.route(f)
+            for (f in vm.cameraShots) keepTaking("camera_route") { scanCamera.route(f) }
         }
         lifecycleScope.launch {
-            for (u in vm.scanImports) scanCamera.importPhotos()
+            for (u in vm.scanImports) keepTaking("photo_picker") { scanCamera.importPhotos() }
         }
         // pictures shared from another app start a scan (#617)
         lifecycleScope.launch {
-            for (uris in vm.scanShared) scanCamera.importShared(uris)
+            for (uris in vm.scanShared) keepTaking("shared_import") { scanCamera.importShared(uris) }
         }
         lifecycleScope.launch {
             for (r in vm.requests.creates) launchSafely {
@@ -250,6 +252,17 @@ class MainActivity : ComponentActivity() {
         super.onUserInteraction()
         lastTouch = System.currentTimeMillis()
         vm.study.studyActivity()
+    }
+
+    /** One request from the scan's channels: a failure is logged as a scan failure at [stage], and the loop goes on (#716). */
+    private inline fun keepTaking(stage: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Diag.failure(DiagArea.Scan, stage, e)
+        }
     }
 
     private inline fun launchSafely(onFail: () -> Unit = {}, block: () -> Unit) {

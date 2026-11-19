@@ -27,6 +27,19 @@ internal enum class ScanBordersOpener(val id: String) {
     val afterPhoto: Boolean get() = this != Page
 }
 
+/**
+ * Where Discard on Adjust borders goes once the photo is dropped, given the scan's [pages] with it
+ * (#460, #716). An imported photo with other pages goes back to them (`document`); the only
+ * photo picked for a scan ends the scan (`end`), as closing the picker with nothing chosen does;
+ * a photo just taken brings the camera back for another (`camera`). Before #716 the only
+ * imported photo opened the camera.
+ */
+internal fun scanBordersDiscardTo(opener: ScanBordersOpener, pages: Int): String = when {
+    opener == ScanBordersOpener.Import && pages > 1 -> "document"
+    opener == ScanBordersOpener.Import -> "end"
+    else -> "camera"
+}
+
 /** The Adjust borders screen open on one page: the page's key and why it opened. */
 internal data class ScanBordersOpen(val key: String, val opener: ScanBordersOpener, val openedAt: Long, val mode: String = "none")
 
