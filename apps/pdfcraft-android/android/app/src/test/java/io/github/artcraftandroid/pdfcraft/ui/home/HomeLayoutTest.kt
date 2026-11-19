@@ -70,13 +70,23 @@ class HomeLayoutTest {
         }
         s.library.setCategory("content://t/s0", "Anatomy lecture 4.pdf", null, DocCategory.STUDY, now)
         rule.runOnUiThread { vm.refreshRecents(); s.refreshStudy() }
-        settle { vm.recentList.size == 5 && s.studyRecent.size == 3 && vm.tabs.tabs.size == 3 }
+        // Home's own refresh, started as it was composed, can land after this one and leave the
+        // lists short (#755): refresh again while waiting
+        settle(retry = { rule.runOnUiThread { vm.refreshRecents(); s.refreshStudy() } }) {
+            vm.recentList.size == 5 && s.studyRecent.size == 3 && vm.tabs.tabs.size == 3
+        }
     }
 
-    private fun settle(done: () -> Boolean) {
+    /** Waits up to 10 s for [done], running [retry] every half second meanwhile (#755). */
+    private fun settle(retry: () -> Unit = {}, done: () -> Boolean) {
         val until = System.currentTimeMillis() + 10_000
+        var nextRetry = System.currentTimeMillis() + 500
         while (!done()) {
             check(System.currentTimeMillis() < until) { "home state: recents=${vm.recentList.size} study=${vm.study.studyRecent.size} tabs=${vm.tabs.tabs.size}" }
+            if (System.currentTimeMillis() >= nextRetry) {
+                retry()
+                nextRetry = System.currentTimeMillis() + 500
+            }
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
             Thread.sleep(20)
         }
