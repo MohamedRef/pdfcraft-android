@@ -296,7 +296,12 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
                 Text(
                     if (list == null) stringResource(R.string.comments_title)
                     else if (filtering) stringResource(R.string.comments_shown, shown.size, threads.size)
-                    else threadsTitle(threads.size, stringResource(R.string.comments_none)) { plural(R.plurals.comments_threads, it, it) },
+                    else titleCounts(threads).let { (written, drawings) ->
+                        // drawings are counted apart, as the list folds them (#740)
+                        threadsTitle(written, drawings, stringResource(R.string.comments_none), { plural(R.plurals.comments_threads, it, it) }) {
+                            plural(R.plurals.comments_drawings, it, it)
+                        }
+                    },
                     color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
