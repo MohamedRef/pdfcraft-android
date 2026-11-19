@@ -35,7 +35,7 @@ class ViewerToolIconsTest {
         val found = mutableListOf<Pair<String, String>>()
         val subTool = Regex("""SubTool\(\s*$icon,\s*stringResource\(R\.string\.(\w+)\),\s*([^,]+),""")
         for ((file, fn) in listOf(
-            "Tools.kt" to "MarkupSubTools", "Tools.kt" to "CommentSubTools", "Tools.kt" to "TextSubTools",
+            "ToolPickers.kt" to "MarkupSubTools", "ToolPickers.kt" to "CommentSubTools", "ToolPickers.kt" to "TextSubTools",
             "Measure.kt" to "MeasureToolbar", "FillSign.kt" to "FillSignToolbar",
         )) {
             subTool.findAll(body(file, fn)).filter { it.groupValues[3].trim() != "false" }.forEach { found += it.groupValues[1] to it.groupValues[2] }
