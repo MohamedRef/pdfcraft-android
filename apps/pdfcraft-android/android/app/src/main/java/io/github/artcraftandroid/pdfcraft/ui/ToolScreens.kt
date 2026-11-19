@@ -1001,11 +1001,16 @@ fun ScanScreen(vm: AppViewModel) {
                 onRotate = { d -> vm.rotateScanPageBy(bordersAt, d) },
                 onDiscard = {
                     // one step back: the photo just taken goes, and the camera comes back for another;
-                    // an imported photo goes back to the pages there are, when there are some (#460)
-                    val toPages = borders.opener == io.github.artcraftandroid.pdfcraft.ui.scan.ScanBordersOpener.Import && pages.size > 1
-                    vm.scanSteps.close(if (toPages) "document" else "camera", bordersAt + 1)
+                    // an imported photo goes back to the pages there are (#460), or ends the scan when
+                    // it was the only one, never opening the camera (#716)
+                    val to = io.github.artcraftandroid.pdfcraft.ui.scan.scanBordersDiscardTo(borders.opener, pages.size)
+                    vm.scanSteps.close(to, bordersAt + 1)
                     vm.deleteScanPage(bordersAt)
-                    if (toPages) vm.scanSteps.showDocument("borders", pages.size) else vm.takeScanPhoto()
+                    when (to) {
+                        "document" -> vm.scanSteps.showDocument("borders", pages.size)
+                        "end" -> vm.discardScan(asked = true)
+                        else -> vm.takeScanPhoto()
+                    }
                 },
             ),
         )
