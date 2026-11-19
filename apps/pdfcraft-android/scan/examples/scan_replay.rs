@@ -20,7 +20,7 @@
 use std::path::{Path, PathBuf};
 
 use pdfcraft_scan::page_kind::{PresetChoice, preset_from_id};
-use pdfcraft_scan::{Finder, Look, PageRequest, Photo, Pyramid, Quad, RefineOptions, detect_with, process_page, refine};
+use pdfcraft_scan::{Finder, Look, PageRequest, Paper, Photo, Pyramid, Quad, RefineOptions, detect_with, process_page, refine};
 use serde_json::Value;
 
 /// A corner within this share of the diagonal needs no moving by hand (#288, `no_touch`).
@@ -154,6 +154,9 @@ fn main() {
             strength: facts["strength"].as_u64().map_or(60, |v| v.min(100) as u8),
             threads,
             snap_paper: options["snap_paper"].as_bool().unwrap_or(true),
+            // the scan's own paper and the card rule the phone asked with (#759); files from before have neither
+            paper_hint: facts["paper_hint"].as_str().and_then(paper_named),
+            card_paper: facts["card_paper"].as_bool().unwrap_or(true),
             side_proportions: options["side_proportions"].as_bool().unwrap_or(false),
             // the scan screen's switch, or every page checked by the automatic mode (#302)
             flatten: facts["flatten"].as_bool().unwrap_or(false) || (options["flatten_auto"].as_bool().unwrap_or(false)),
@@ -246,5 +249,18 @@ fn main() {
             100.0 * median(&mut phone),
             100.0 * median(&mut now)
         );
+    }
+}
+
+/// The paper a page file names (#759: `paper_hint`), as the app writes it; `None` for "none" or a word it doesn't know.
+fn paper_named(word: &str) -> Option<Paper> {
+    match word {
+        "a4" => Some(Paper::A4),
+        "a5" => Some(Paper::A5),
+        "letter" => Some(Paper::Letter),
+        "legal" => Some(Paper::Legal),
+        "id_card" => Some(Paper::IdCard),
+        "square" => Some(Paper::Square),
+        _ => None,
     }
 }
