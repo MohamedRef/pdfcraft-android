@@ -3240,9 +3240,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val toFinish = io.github.artcraftandroid.pdfcraft.ui.scan.scanPagesToFinish(readyAtTap)
         // the n of m in "Finishing page n of m": only the pages not made ahead are counted
         var finishing = 0
+        // two pages made at once (#549), and the most that were
+        val lanes = io.github.artcraftandroid.pdfcraft.ui.scan.scanSaveLanes(lab.parallelSave, toFinish.size)
+        var atOnce = 0
+        var mostAtOnce = 0
         suspend fun make(i: Int, turns: Int?) {
             val page = pages[i]
-            val out = if (ahead) fullPages.newFile() else File(dir, "page-$i")
+            // the page's place in the name: two pages are made at once (#549)
+            val out = if (ahead) File(fullPages.newFile().path + "-$i") else File(dir, "page-$i")
             val request = scanSaveRequest(page, out.absolutePath, turns, shown[i], lab, autoUpright, sizeChoice)
             if (ahead) fullPages.take(page, request)?.let {
                 made[i] = it
@@ -3258,7 +3263,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tools.busyProgress = i to pages.size
             }
             val started = android.os.SystemClock.elapsedRealtime()
-            val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
+            atOnce++
+            mostAtOnce = maxOf(mostAtOnce, atOnce)
+            val result = try {
+                withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
+            } finally {
+                atOnce--
+            }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
             madeMs[i] += android.os.SystemClock.elapsedRealtime() - started
             result.getOrNull()?.let {
@@ -3270,9 +3281,19 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // the size sheet's estimate may still be making the first page (#505): one full-size page at a time
         scanSizeBusy.withLock { }
         try {
-            for (i in pages.indices) {
-                if (cancelled) break
-                make(i, firstTurns[i])
+            // [lanes] pages at once, each taking the next page in the scan's order (#549); one lane is the order as before
+            var nextPage = 0
+            kotlinx.coroutines.coroutineScope {
+                val scope = this
+                repeat(lanes) {
+                    scope.launch {
+                        while (!cancelled) {
+                            val i = nextPage++
+                            if (i >= pages.size) break
+                            make(i, firstTurns[i])
+                        }
+                    }
+                }
             }
         } finally {
             // from here the pages go into the PDF, which can't be stopped half-way
@@ -3503,7 +3524,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // from the tap to the file (#504)
             val waitDiag = io.github.artcraftandroid.pdfcraft.ui.scan.scanSaveWaitDiag(ahead, readyAtTap.count { it }, android.os.SystemClock.elapsedRealtime() - scanStarted, ocr, ocrMs) +
                 // made ahead whatever the size, stored ahead at this size, and the making done at Save (#528)
-                io.github.artcraftandroid.pdfcraft.ui.scan.scanSizesAheadDiag(lab.sizesAhead, madeAhead, readyAtTap.count { it }, madeMs.sum())
+                io.github.artcraftandroid.pdfcraft.ui.scan.scanSizesAheadDiag(lab.sizesAhead, madeAhead, readyAtTap.count { it }, madeMs.sum()) +
+                // how many pages Save made at once (#549)
+                io.github.artcraftandroid.pdfcraft.ui.scan.scanSaveLanesDiag(lanes, mostAtOnce)
             if (purpose == io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Print) {
                 // the print screen reads the copy and deletes it when the job is done (#516); the scan stays as it is
                 Diag.event(DiagArea.Scan, "print", "pages" to pages.size, "bytes" to out.length(), "ms" to android.os.SystemClock.elapsedRealtime() - scanStarted)

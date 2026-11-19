@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Save makes the pages not made ahead two at once (#549) -->
+<resources>
+    <string name="scan_lab_parallel_save">Preparar dos páginas a la vez al guardar</string>
+</resources>

@@ -117,6 +117,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_background_pages, o.backgroundPages) { lab.update(o.copy(backgroundPages = it)) }
     // the background queue makes two pages at once (#549)
     Sw(R.string.scan_lab_parallel_pages, o.parallelPages) { lab.update(o.copy(parallelPages = it)) }
+    // Save makes the pages not made ahead two at once (#549)
+    Sw(R.string.scan_lab_parallel_save, o.parallelSave) { lab.update(o.copy(parallelSave = it)) }
     // every page made at full size before Save (#504)
     Sw(R.string.scan_lab_full_pages_ahead, o.fullPagesAhead) { lab.update(o.copy(fullPagesAhead = it)) }
     // every size stored from one making, so another size at Save makes nothing again (#528)
