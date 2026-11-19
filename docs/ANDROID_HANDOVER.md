@@ -25,8 +25,8 @@
 ## RELEASE 0.0.44-beta (44012) — 2026-11-19 (prepared; published only on the owner's go-ahead)
 
 - Release PR publishes `0.0.44-beta` / ARM64 build `44012` (`pdfcraft.versionCode=4401`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.44-beta (44012)`.
-- Included: #698 (#697), #700 (#699), #702 (#701), #707 (#706), #710 (#705), #711 (#708), #713 (#712), #714 (#709), #717 (#655), #718 (#190), #715 (#704), #722 (#652), #728 (#723), #725 (#720), #729 (#724), #727 (#719), #726 (#721), #731 (#595), #732 (#703), #734 (#716), #733 (#595), #736 (#735), #743 (#737). See [`releases/0.0.44-beta.md`](releases/0.0.44-beta.md).
-- Checked on the owner's tablet with a debug build of `main`: #716, #703, #627, #190, #735 and the #595 timings. Not on the phone. Open from the tablet run: #739, #740, #741, #742.
+- Included: #698 (#697), #700 (#699), #702 (#701), #707 (#706), #710 (#705), #711 (#708), #713 (#712), #714 (#709), #717 (#655), #718 (#190), #715 (#704), #722 (#652), #728 (#723), #725 (#720), #729 (#724), #727 (#719), #726 (#721), #731 (#595), #732 (#703), #734 (#716), #733 (#595), #736 (#735), #743 (#737), #745 (#740), #746 (#741), #747 (#742), #748 (#739). See [`releases/0.0.44-beta.md`](releases/0.0.44-beta.md).
+- Checked on the owner's tablet with a debug build of `main`: #716, #703, #627, #190, #735 and the #595 timings. Not on the phone. Found in the tablet run and fixed after it, not yet tried on a device: #739, #740, #741, #742.
 
 ## RELEASE 0.0.43-beta (43012) — 2026-11-18 (owner requested)
 
