@@ -136,6 +136,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             output_path: dir.join(format!("page-{n}")).to_string_lossy().into_owned(),
             focal_35mm: None,
             snap_paper: false,
+            paper_hint: None,
+            card_paper: true,
             flatten: false,
             flatten_check: false,
             flatten_trim: false,

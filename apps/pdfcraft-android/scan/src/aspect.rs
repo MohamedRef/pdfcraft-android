@@ -64,6 +64,29 @@ impl Paper {
 
 /// A measured ratio within this share of a standard one is taken to be that paper.
 const SNAP: f64 = 0.03;
+/// A measured ratio within this share of the paper most of a scan's other pages have is taken to
+/// be that paper (#759): its corners or the focal length a little off moved it out of [`SNAP`].
+pub const HINT_SNAP: f64 = 0.10;
+
+/// How a page is matched to a paper size (#759).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PaperMatch {
+    /// Match to standard papers at all, within [`SNAP`].
+    pub on: bool,
+    /// The paper most of the scan's other pages were matched to: a page within [`HINT_SNAP`] of it
+    /// takes it, before the papers within [`SNAP`] are looked at. `None` for none.
+    pub hint: Option<Paper>,
+    /// Whether the page may be matched to ID card: off for an outline the detector was not sure
+    /// of, since a part of a page cut across a table or a pile easily has a card's shape.
+    pub card: bool,
+}
+
+impl PaperMatch {
+    /// Standard papers within [`SNAP`] when [`on`](Self::on), as before #759: no hint, ID card allowed.
+    pub const fn plain(on: bool) -> Self {
+        PaperMatch { on, hint: None, card: true }
+    }
+}
 /// Without a fixed size, a page's long side is taken to be this long (A4's).
 const LONG_SIDE_MM: f64 = 297.0;
 /// The focal lengths (in units of the photo's longer side) the corners may be taken to imply:
@@ -200,13 +223,22 @@ fn focal(camera: Focal, unit: f64, estimate: Option<(f64, f64)>) -> (f64, Aspect
     (both.clamp(*FOCAL_RANGE.start(), *FOCAL_RANGE.end()), source, None, firm)
 }
 
-/// The paper whose shape is within [`SNAP`] of `ratio` (width over height), closest first.
-fn snap(ratio: f64) -> Paper {
+/// The paper `ratio` (width over height) is taken to be: the hint within [`HINT_SNAP`] (#759),
+/// else the standard paper within [`SNAP`], closest first, ID card only when it is allowed.
+fn snap(ratio: f64, matched: PaperMatch) -> Paper {
     let long_short = ratio.max(1.0 / ratio);
+    let off = |p: Paper| p.ratio().map(|r| (long_short / r - 1.0).abs());
+    let allowed = |p: Paper| matched.card || p != Paper::IdCard;
+    if let Some(hint) = matched.hint.filter(|&p| allowed(p)) {
+        if off(hint).is_some_and(|o| o <= HINT_SNAP) {
+            return hint;
+        }
+    }
     [Paper::A4, Paper::Letter, Paper::Legal, Paper::IdCard, Paper::Square]
         .into_iter()
-        .filter_map(|p| p.ratio().map(|r| (p, (long_short / r - 1.0).abs())))
-        .filter(|&(_, off)| off <= SNAP)
+        .filter(|&p| allowed(p))
+        .filter_map(|p| off(p).map(|o| (p, o)))
+        .filter(|&(_, o)| o <= SNAP)
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map_or(Paper::Custom, |(p, _)| p)
 }
@@ -233,7 +265,13 @@ pub struct Proportions {
 /// the camera said about its lens (`None` for nothing); `snap_paper` matches the result to
 /// standard papers.
 pub fn proportions(quad: &Quad, photo_w: u32, photo_h: u32, camera: impl Into<Focal>, snap_paper: bool) -> Proportions {
-    shape(quad, photo_w, photo_h, camera.into(), snap_paper, true)
+    shape(quad, photo_w, photo_h, camera.into(), PaperMatch::plain(snap_paper), true)
+}
+
+/// [`proportions`] with the paper matched as [`PaperMatch`] says (#759): the scan's own paper
+/// first, ID card only when allowed.
+pub fn proportions_matched(quad: &Quad, photo_w: u32, photo_h: u32, camera: impl Into<Focal>, matched: PaperMatch) -> Proportions {
+    shape(quad, photo_w, photo_h, camera.into(), matched, true)
 }
 
 /// The page's proportions from the lengths of its sides in the photo alone, as before #293: right
@@ -241,10 +279,15 @@ pub fn proportions(quad: &Quad, photo_w: u32, photo_h: u32, camera: impl Into<Fo
 /// testing choice (#288), to tell a page drawn with the wrong proportions by [`proportions`]
 /// from one whose corners are wrong.
 pub fn proportions_by_sides(quad: &Quad, photo_w: u32, photo_h: u32, snap_paper: bool) -> Proportions {
-    shape(quad, photo_w, photo_h, Focal::default(), snap_paper, false)
+    shape(quad, photo_w, photo_h, Focal::default(), PaperMatch::plain(snap_paper), false)
 }
 
-fn shape(quad: &Quad, photo_w: u32, photo_h: u32, camera: Focal, snap_paper: bool, perspective: bool) -> Proportions {
+/// [`proportions_by_sides`] with the paper matched as [`PaperMatch`] says (#759).
+pub fn proportions_by_sides_matched(quad: &Quad, photo_w: u32, photo_h: u32, matched: PaperMatch) -> Proportions {
+    shape(quad, photo_w, photo_h, Focal::default(), matched, false)
+}
+
+fn shape(quad: &Quad, photo_w: u32, photo_h: u32, camera: Focal, matched: PaperMatch, perspective: bool) -> Proportions {
     let unit = f64::from(photo_w.max(photo_h)).max(1.0);
     let (cx, cy) = (f64::from(photo_w) / 2.0, f64::from(photo_h) / 2.0);
     let m = |i: usize| -> V3 { [(quad.0[i][0] - cx) / unit, (quad.0[i][1] - cy) / unit, 1.0] };
@@ -260,7 +303,7 @@ fn shape(quad: &Quad, photo_w: u32, photo_h: u32, camera: Focal, snap_paper: boo
     let (ratio, source, known, estimated) =
         measured.filter(|&(r, ..)| r.is_finite() && r > 0.0 && (r / by_sides.0).max(by_sides.0 / r) <= 3.0).unwrap_or(by_sides);
     let focal_mismatch = matches!((known, estimated), (Some(k), Some(e)) if (e / k - 1.0).abs() > FOCAL_MISMATCH);
-    let paper = if snap_paper { snap(ratio) } else { Paper::Custom };
+    let paper = if matched.on { snap(ratio, matched) } else { Paper::Custom };
     let ratio = match paper.ratio() {
         Some(r) if ratio >= 1.0 => r,
         Some(r) => 1.0 / r,

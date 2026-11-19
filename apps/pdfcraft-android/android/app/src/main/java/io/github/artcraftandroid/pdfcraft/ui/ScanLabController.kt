@@ -83,7 +83,9 @@ internal class ScanLabController(private val vm: AppViewModel) {
                 // #513: opened from its PDF in the viewer
                 viewerSource = viewerSource,
                 // #758: still unsure when kept
-                unsure = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageUnsure(page))
+                unsure = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageUnsure(page),
+                // #759: the scan's own paper and the card rule
+                paperHint = vm.scanPaperHint(page, lab)?.name?.lowercase() ?: "none", cardPaper = vm.scanCardPaper(page, lab))
         }
     }
 

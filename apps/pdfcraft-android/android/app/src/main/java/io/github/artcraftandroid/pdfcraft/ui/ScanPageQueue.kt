@@ -44,6 +44,8 @@ internal class ScanMadePage(
     val orientation: io.github.artcraftandroid.pdfcraft.core.ScanOrientation?,
     /** What removing fingers did to the page (#466); null when it did not run. */
     val fingers: io.github.artcraftandroid.pdfcraft.core.ScanFingers? = null,
+    /** The paper the page was matched to (#759): the scan's own paper is worked out from these. */
+    val paper: io.github.artcraftandroid.pdfcraft.core.ScanPaper? = null,
 )
 
 /**
@@ -133,11 +135,14 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
     fun keyOf(page: ScanPage): ScanPreviewKey {
         val lab = vm.scanLab.options
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
-        return ScanPreviewKey.of(page, io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, vm.scanCanFlatten), lab, autoUpright, autoFlatten = vm.scanAutoFlattens(page, lab))
+        return ScanPreviewKey.of(page, io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, vm.scanCanFlatten), lab, autoUpright, autoFlatten = vm.scanAutoFlattens(page, lab), paperHint = vm.scanPaperHint(page, lab), cardPaper = vm.scanCardPaper(page, lab))
     }
 
     /** The result of [page] when it is up to date. */
     fun readyOf(page: ScanPage): ScanMadePage? = made[page.key]?.takeIf { it.key == keyOf(page) }
+
+    /** The paper [page] was last made at (#759), also while it is made again; null before it is made. */
+    fun paperOf(page: ScanPage): io.github.artcraftandroid.pdfcraft.core.ScanPaper? = made[page.key]?.paper
 
     /** The strip's thumbnail of [page]: its latest result (the last one while it is made again), or null for the photo. */
     fun thumbOf(page: ScanPage): ImageBitmap? = if (on()) made[page.key]?.thumb else null
@@ -271,7 +276,7 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
         val started = android.os.SystemClock.elapsedRealtime()
         val dispatcher = if (lanes > 1) vm.scanQueueDispatcher else vm.scanPreviewDispatcher
         val result = withContext(dispatcher) {
-            runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(vm.scanPreviewRequest(page, key.flatten, key.lab, key.autoUpright, key.autoFlatten), SCAN_PREVIEW_SIDE.toUInt(), cancel) }
+            runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(vm.scanPreviewRequest(page, key.flatten, key.lab, key.autoUpright, key.autoFlatten, key.paperHint, key.cardPaper), SCAN_PREVIEW_SIDE.toUInt(), cancel) }
         }
         // stopped for the page on screen, whose preview goes first: this page is asked again
         if (cancel.isCancelled()) return
@@ -335,7 +340,7 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
             out.delete()
             return
         }
-        made.put(page.key, ScanMadePage(key, out, thumb.asImageBitmap(), p.quarterTurns.toInt(), p.turns.toInt(), scanCameOutFlat(p), p.kind, p.orientation, p.fingers))?.file?.takeIf { it != out }?.delete()
+        made.put(page.key, ScanMadePage(key, out, thumb.asImageBitmap(), p.quarterTurns.toInt(), p.turns.toInt(), scanCameOutFlat(p), p.kind, p.orientation, p.fingers, p.paper))?.file?.takeIf { it != out }?.delete()
         val now = android.os.SystemClock.elapsedRealtime()
         val since = waitingSince.remove(page.key)
         val why = waitingWhy.remove(page.key) ?: scanQueueWhy(null, key, false)
