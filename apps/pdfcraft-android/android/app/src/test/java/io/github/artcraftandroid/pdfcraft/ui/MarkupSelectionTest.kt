@@ -6,6 +6,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.MAX_MARKUP_LINE_RECTS
 import io.github.artcraftandroid.pdfcraft.ui.viewer.markupLineRects
 import io.github.artcraftandroid.pdfcraft.ui.viewer.MARKUP_SIDE_REACH_PT
 import io.github.artcraftandroid.pdfcraft.ui.viewer.markupLetterRange
+import io.github.artcraftandroid.pdfcraft.ui.viewer.markupWholeWords
 import io.github.artcraftandroid.pdfcraft.ui.viewer.markupNearLine
 import io.github.artcraftandroid.pdfcraft.ui.viewer.CommentPalette
 import io.github.artcraftandroid.pdfcraft.ui.viewer.MARKUP_QUICK_COLORS
@@ -127,5 +128,22 @@ class MarkupSelectionTest {
         val palette = CommentPalette.map { it.first.toArgbInt() }
         for (argb in MARKUP_QUICK_COLORS) assertTrue("%08X".format(argb), argb.toInt() in palette)
         assertEquals(5, MARKUP_QUICK_COLORS.toSet().size)
+    }
+
+    /** #739: "the quick bro|wn fox jumps ove|r" marks "brown fox jumps over", not "wn fox jumps ove". */
+    @Test
+    fun aDragInsideWordsTakesTheWholeWords() {
+        // letters: "brown" 10..14, "over" 26..29 on page 0
+        val brown = TextRange(0u, 10u, 15u)
+        val over = TextRange(0u, 26u, 30u)
+        assertEquals(10u to 29u, markupWholeWords(13u, 28u, brown, over))
+        // a drag from the end backwards is the same once ordered
+        assertEquals(10u to 29u, markupWholeWords(minOf(28u, 13u), maxOf(28u, 13u), brown, over))
+        // inside one word: that word
+        assertEquals(10u to 14u, markupWholeWords(11u, 12u, brown, brown))
+        // a space or punctuation (no word) stays as it is
+        assertEquals(9u to 25u, markupWholeWords(9u, 25u, null, null))
+        // a word that doesn't hold the letter is not taken
+        assertEquals(5u to 20u, markupWholeWords(5u, 20u, brown, over))
     }
 }
