@@ -82,6 +82,8 @@ import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import io.github.artcraftandroid.pdfcraft.ui.safeTopPadding
 import kotlin.math.min
 import kotlin.math.roundToInt
+import io.github.artcraftandroid.pdfcraft.ui.saveScan
+import io.github.artcraftandroid.pdfcraft.ui.saveScanToGallery
 
 /**
  * The document screen (#460): the scan's pages in a grid, two across on a phone. A tap opens the
