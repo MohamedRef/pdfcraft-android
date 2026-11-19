@@ -24,6 +24,7 @@
     <string name="scan_borders_not_found">Aucune page trouvée. Faites glisser les coins sur la page.</string>
     <string name="scan_borders_discard_title">Supprimer cette photo ?</string>
     <string name="scan_borders_discard_body">La photo que vous venez de prendre sera supprimée.</string>
+    <string name="scan_borders_discard_body_picked">La photo choisie est retirée de ce scan. Elle reste dans votre galerie.</string>
     <string name="scan_borders_discard">Supprimer</string>
     <string name="scan_borders_keep">Garder</string>
     <string name="scan_lab_steps">Écrans de numérisation par étapes (ajuster les bords après la photo)</string>

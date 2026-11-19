@@ -414,6 +414,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
     }
     if (askDiscard && steps != null) {
         ScanBordersDiscardDialog(
+            steps.opener,
             onKeep = { askDiscard = false },
             onDiscard = {
                 askDiscard = false

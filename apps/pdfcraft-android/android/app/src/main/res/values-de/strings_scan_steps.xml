@@ -24,6 +24,7 @@
     <string name="scan_borders_not_found">Keine Seite gefunden. Ziehe die Ecken auf die Seite.</string>
     <string name="scan_borders_discard_title">Dieses Foto verwerfen?</string>
     <string name="scan_borders_discard_body">Das gerade aufgenommene Foto wird gelöscht.</string>
+    <string name="scan_borders_discard_body_picked">Das ausgewählte Foto wird aus diesem Scan genommen. In der Galerie bleibt es erhalten.</string>
     <string name="scan_borders_discard">Verwerfen</string>
     <string name="scan_borders_keep">Behalten</string>
     <string name="scan_lab_steps">Scan-Bildschirme in Schritten (Ränder nach dem Foto anpassen)</string>

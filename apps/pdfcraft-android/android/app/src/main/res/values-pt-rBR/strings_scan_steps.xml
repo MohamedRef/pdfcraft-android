@@ -24,6 +24,7 @@
     <string name="scan_borders_not_found">Nenhuma página encontrada. Arraste os cantos até a página.</string>
     <string name="scan_borders_discard_title">Descartar esta foto?</string>
     <string name="scan_borders_discard_body">A foto que você acabou de tirar será excluída.</string>
+    <string name="scan_borders_discard_body_picked">A foto escolhida sai desta digitalização. Ela continua na sua galeria.</string>
     <string name="scan_borders_discard">Descartar</string>
     <string name="scan_borders_keep">Manter</string>
     <string name="scan_lab_steps">Telas de digitalização em etapas (ajustar bordas após a foto)</string>

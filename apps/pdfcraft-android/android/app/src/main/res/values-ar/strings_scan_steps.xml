@@ -24,6 +24,7 @@
     <string name="scan_borders_not_found">لم يُعثر على صفحة. اسحب الزوايا إلى الصفحة.</string>
     <string name="scan_borders_discard_title">تجاهل هذه الصورة؟</string>
     <string name="scan_borders_discard_body">سيتم حذف الصورة التي التُقطت للتو.</string>
+    <string name="scan_borders_discard_body_picked">ستُستبعد الصورة المختارة من هذا المسح، وتبقى في المعرض.</string>
     <string name="scan_borders_discard">تجاهل</string>
     <string name="scan_borders_keep">احتفاظ</string>
     <string name="scan_lab_steps">شاشات المسح خطوة بخطوة (ضبط الحواف بعد الصورة)</string>
