@@ -78,3 +78,44 @@ fn save_timings_are_opt_in_and_name_each_stage_of_the_save_once() {
     let info = call(&mut a, "doc_info", json!({"doc": reopened}));
     assert_eq!(info["title"], "Timed");
 }
+
+/// What `doc_info` shows of a document, without what belongs to this visit (its number, name,
+/// path, undo and redo).
+fn shown(mut info: Value) -> Value {
+    info.as_object_mut().unwrap().remove("document");
+    info
+}
+
+/// #595: after an incremental save the document is not inspected again, so it must show exactly
+/// what opening the saved file shows: pages, comments, metadata, fonts and the file's size, also
+/// after a second save on top of the first and after a page turned since.
+#[test]
+fn a_document_after_an_incremental_save_shows_what_the_saved_file_opened_anew_shows() {
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = pdfcraft_engine::Session::new().create_blank(200.0, 300.0, 3).unwrap();
+    std::fs::write(dir.path().join("a.pdf"), bytes.as_slice()).unwrap();
+    let mut a = Automation::new().with_root(dir.path()).unwrap().with_clock(|| 1_700_000_000);
+    let doc = open(&mut a, json!({"path": "a.pdf"}))["doc"].clone();
+    call(&mut a, "doc_set_info", json!({"doc": doc, "key": "Title", "value": "Saved"}));
+    call(&mut a, "comment_add", json!({"doc": doc, "page": 1, "type": "ink", "strokes": [[[10, 280], [50, 260], [90, 285]]]}));
+    call(&mut a, "comment_add", json!({"doc": doc, "page": 2, "type": "note", "at": [150, 20], "contents": "Sticky"}));
+    for round in 0..2 {
+        if round == 1 {
+            call(&mut a, "comment_add", json!({"doc": doc, "page": 3, "type": "ink", "strokes": [[[20, 20], [60, 80]]]}));
+            call(&mut a, "page_rotate", json!({"doc": doc, "pages": [2], "degrees": 90}));
+        }
+        let saved = call(&mut a, "doc_save", json!({"doc": doc, "save_timings": true}));
+        assert_eq!(saved["incremental"], true, "round {round}");
+        let file = std::fs::read(dir.path().join("a.pdf")).unwrap();
+        assert_eq!(saved["bytes"].as_u64().unwrap() as usize, file.len());
+        let after_save = shown(call(&mut a, "doc_info", json!({"doc": doc})));
+        assert_eq!(after_save["file_size"].as_u64().unwrap() as usize, file.len(), "round {round}");
+        let fresh = open(&mut a, json!({"path": "a.pdf"}))["doc"].clone();
+        let opened = shown(call(&mut a, "doc_info", json!({"doc": fresh})));
+        assert_eq!(after_save, opened, "round {round}: the saved document reads as the saved file");
+        call(&mut a, "doc_close", json!({"doc": fresh}));
+    }
+    // and it goes on drawing and saving from there
+    let page = a.call("page_render", &json!({"doc": doc, "page": 1, "dpi": 36})).unwrap();
+    assert!(!page.is_empty());
+}
