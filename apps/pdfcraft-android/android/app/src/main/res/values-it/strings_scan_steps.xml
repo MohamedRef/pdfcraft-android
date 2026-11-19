@@ -24,6 +24,7 @@
     <string name="scan_borders_not_found">Nessuna pagina trovata. Trascina gli angoli sulla pagina.</string>
     <string name="scan_borders_discard_title">Eliminare questa foto?</string>
     <string name="scan_borders_discard_body">La foto appena scattata verrà eliminata.</string>
+    <string name="scan_borders_discard_body_picked">La foto scelta viene tolta da questa scansione. Resta nella tua galleria.</string>
     <string name="scan_borders_discard">Elimina</string>
     <string name="scan_borders_keep">Mantieni</string>
     <string name="scan_lab_steps">Schermate di scansione a passi (regola i bordi dopo la foto)</string>

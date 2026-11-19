@@ -160,13 +160,20 @@ internal fun ScanBarButton(icon: ImageVector, label: String, enabled: Boolean = 
     }
 }
 
+/**
+ * What "Discard this photo?" says for a photo opened by [opener] (#737): a photo picked from the
+ * gallery is only left out of the scan and stays in the gallery; a photo just taken is deleted.
+ */
+internal fun scanBordersDiscardBody(opener: ScanBordersOpener): Int =
+    if (opener == ScanBordersOpener.Import) R.string.scan_borders_discard_body_picked else R.string.scan_borders_discard_body
+
 /** Back on Adjust borders right after a photo: the photo is dropped only when asked (#456). Keep is the default. */
 @Composable
-internal fun ScanBordersDiscardDialog(onKeep: () -> Unit, onDiscard: () -> Unit) {
+internal fun ScanBordersDiscardDialog(opener: ScanBordersOpener, onKeep: () -> Unit, onDiscard: () -> Unit) {
     AlertDialog(
         onDismissRequest = onKeep,
         title = { Text(stringResource(R.string.scan_borders_discard_title)) },
-        text = { Text(stringResource(R.string.scan_borders_discard_body)) },
+        text = { Text(stringResource(scanBordersDiscardBody(opener))) },
         confirmButton = { TextButton(onClick = onKeep) { Text(stringResource(R.string.scan_borders_keep)) } },
         dismissButton = { TextButton(onClick = onDiscard) { Text(stringResource(R.string.scan_borders_discard)) } },
     )
