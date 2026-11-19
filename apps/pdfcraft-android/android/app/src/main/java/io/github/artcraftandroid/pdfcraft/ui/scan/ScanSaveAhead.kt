@@ -76,6 +76,12 @@ internal fun scanFullReadyDiag(index: Int, ms: Long, bytes: Long, why: String, f
  */
 internal fun scanMadeFullBeforeSave(ahead: Boolean, ready: Boolean): Boolean? = if (ahead) ready else null
 
+/** How many pages Save makes at once (#549): two with the testing option on and two or more to make, else one as before. */
+internal fun scanSaveLanes(parallel: Boolean, toMake: Int): Int = if (parallel && toMake >= 2) 2 else 1
+
+/** The fields added to `saved` and `share` (#549): how many pages Save could make at once, and the most it did make at once. */
+internal fun scanSaveLanesDiag(lanes: Int, mostAtOnce: Int): Array<Pair<String, Any?>> = arrayOf("save_lanes" to lanes, "save_most_at_once" to mostAtOnce)
+
 /** What Save found ready (#528): pages made ahead at any size, those already stored at the size chosen, and the making Save did itself. */
 internal fun scanSizesAheadDiag(on: Boolean, madeAhead: Int, storedAhead: Int, makeMs: Long): Array<Pair<String, Any?>> = arrayOf(
     "sizes_ahead" to on, "pages_made_ahead" to madeAhead, "pages_stored_ahead" to storedAhead, "make_ms" to makeMs,

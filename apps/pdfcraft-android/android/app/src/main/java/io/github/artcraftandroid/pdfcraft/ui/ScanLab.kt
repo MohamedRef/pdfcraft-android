@@ -173,6 +173,11 @@ internal data class ScanLab(
      */
     val parallelPages: Boolean = true,
     /**
+     * Save PDF and Share make the pages not made ahead two at once (#549), as the background
+     * queue makes its previews. Off: one page after another, as before.
+     */
+    val parallelSave: Boolean = true,
+    /**
      * Auto detect on the crop screen says when it finds nothing, and does not make a search that
      * already found nothing on the photo again: the next press tries the line detector (#443).
      * Off: every press makes the same search and nothing is said when it finds nothing, as before.
@@ -295,7 +300,7 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "grain_white" to grainWhite, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "strict_book" to strictBook, "book_gutter" to bookGutter, "line_flatten" to lineFlatten, "flatten_reuse" to flattenReuse, "skip_flat" to skipFlat, "parallel_pages" to parallelPages,
+        "denoise" to denoise, "grain_white" to grainWhite, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "strict_book" to strictBook, "book_gutter" to bookGutter, "line_flatten" to lineFlatten, "flatten_reuse" to flattenReuse, "skip_flat" to skipFlat, "parallel_pages" to parallelPages, "parallel_save" to parallelSave,
         "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "background_pages" to backgroundPages, "full_pages_ahead" to fullPagesAhead, "sizes_ahead" to sizesAhead, "ask_discard" to askDiscard, "auto_look" to autoLook, "remove_fingers" to removeFingers, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
         "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "camera_bar" to cameraBar, "steps" to steps, "recent_scans" to recentScans, "edit_from_viewer" to editFromViewer, "snap_while_dragging" to snapWhileDragging, "pull_catch_dp" to pullCatchDp, "pull_release_dp" to pullReleaseDp, "batch_borders" to batchBorders, "tools_in_reach" to toolsInReach, "markup" to markup, "markup_colours" to markupColours, "markup_edge" to markupEdge, "markup_ink" to markupInk, "auto_encode" to autoEncode, "size_override" to (size ?: "none"), "keep" to keep, "inspect" to inspect,
     )
@@ -304,7 +309,7 @@ internal data class ScanLab(
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("grain_white", grainWhite).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("strict_book", strictBook).put("book_gutter", bookGutter).put("line_flatten", lineFlatten).put("flatten_reuse", flattenReuse).put("skip_flat", skipFlat).put("parallel_pages", parallelPages)
+        .put("sharpen", sharpen).put("denoise", denoise).put("grain_white", grainWhite).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("strict_book", strictBook).put("book_gutter", bookGutter).put("line_flatten", lineFlatten).put("flatten_reuse", flattenReuse).put("skip_flat", skipFlat).put("parallel_pages", parallelPages).put("parallel_save", parallelSave)
         .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("background_pages", backgroundPages).put("full_pages_ahead", fullPagesAhead).put("sizes_ahead", sizesAhead).put("ask_discard", askDiscard).put("auto_look", autoLook).put("remove_fingers", removeFingers).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
         .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("camera_bar", cameraBar).put("steps", steps).put("recent_scans", recentScans).put("edit_from_viewer", editFromViewer).put("snap_while_dragging", snapWhileDragging).put("pull_catch_dp", pullCatchDp).put("pull_release_dp", pullReleaseDp).put("batch_borders", batchBorders).put("tools_in_reach", toolsInReach).put("markup", markup).put("markup_colours", markupColours).put("markup_edge", markupEdge).put("markup_ink", markupInk).put("auto_encode", autoEncode).put("size_override", size ?: JSONObject.NULL).put("inspect", inspect)
 
@@ -313,7 +318,7 @@ internal data class ScanLab(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "grain_white" to flag(grainWhite), "preview" to flag(preview), "crop" to flag(cropTools), "detect_note" to flag(cropDetectNote), "flatten_auto_on" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
-        "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "strict_book" to flag(strictBook), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten), "flatten_reuse" to flag(flattenReuse), "skip_flat" to flag(skipFlat), "parallel_pages" to flag(parallelPages),
+        "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "strict_book" to flag(strictBook), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten), "flatten_reuse" to flag(flattenReuse), "skip_flat" to flag(skipFlat), "parallel_pages" to flag(parallelPages), "parallel_save" to flag(parallelSave),
         "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "bg_pages" to flag(backgroundPages), "full_ahead" to flag(fullPagesAhead), "sizes_ahead" to flag(sizesAhead), "ask_discard" to flag(askDiscard), "auto_look" to flag(autoLook), "fingers" to flag(removeFingers), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
         "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "camera_bar" to flag(cameraBar), "steps" to flag(steps), "recent" to flag(recentScans), "edit_viewer" to flag(editFromViewer), "snap_drag" to flag(snapWhileDragging), "catch_dp" to pullCatchDp.toString(), "release_dp" to pullReleaseDp.toString(), "batch" to flag(batchBorders), "reach" to flag(toolsInReach), "markup" to flag(markup), "markup_colours" to flag(markupColours), "markup_edge" to flag(markupEdge), "ink" to flag(markupInk), "auto_encode" to flag(autoEncode), "size" to (size ?: ""), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
@@ -380,6 +385,7 @@ internal data class ScanLab(
                 flattenReuse = on("flatten_reuse", default.flattenReuse),
                 skipFlat = on("skip_flat", default.skipFlat),
                 parallelPages = on("parallel_pages", default.parallelPages),
+                parallelSave = on("parallel_save", default.parallelSave),
                 pageStrength = on("page_strength", default.pageStrength),
                 unfoundDocument = on("unfound_doc", default.unfoundDocument),
                 backgroundPages = on("bg_pages", default.backgroundPages),
