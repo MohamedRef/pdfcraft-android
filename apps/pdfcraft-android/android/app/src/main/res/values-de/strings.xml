@@ -1004,6 +1004,7 @@
     <string name="msg_redone">%1$s wiederhergestellt</string>
     <string name="msg_ink_kept">Nicht gespeicherte Tinte wurde behalten. Öffne Zeichnen und tippe auf Fertig, um sie erneut zu speichern.</string>
     <string name="msg_ink_restored">%1$d Striche, die beim Beenden der App nicht gespeichert waren, wurden wieder hinzugefügt.</string>
+    <string name="msg_ink_restored_changed">%1$d beim Beenden der App nicht gespeicherte Striche wurden wieder hinzugefügt. Spätere Änderungen daran (Verschieben, Radieren, Rückgängig) fehlen eventuell.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">Dieses Werkzeug ist aufgrund der Sicherheitseinstellungen des Dokuments nicht verfügbar.</string>

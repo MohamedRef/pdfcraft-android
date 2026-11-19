@@ -1341,6 +1341,7 @@
     <string name="msg_redone">%1$s redone</string>
     <string name="msg_ink_kept">Ink that wasn\'t saved is kept. Open Draw and tap Done to save it again.</string>
     <string name="msg_ink_restored">%1$d strokes not saved when the app closed were added back.</string>
+    <string name="msg_ink_restored_changed">%1$d strokes not saved when the app closed were added back. Changes made to them afterwards (moving, erasing, Undo) may be missing.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">This tool is not available due to the document\'s security settings.</string>

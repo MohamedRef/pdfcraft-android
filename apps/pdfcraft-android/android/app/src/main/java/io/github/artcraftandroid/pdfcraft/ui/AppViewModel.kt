@@ -1300,12 +1300,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // the bar by a new markup names it by its place among the page's comments: after an undo
         // that place may be another comment's (#650)
         commenting.markupFollowUp = null
+        // the crash journal can't tell what the step changes of the strokes it keeps (#703)
+        doc.inkJournal?.documentStepped()
         runTool(doc, "edit_undo") { if (announce) step(doc, text(R.string.msg_undone, label)) }
     }
 
     fun redoDocument(doc: OpenDocument, announce: Boolean) {
         val label = doc.info.redoLabel ?: return
         commenting.markupFollowUp = null
+        doc.inkJournal?.documentStepped()
         runTool(doc, "edit_redo") { if (announce) step(doc, text(R.string.msg_redone, label)) }
     }
 
@@ -1348,7 +1351,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val points = found.strokes.sumOf { it.points.size }
             fun log(outcome: String, applied: Int = 0) = Diag.event(
                 DiagArea.Ink, "ink_journal", "doc" to doc.diagNumber, "outcome" to outcome, "strokes" to found.strokes.size, "points" to points,
-                "records" to found.records, "torn" to found.torn, "bytes" to found.bytes, "applied" to applied, "ms" to android.os.SystemClock.elapsedRealtime() - started,
+                "records" to found.records, "torn" to found.torn, "touched" to found.touched, "bytes" to found.bytes, "applied" to applied,
+                "ms" to android.os.SystemClock.elapsedRealtime() - started,
             )
             if (doc.inkJournal !== state) return@launch
             if (found.outcome != "read" || found.strokes.isEmpty()) {
@@ -1367,7 +1371,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 return@launch
             }
             val restored = found.strokes.map { s -> io.github.artcraftandroid.pdfcraft.ui.viewer.InkJournalItem(Any(), listOf("restored")) { s } }
-            state.adoptRestored(restored)
+            state.adoptRestored(restored, found.touched)
             val groups = io.github.artcraftandroid.pdfcraft.ui.viewer.inkSaveCommandGroups(found.strokes) { argb -> androidx.compose.ui.graphics.Color(argb).hex() }
             runToolBatch(doc, "comment_add", groups) { applied ->
                 val done = applied.coerceIn(0, restored.size)
@@ -1388,7 +1392,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 log("restored", done)
                 state.restoring = false
                 state.sync()
-                if (document === doc) tell(text(R.string.msg_ink_restored, found.strokes.size))
+                // changes made to them after they were drawn may be missing (#703)
+                val message = if (found.touched) R.string.msg_ink_restored_changed else R.string.msg_ink_restored
+                if (document === doc) tell(text(message, found.strokes.size))
             }
         }
     }

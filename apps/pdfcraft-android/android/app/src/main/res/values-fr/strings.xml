@@ -911,6 +911,7 @@
     <string name="msg_redone">%1$s rétabli</string>
     <string name="msg_ink_kept">L\'encre non enregistrée a été conservée. Ouvrez Dessiner et touchez OK pour l\'enregistrer à nouveau.</string>
     <string name="msg_ink_restored">%1$d traits non enregistrés à la fermeture de l\'app ont été rajoutés.</string>
+    <string name="msg_ink_restored_changed">%1$d traits non enregistrés à la fermeture de l\'app ont été rajoutés. Les modifications faites ensuite (déplacement, gomme, annulation) peuvent manquer.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">Cet outil n\'est pas disponible en raison des paramètres de sécurité du document.</string>

@@ -860,6 +860,7 @@
     <string name="msg_redone">تمت إعادة %1$s</string>
     <string name="msg_ink_kept">تم الاحتفاظ بالحبر الذي لم يُحفظ. افتح الرسم واضغط تم لحفظه مرة أخرى.</string>
     <string name="msg_ink_restored">أُعيد %1$d من الخطوط التي لم تُحفظ عند إغلاق التطبيق.</string>
+    <string name="msg_ink_restored_changed">أُعيد %1$d من الخطوط التي لم تُحفظ عند إغلاق التطبيق. قد تكون التغييرات التي أُجريت عليها بعد ذلك (النقل أو المسح أو التراجع) مفقودة.</string>
     <string name="msg_tool_blocked_security">هذه الأداة غير متاحة بسبب إعدادات أمان المستند.</string>
     <string name="msg_snap_to_shape_on">تحويل الرسم إلى شكل: مفعّل</string>
     <string name="msg_search_image_only">نصوص هذا الملف صور؛ لذا لا يمكن البحث فيها بعد.</string>
