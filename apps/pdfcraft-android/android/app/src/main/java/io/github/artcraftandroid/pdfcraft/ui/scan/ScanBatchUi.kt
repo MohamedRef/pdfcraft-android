@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui.scan
 
+import androidx.annotation.PluralsRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,15 +34,18 @@ internal fun ScanBatchMarksDialog(pages: Int, onKeep: () -> Unit, onRemove: () -
     )
 }
 
-/** The document screen's line after an import of several photos (#515): "Check the borders of N pages", Check, and a close. */
+/**
+ * The document screen's line after an import of several photos (#515): "Check the borders of N pages",
+ * Check, and a close; [text] says something else for the unsure pages (#758).
+ */
 @Composable
-internal fun ScanBatchOfferRow(pages: Int, onCheck: () -> Unit, onDismiss: () -> Unit) {
+internal fun ScanBatchOfferRow(pages: Int, onCheck: () -> Unit, onDismiss: () -> Unit, @PluralsRes text: Int = R.plurals.scan_batch_offer) {
     val c = pdfColors
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(8.dp)).background(c.surfaceRaised).padding(start = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(pluralStringResource(R.plurals.scan_batch_offer, pages, pages), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Text(pluralStringResource(text, pages, pages), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
         TextButton(onClick = onCheck) { Text(stringResource(R.string.scan_batch_check), color = c.accent) }
         BarIcon(LucideIcons.X, stringResource(R.string.scan_enhance_dismiss), onDismiss)
     }

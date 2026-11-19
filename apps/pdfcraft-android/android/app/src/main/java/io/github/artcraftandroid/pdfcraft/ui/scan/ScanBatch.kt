@@ -3,6 +3,8 @@ package io.github.artcraftandroid.pdfcraft.ui.scan
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import io.github.artcraftandroid.pdfcraft.ui.ScanFinding
+import io.github.artcraftandroid.pdfcraft.ui.ScanPage
 import kotlin.math.abs
 
 /*
@@ -73,6 +75,37 @@ internal fun scanBatchSwipe(dx: Float, dy: Float, turns: Int, minPx: Float, rtl:
 /** Whether the document screen offers "Check the borders of N pages" after an import of [imported] photos. */
 internal fun scanBatchOffers(optionOn: Boolean, steps: Boolean, imported: Int): Boolean = optionOn && steps && imported >= 2
 
+/** The detector's own mark for an outline it is sure of (`SURE` in the scan crate's `detect.rs`). */
+internal const val SCAN_SURE_CONFIDENCE = 0.7
+
+/**
+ * Whether a page's borders are worth a look (#758): its search found no page, or found one with a
+ * confidence under the detector's own sure mark ([SCAN_SURE_CONFIDENCE]), and since then nobody has
+ * moved its corners or left Adjust borders on it with Done ([visits]). A page that was not searched
+ * ([finding] null: a low-light merge comes already straightened, a restored page keeps no search) is not.
+ */
+internal fun scanPageUnsure(corners: FloatArray, found: FloatArray?, uncropped: FloatArray?, finding: ScanFinding?, visits: Int): Boolean {
+    if (finding == null || visits > 0) return false
+    // not found: unsure while the corners are still those the page started with
+    if (found == null) return corners.contentEquals(uncropped ?: ScanPage.WHOLE)
+    return finding.confidence < SCAN_SURE_CONFIDENCE && corners.contentEquals(found)
+}
+
+/** [scanPageUnsure] for a page of the scan. */
+internal fun scanPageUnsure(page: ScanPage): Boolean = scanPageUnsure(page.corners, page.found, page.uncropped, page.finding, page.crop?.visits ?: 0)
+
+/**
+ * Whether the document screen offers to check the [unsure] pages (#758): with the option, the passes
+ * over several pages (#515) and the screens in steps on, while an unsure page is left that the person
+ * didn't dismiss, and the offer after an import ([importOffer], which covers every imported page) isn't shown.
+ */
+internal fun scanUnsureOffers(optionOn: Boolean, batchOn: Boolean, steps: Boolean, unsure: Set<String>, dismissed: Set<String>, importOffer: Int): Boolean =
+    optionOn && batchOn && steps && importOffer == 0 && (unsure - dismissed).isNotEmpty()
+
+/** The log's `unsure_offer` line: the pages offered, how many of them had no page found, and the scan's pages. */
+internal fun scanUnsureOfferDiag(pages: Int, notFound: Int, scanPages: Int): Array<Pair<String, Any?>> =
+    arrayOf("pages" to pages, "not_found" to notFound, "low_confidence" to pages - notFound, "scan_pages" to scanPages, "sure" to SCAN_SURE_CONFIDENCE)
+
 /** The log's `batch_open` line. */
 internal fun scanBatchOpenDiag(what: ScanBatchWhat, pages: Int, from: String, withMarks: Int): Array<Pair<String, Any?>> =
     arrayOf("what" to what.id, "pages" to pages, "from" to from, "with_markup" to withMarks)
@@ -103,4 +136,7 @@ internal class ScanBatchState {
 
     /** "Remove the markup on N pages?" before a borders pass, or null. */
     var asking by mutableStateOf<ScanBatchMarksAsk?>(null)
+
+    /** The unsure pages whose offer the person closed (#758): it comes back only for others. */
+    var unsureDismissed by mutableStateOf<Set<String>>(emptySet())
 }

@@ -81,7 +81,9 @@ internal class ScanLabController(private val vm: AppViewModel) {
                 // #505: how the page was stored at the size chosen
                 encoding = encoding,
                 // #513: opened from its PDF in the viewer
-                viewerSource = viewerSource)
+                viewerSource = viewerSource,
+                // #758: still unsure when kept
+                unsure = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageUnsure(page))
         }
     }
 

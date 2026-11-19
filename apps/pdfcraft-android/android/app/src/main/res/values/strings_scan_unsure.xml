@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The pages whose page was not found or is unsure, offered for a check (#758) -->
+<resources>
+    <string name="scan_lab_check_unsure">Offer to check pages the app is unsure of</string>
+    <plurals name="scan_unsure_offer">
+        <item quantity="one">%1$d page may have the wrong borders</item>
+        <item quantity="other">%1$d pages may have the wrong borders</item>
+    </plurals>
+</resources>
