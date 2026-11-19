@@ -384,6 +384,9 @@ class SharingController internal constructor(private val vm: AppViewModel) {
     internal sealed class CopyRequest {
         class Document(val doc: OpenDocument, val then: (() -> Unit)?) : CopyRequest()
         class Row(val row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow) : CopyRequest()
+
+        /** Export a copy (#738): the document as it is now, to the picked place; the viewer stays on it. */
+        class Export(val doc: OpenDocument) : CopyRequest()
     }
 
     /** The single Save a copy waiting for its picker (#104). */
@@ -404,6 +407,10 @@ class SharingController internal constructor(private val vm: AppViewModel) {
         if (request is CopyRequest.Document) {
             request.doc.holdWriteBack = false
             Diag.event(DiagArea.Save, "copy_cancel", "doc" to request.doc.diagNumber, "not_written_back" to request.doc.notWrittenBack)
+        }
+        if (request is CopyRequest.Export) {
+            request.doc.holdWriteBack = false
+            Diag.event(DiagArea.Save, "export_copy_cancel", "doc" to request.doc.diagNumber)
         }
         if (request is CopyRequest.Document && request.then != null && vm.resolvingReadOnly) {
             vm.readOnlyPrompt = request.doc
@@ -441,6 +448,44 @@ class SharingController internal constructor(private val vm: AppViewModel) {
         when (request) {
             is CopyRequest.Row -> vm.home.copyRowTo(request.row, target)
             is CopyRequest.Document -> copyDocumentTo(request.doc, request.then, target)
+            is CopyRequest.Export -> exportCopyTo(request.doc, target)
+        }
+    }
+
+    /**
+     * Export a copy (#738): [doc] as it is now, edits included, written to a place the user picks.
+     * Unlike Save a copy, the viewer stays on [doc], and the export itself saves nothing: the
+     * document keeps its unsaved changes, and its file is saved by the usual rules afterwards.
+     */
+    fun exportCopy(doc: OpenDocument) {
+        // Draw's strokes are the document's too
+        if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
+        // Opening the picker pauses the app: that save must not write the original meanwhile (#190).
+        doc.holdWriteBack = true
+        Diag.event(DiagArea.Save, "export_copy_start", "doc" to doc.diagNumber, "dirty" to doc.info.dirty)
+        startCopyRequest(CopyRequest.Export(doc), doc.name)
+    }
+
+    private fun exportCopyTo(doc: OpenDocument, target: Uri) {
+        vm.viewModelScope.launch {
+            val started = android.os.SystemClock.elapsedRealtime()
+            val out = vm.tempFile("pdf")
+            try {
+                // the engine writes the document as it is now and leaves it unsaved (doc_save copy)
+                vm.saveMutex.withLock {
+                    val eng = vm.engine ?: throw IllegalStateException("no engine")
+                    eng.tool("doc_save", mapOf("doc" to doc.id, "path" to out.absolutePath, "copy" to true))
+                }
+                withContext(Dispatchers.IO) { vm.files.writeBack(out, target) }
+                Diag.event(DiagArea.Save, "export_copy", "doc" to doc.diagNumber, "bytes" to out.length(), "ms" to android.os.SystemClock.elapsedRealtime() - started)
+                vm.tell(text(R.string.msg_exported_copy))
+            } catch (e: Exception) {
+                Diag.failure(DiagArea.Save, "export_copy", e)
+                vm.fail(e.userMessage)
+            } finally {
+                doc.holdWriteBack = false
+                out.delete()
+            }
         }
     }
 

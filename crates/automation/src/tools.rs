@@ -207,7 +207,8 @@ pub fn tools() -> Vec<ToolDef> {
                 "path": { "type": "string", "description": "Save as this file. Omit to save in place." },
                 "full": { "type": "boolean", "description": "Force a full rewrite (or, with false, an incremental update)." },
                 "flatten_fill_sign": { "type": "boolean", "description": "Bake Fill & Sign marks into the page before writing. Default false." },
-                "save_timings": { "type": "boolean", "description": "Opt in to bounded save stage timings (fixed stage names and durations only)." }
+                "save_timings": { "type": "boolean", "description": "Opt in to bounded save stage timings (fixed stage names and durations only)." },
+                "copy": { "type": "boolean", "description": "Write the document as it is now to path without saving it: it stays unsaved, at its own path, and no Will Save script runs. Needs path." }
             }),
             &["doc"],
         )),

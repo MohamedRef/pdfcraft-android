@@ -11,6 +11,7 @@
     <string name="common_done">تم</string>
     <string name="common_save">حفظ</string>
     <string name="common_save_copy">حفظ نسخة</string>
+    <string name="common_export_copy">تصدير نسخة</string>
     <string name="common_delete">حذف</string>
     <string name="common_back">رجوع</string>
     <string name="common_share">مشاركة</string>
@@ -868,6 +869,7 @@
     <string name="msg_search_no_matches_some_images">لا توجد نتائج تطابق «%1$s». بعض الصفحات صور، لذلك لا يمكن البحث في كلماتها بعد.</string>
     <string name="msg_print_disabled">الطباعة غير متاحة؛ عطّل المؤلف طباعة هذا المستند.</string>
     <string name="msg_saved_copy">تم حفظ نسخة</string>
+    <string name="msg_exported_copy">صُدِّرت نسخة. ما زلت في هذا المستند.</string>
     <string name="msg_saved_downloads">تم الحفظ باسم %1$s في التنزيلات</string>
     <string name="msg_saved_downloads_size">حُفظ باسم %1$s في التنزيلات (%2$s)</string>
     <string name="msg_read_aloud_encrypted">القراءة بصوت عالٍ غير متاحة للمستندات المحمية بكلمة مرور.</string>

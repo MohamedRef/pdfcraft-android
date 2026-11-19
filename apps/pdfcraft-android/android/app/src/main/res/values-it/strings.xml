@@ -20,6 +20,7 @@
     <string name="common_done">Fine</string>
     <string name="common_save">Salva</string>
     <string name="common_save_copy">Salva una copia</string>
+    <string name="common_export_copy">Esporta una copia</string>
     <string name="common_delete">Elimina</string>
     <string name="common_back">Indietro</string>
     <string name="common_share">Condividi</string>
@@ -1016,6 +1017,7 @@
     <!-- Salvataggio -->
 
     <string name="msg_saved_copy">Copia salvata</string>
+    <string name="msg_exported_copy">Copia esportata. Resti in questo documento.</string>
     <string name="msg_saved_downloads">Salvato come %1$s in Download</string>
     <string name="msg_saved_downloads_size">Salvato come %1$s in Download (%2$s)</string>
 
