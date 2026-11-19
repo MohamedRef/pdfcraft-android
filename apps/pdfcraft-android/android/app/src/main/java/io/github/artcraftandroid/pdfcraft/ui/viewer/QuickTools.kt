@@ -67,6 +67,7 @@ import io.github.artcraftandroid.pdfcraft.ui.LucideIcons
 import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlin.math.roundToInt
+import io.github.artcraftandroid.pdfcraft.ui.openBates
 
 /**
  * The groups tools are filed under in Home ▸ Tools (#539): each tool has exactly one, and the

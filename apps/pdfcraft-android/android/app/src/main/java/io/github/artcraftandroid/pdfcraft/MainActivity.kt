@@ -36,6 +36,7 @@ import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import io.github.artcraftandroid.pdfcraft.ui.onBatesFilesPicked
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
