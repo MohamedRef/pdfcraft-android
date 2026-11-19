@@ -119,3 +119,28 @@ fn a_document_after_an_incremental_save_shows_what_the_saved_file_opened_anew_sh
     let page = a.call("page_render", &json!({"doc": doc, "page": 1, "dpi": 36})).unwrap();
     assert!(!page.is_empty());
 }
+
+/// #738: Export a copy writes the document as it is now, edits included, and leaves it unsaved at
+/// its own path; the file it was opened from is not touched.
+#[test]
+fn a_copy_has_the_edits_and_the_document_stays_unsaved_at_its_own_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = pdfcraft_engine::Session::new().create_blank(200.0, 300.0, 2).unwrap();
+    std::fs::write(dir.path().join("a.pdf"), bytes.as_slice()).unwrap();
+    let mut a = Automation::new().with_root(dir.path()).unwrap().with_clock(|| 1_700_000_000);
+    let doc = open(&mut a, json!({"path": "a.pdf"}))["doc"].clone();
+    call(&mut a, "doc_set_info", json!({"doc": doc, "key": "Title", "value": "Exported"}));
+    let out = call(&mut a, "doc_save", json!({"doc": doc, "path": "b.pdf", "copy": true}));
+    assert_eq!(out["copy"], true);
+    assert_eq!(out["document"]["dirty"], true, "still unsaved");
+    assert!(out["document"]["path"].as_str().unwrap().ends_with("a.pdf"), "still at its own path");
+    assert_eq!(std::fs::read(dir.path().join("a.pdf")).unwrap().as_slice(), bytes.as_slice(), "the original is untouched");
+    let copy = open(&mut a, json!({"path": "b.pdf"}))["doc"].clone();
+    assert_eq!(call(&mut a, "doc_info", json!({"doc": copy}))["title"], "Exported");
+    // a copy needs a place, and doesn't change the document by flattening it
+    assert!(a.call("doc_save", &json!({"doc": doc, "copy": true})).is_err());
+    assert!(a.call("doc_save", &json!({"doc": doc, "path": "c.pdf", "copy": true, "flatten_fill_sign": true})).is_err());
+    // the document can still be saved as usual afterwards
+    let saved = call(&mut a, "doc_save", json!({"doc": doc}));
+    assert_eq!(saved["document"]["dirty"], false);
+}

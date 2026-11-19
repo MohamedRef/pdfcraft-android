@@ -11,6 +11,7 @@
     <string name="common_done">Fertig</string>
     <string name="common_save">Speichern</string>
     <string name="common_save_copy">Kopie speichern</string>
+    <string name="common_export_copy">Kopie exportieren</string>
     <string name="common_delete">Löschen</string>
     <string name="common_back">Zurück</string>
     <string name="common_share">Teilen</string>
@@ -1021,6 +1022,7 @@
 
     <!-- Messages: saving. %1$s is a file name; %2$s is its size (for example "1.2 MB"). -->
     <string name="msg_saved_copy">Kopie gespeichert</string>
+    <string name="msg_exported_copy">Eine Kopie wurde exportiert. Du bleibst in diesem Dokument.</string>
     <string name="msg_saved_downloads">Als %1$s in „Downloads“ gespeichert</string>
     <string name="msg_saved_downloads_size">Als %1$s in „Downloads“ gespeichert (%2$s)</string>
 

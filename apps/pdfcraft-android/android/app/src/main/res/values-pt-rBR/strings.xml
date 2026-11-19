@@ -6,6 +6,7 @@
     <string name="common_done">Concluído</string>
     <string name="common_save">Salvar</string>
     <string name="common_save_copy">Salvar uma cópia</string>
+    <string name="common_export_copy">Exportar uma cópia</string>
     <string name="common_delete">Excluir</string>
     <string name="common_back">Voltar</string>
     <string name="common_share">Compartilhar</string>
@@ -675,6 +676,7 @@
     <string name="msg_search_no_matches">Nenhuma ocorrência de “%1$s”</string>
     <string name="msg_print_disabled">Impressão indisponível: a pessoa autora desativou a impressão deste documento.</string>
     <string name="msg_saved_copy">Cópia salva</string>
+    <string name="msg_exported_copy">Uma cópia foi exportada. Você continua neste documento.</string>
     <string name="msg_saved_downloads">Salvo como %1$s em Downloads</string>
     <string name="msg_saved_downloads_size">Salvo como %1$s em Downloads (%2$s)</string>
     <string name="msg_read_aloud_encrypted">A leitura em voz alta não está disponível para documentos protegidos por senha.</string>

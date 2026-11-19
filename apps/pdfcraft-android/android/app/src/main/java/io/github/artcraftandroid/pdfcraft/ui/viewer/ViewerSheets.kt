@@ -177,6 +177,8 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 SheetRow(LucideIcons.Share2, stringResource(R.string.common_share), { ctl.sheet = ViewerSheet.Share })
             }
             SaveRows(saveState(doc), onSave = { close(); vm.saveNow(doc, trigger = "save_menu") }, onSaveCopy = { close(); vm.sharing.saveCopyAs(doc) })
+            // a copy as it is now, without leaving this document (#738)
+            SheetRow(LucideIcons.FileDown, stringResource(R.string.common_export_copy), { close(); vm.sharing.exportCopy(doc) })
             if (vm.backups.backupTree != null) SheetRow(LucideIcons.RotateCcw, stringResource(R.string.backup_history), { ctl.sheet = ViewerSheet.Backups }, chevron = true)
             SheetRow(LucideIcons.GitCompare, stringResource(R.string.compare_with_older), { close(); vm.startCompare(doc) })
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.sharing.openExport(doc) })
