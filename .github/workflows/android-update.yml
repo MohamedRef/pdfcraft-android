@@ -253,13 +253,13 @@ jobs:
 
   signed-apk:
     name: Build and verify signed ARM64 APK
-    # One-time owner-approved 0.0.44-beta (44012) release on the exact squash-merge commit.
+    # One-time owner-approved 0.0.45-beta (45012) release on the exact squash-merge commit.
     # Keep manual dispatch for all other batches; normal main pushes never sign.
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' &&
-      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.44-beta (44012)')))
+      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.45-beta (45012)')))
     needs: [repo-checks, rust-tests, rust-scan, rust-checks, android-tests]
     concurrency:
       # One signed publication at a time across runs; never cancel one in progress.
@@ -276,9 +276,9 @@ jobs:
         run: |
           set -euo pipefail
           prop=apps/pdfcraft-android/android/gradle.properties
-          grep -Fxq 'pdfcraft.version=0.0.44-beta' "$prop"
-          grep -Fxq 'pdfcraft.versionCode=4401' "$prop"
-          echo 'Exact approved 0.0.44-beta (44012) release properties verified.' >> "$GITHUB_STEP_SUMMARY"
+          grep -Fxq 'pdfcraft.version=0.0.45-beta' "$prop"
+          grep -Fxq 'pdfcraft.versionCode=4501' "$prop"
+          echo 'Exact approved 0.0.45-beta (45012) release properties verified.' >> "$GITHUB_STEP_SUMMARY"
       - name: Refuse to re-sign a version that is already tagged
         if: github.event_name == 'push'
         run: |
@@ -390,7 +390,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' &&
-      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.44-beta (44012)')))
+      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.45-beta (45012)')))
     needs: [signed-apk]
     concurrency:
       # One signed publication at a time across runs; never cancel one in progress.
