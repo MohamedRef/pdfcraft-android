@@ -2080,13 +2080,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-        withContext(Dispatchers.Default) {
-            runCatching { io.github.artcraftandroid.pdfcraft.core.scanSplitSpread(f.absolutePath, corners.toList(), lookForGutter) }
-                .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_split_spread", e) }.getOrNull()
-        }?.let {
-            io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookCut(it.split, it.left.toFloatArray(), it.right.toFloatArray(), it.gutterFound, it.gutterTop, it.gutterBottom, it.confidence)
-        }
-
     /** Where Save writes each scanned page's straightened image (removed when the scan ends). */
     internal fun scanPageDir() = File(getApplication<Application>().cacheDir, "scan")
 

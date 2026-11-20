@@ -188,6 +188,12 @@ internal fun AppViewModel.onScanPhoto(ok: Boolean) {
 
 /** The outline [corners] of the photo [f] cut along the book's gutter (#303); null when that failed. */
 private suspend fun AppViewModel.splitScanSpread(f: File, corners: FloatArray, lookForGutter: Boolean): io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookCut? =
+    withContext(Dispatchers.Default) {
+        runCatching { io.github.artcraftandroid.pdfcraft.core.scanSplitSpread(f.absolutePath, corners.toList(), lookForGutter) }
+            .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_split_spread", e) }.getOrNull()
+    }?.let {
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookCut(it.split, it.left.toFloatArray(), it.right.toFloatArray(), it.gutterFound, it.gutterTop, it.gutterBottom, it.confidence)
+    }
 
 /**
  * Put [replacement] in place of page [at] (null or out of range: after the last page). A half
