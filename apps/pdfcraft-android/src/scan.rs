@@ -185,6 +185,11 @@ pub struct ScanPageRequest {
     /// its check and the text lines again (#549). False decides afresh, as before.
     #[uniffi(default = false)]
     pub flatten_reuse: bool,
+    /// With `flatten_reuse`: the flattening decision of every page made in this scan is kept, not
+    /// only those of the last four previews, and a memory trim does not drop them, so a page made
+    /// again after its look changed is not flattened again (#549). False: the previews' only, as before.
+    #[uniffi(default = false)]
+    pub flatten_keep_all: bool,
     /// With `flatten_check` (the automatic mode): a page whose four sides were found straight
     /// (`curved_sides` 0) and whose lines of text are already straight is left straightened by its
     /// corners without the network, its check or the text lines (#549). False flattens it as before.
@@ -1307,16 +1312,58 @@ fn preview_key(photo: PathBuf, request: &ScanPageRequest, corners: [f32; 8], max
     })
 }
 
-/// The flattening decision of the newest kept preview of the same photo and corners (#549), for
-/// a page `request` asks at full size; `None` when it does not ask for it, or no preview is kept.
+/// The flattening decision of the newest kept preview of the same photo and corners (#549), or
+/// with `flatten_keep_all` of any page made of them in this scan, for a page `request` asks at
+/// full size; `None` when it does not ask for it, or none is kept.
 fn preview_flattening(root: &Path, request: &ScanPageRequest, corners: [f32; 8]) -> Option<pdfcraft_scan::page::FlattenDecision> {
     if !(request.flatten && request.flatten_reuse) {
         return None;
     }
     let photo = Path::new(&request.photo_path).canonicalize().ok().filter(|p| p.starts_with(root))?;
     let key = preview_key(photo, request, corners, 0)?;
-    let previews = PREVIEWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    previews.iter().rev().find(|(k, _)| k.flattens_like(&key)).and_then(|(_, base)| base.flatten_decision.clone())
+    let from_preview = {
+        let previews = PREVIEWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        previews.iter().rev().find(|(k, _)| k.flattens_like(&key)).and_then(|(_, base)| base.flatten_decision.clone())
+    };
+    from_preview.or_else(|| kept_flattening(root, request, corners))
+}
+
+/// The flattening decisions of the pages made in this scan, newest last (#549). A decision is a
+/// grid of a few thousand numbers where a kept preview is a whole page (about 5 MB), so many more
+/// are kept, and a memory trim leaves them; the scan's end drops them.
+static DECISIONS: std::sync::Mutex<Vec<(PreviewKey, std::sync::Arc<pdfcraft_scan::page::FlattenDecision>)>> = std::sync::Mutex::new(Vec::new());
+const DECISIONS_KEPT: usize = 64;
+
+/// Whether `request` keeps, and takes, every page's flattening decision (#549).
+fn keeps_flattening(request: &ScanPageRequest) -> bool {
+    request.flatten && request.flatten_reuse && request.flatten_keep_all
+}
+
+/// The key a flattening decision of `request`'s photo and `corners` is kept under.
+fn flattening_key(root: &Path, request: &ScanPageRequest, corners: [f32; 8]) -> Option<PreviewKey> {
+    let photo = Path::new(&request.photo_path).canonicalize().ok().filter(|p| p.starts_with(root))?;
+    preview_key(photo, request, corners, 0)
+}
+
+/// The kept decision for `request`'s photo and `corners` (#549), when it keeps them.
+fn kept_flattening(root: &Path, request: &ScanPageRequest, corners: [f32; 8]) -> Option<pdfcraft_scan::page::FlattenDecision> {
+    if !keeps_flattening(request) {
+        return None;
+    }
+    let key = flattening_key(root, request, corners)?;
+    let kept = DECISIONS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    kept.iter().rev().find(|(k, _)| k.flattens_like(&key)).map(|(_, d)| d.as_ref().clone())
+}
+
+/// Keep `decision`, made for `request`'s photo and `corners`, for the next page made of them (#549).
+fn keep_flattening(root: &Path, request: &ScanPageRequest, corners: [f32; 8], decision: Option<&pdfcraft_scan::page::FlattenDecision>) {
+    let Some(decision) = decision.filter(|_| keeps_flattening(request)) else { return };
+    let Some(key) = flattening_key(root, request, corners) else { return };
+    let mut kept = DECISIONS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    kept.retain(|(k, _)| !k.flattens_like(&key));
+    kept.push((key, std::sync::Arc::new(decision.clone())));
+    let over = kept.len().saturating_sub(DECISIONS_KEPT);
+    kept.drain(..over);
 }
 
 /// The straightened pages of the last few previews, newest last. A page 1280 pixels long is
@@ -1328,9 +1375,16 @@ const PREVIEWS_KEPT: usize = 4;
 #[cfg(test)]
 pub(crate) static PREVIEWS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-/// Forget the straightened preview pages (when memory is short, or the scan is over).
+/// Forget the straightened preview pages and the kept flattening decisions (the scan is over).
 #[uniffi::export]
 pub fn scan_release_previews() {
+    release_preview_pages();
+    DECISIONS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clear();
+}
+
+/// Forget the straightened preview pages only (memory is short): the flattening decisions are
+/// small and stay for the rest of the scan (#549).
+pub(crate) fn release_preview_pages() {
     PREVIEWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clear();
 }
 
@@ -1518,7 +1572,11 @@ pub(crate) fn preview_stoppable(
         None => {
             let bytes = read_photo(root, &request.photo_path)?;
             check()?;
-            let made = page_base(&page_request(request, &bytes, corners, Some(max_side), None)).map_err(|e| MobileError::Command(e.to_string()))?;
+            // a decision kept from a page made before is taken over, and this one's kept (#549)
+            let known = kept_flattening(root, request, corners);
+            let asked = PageRequest { flatten_known: known.as_ref(), ..page_request(request, &bytes, corners, Some(max_side), None) };
+            let made = page_base(&asked).map_err(|e| MobileError::Command(e.to_string()))?;
+            keep_flattening(root, request, corners, made.flatten_decision.as_ref());
             let base = std::sync::Arc::new(made);
             let mut previews = PREVIEWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             previews.push((key, std::sync::Arc::clone(&base)));
@@ -1664,6 +1722,8 @@ pub(crate) fn process_sizes_in(root: &Path, request: &ScanPageRequest, also: &[p
     let (page, others) = pdfcraft_scan::page::process_page_stored(&asked, also)
         .map_err(|e| MobileError::Command(e.to_string()))?;
     drop(bytes);
+    // kept for the page made again with another look (#549)
+    keep_flattening(root, request, corners, page.flatten_decision.as_ref());
     let mut file_name = name.to_os_string();
     file_name.push(".");
     file_name.push(page.format.extension());
@@ -1976,6 +2036,7 @@ mod tests {
             size: "best".into(),
             auto_encode: false,
             flatten_reuse: false,
+            flatten_keep_all: false,
             skip_flat: false,
         }
     }
@@ -2082,6 +2143,39 @@ mod tests {
         assert!(process_in(&root, &ScanPageRequest { turns: 1, ..ask.clone() }).unwrap().flatten_reused);
         let moved = ScanPageRequest { corners: vec![0.12, 0.1, 0.9, 0.1, 0.9, 0.9, 0.1, 0.9], ..ask.clone() };
         assert!(!process_in(&root, &moved).unwrap().flatten_reused);
+        scan_release_previews();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// With `flatten_keep_all` a page's flattening decision outlives the four kept previews and a
+    /// memory trim, so the page made again with another look is not flattened again (#549).
+    #[test]
+    fn every_pages_flattening_decision_is_kept_for_the_scan_when_asked() {
+        let _store = PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        scan_release_previews();
+        let root = temp("flatten-keep");
+        let shot = photo(&root);
+        let ask =
+            ScanPageRequest { flatten: true, line_flatten: true, flatten_reuse: true, flatten_keep_all: true, ..request(&shot, &root.join("keep")) };
+        // the first page made decides, and keeps its decision
+        assert!(!process_in(&root, &ask).unwrap().flatten_reused);
+        // the previews' pages dropped (a memory trim): the decision stays
+        release_preview_pages();
+        let again = process_in(&root, &ScanPageRequest { look: ScanLook::Greyscale, ..ask.clone() }).unwrap();
+        assert!(again.flatten_reused);
+        // a preview takes it too, and the kept previews are not where it came from
+        preview_stoppable(&root, &ask, 320, None).unwrap();
+        release_preview_pages();
+        assert!(process_in(&root, &ask).unwrap().flatten_reused);
+        // without it: only the previews', as before
+        let before = ScanPageRequest { flatten_keep_all: false, ..ask.clone() };
+        assert!(!process_in(&root, &before).unwrap().flatten_reused);
+        // other corners are another page
+        let moved = ScanPageRequest { corners: vec![0.12, 0.1, 0.9, 0.1, 0.9, 0.9, 0.1, 0.9], ..ask.clone() };
+        assert!(!process_in(&root, &moved).unwrap().flatten_reused);
+        // the scan's end drops them
+        scan_release_previews();
+        assert!(!process_in(&root, &ask).unwrap().flatten_reused);
         scan_release_previews();
         std::fs::remove_dir_all(root).unwrap();
     }

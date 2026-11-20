@@ -283,7 +283,7 @@ private suspend fun AppViewModel.saveScanNow(eng: io.github.artcraftandroid.pdfc
             "flatten_trim" to lab.flattenTrim, "flatten_line_floor" to lab.flattenLineFloor, *io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimDiag(r?.trim),
             *scanLineFlattenDiag(lab.lineFlatten, r?.lineFlatten),
             // the preview's flattening decision taken over instead of made again (#549)
-            "flatten_reuse" to lab.flattenReuse, "flatten_reused" to (r?.flattenReused ?: false),
+            "flatten_reuse" to lab.flattenReuse, "flatten_reused" to (r?.flattenReused ?: false), "flatten_keep_all" to lab.flattenKeepAll,
             // a page already flat left unflattened (#549)
             "skip_flat" to lab.skipFlat, "flatten_skipped_flat" to (r?.flattenSkippedFlat ?: false),
             "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,

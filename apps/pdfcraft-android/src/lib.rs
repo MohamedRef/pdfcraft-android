@@ -1587,8 +1587,9 @@ impl MobileSession {
         self.texts().clear();
         // the scanner's detector model loads again when the next photo is taken
         pdfcraft_scan::models::release();
-        // and a preview is straightened again when it is next asked for
-        crate::scan::scan_release_previews();
+        // and a preview is straightened again when it is next asked for; the flattening
+        // decisions are small and stay for the rest of the scan (#549)
+        crate::scan::release_preview_pages();
     }
 
     /// The word at point (`x`, `y`) on page `page` (points, top-left origin), or the one nearest it
