@@ -122,7 +122,7 @@ internal class ScanCameraActions(
  * so everything after the shot is as it was with the phone's camera app.
  */
 @Composable
-internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null, bar: Boolean = false) {
+internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null, bar: Boolean = false, turnedLooks: Boolean = true) {
     val file = model.target ?: return
     BackHandler { actions.onClose() }
     // the permission may have been granted in the system settings meanwhile
@@ -134,7 +134,7 @@ internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, 
     }
     Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (model.route) {
-            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar)
+            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar, turnedLooks)
             else -> if (bar) ScanCameraPermissionView(model.route, actions) else NoCameraView(model.route, actions)
         }
     }
@@ -164,7 +164,7 @@ private fun NoCameraView(route: ScanCaptureRoute, actions: ScanCameraActions) {
 
 /** The camera, once allowed. */
 @Composable
-private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean) {
+private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean, turnedLooks: Boolean) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -223,7 +223,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
     val analysisExecutor = remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
     val analyzer = remember {
         val main = ContextCompat.getMainExecutor(context)
-        ScanLiveAnalyzer { d ->
+        ScanLiveAnalyzer(turnedLooks) { d ->
             main.execute {
                 outline = tracker.update(d)
                 lastLuma = d.meanLuma

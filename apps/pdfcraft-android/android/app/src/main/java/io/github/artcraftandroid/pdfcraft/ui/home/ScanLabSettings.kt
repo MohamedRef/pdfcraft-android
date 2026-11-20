@@ -156,6 +156,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanMergeSettingRow()
     // the camera's modes, icon bar and zoom (#457)
     Sw(R.string.scan_lab_camera_bar, o.cameraBar) { lab.update(o.copy(cameraBar = it)) }
+    // the live outline tries turned looks while it finds nothing (#295)
+    Sw(R.string.scan_lab_live_turned, o.liveTurned) { lab.update(o.copy(liveTurned = it)) }
     // the screens one job each (#455): Adjust borders after a photo (#458), Enhance (#459)
     Sw(R.string.scan_lab_steps, o.steps) { lab.update(o.copy(steps = it)) }
     // saved scans kept to be opened and saved again (#461)

@@ -66,7 +66,7 @@ pub use encode::Format;
 pub use enhance::{AutoOutput, AutoParams, DEFAULT_SHARPEN, PaperMode, auto};
 pub use error::ScanError;
 pub use flatten::{FlattenGrid, flat_grid, predict_grid, unwarp};
-pub use live::{LiveQuad, MAX_FRAME_PIXELS, detect_frame};
+pub use live::{LiveQuad, MAX_FRAME_PIXELS, detect_frame, detect_frame_at};
 pub use look::Look;
 pub use page::{FlattenCheck, PageBase, PageRequest, PageResult, compare_flattened, page_base, page_look, process_page};
 pub use photo::{Luma, MAX_PHOTO_PIXELS, Photo, luma};
