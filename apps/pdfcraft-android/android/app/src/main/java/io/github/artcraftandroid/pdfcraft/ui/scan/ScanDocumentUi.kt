@@ -84,6 +84,13 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import io.github.artcraftandroid.pdfcraft.ui.saveScan
 import io.github.artcraftandroid.pdfcraft.ui.saveScanToGallery
+import io.github.artcraftandroid.pdfcraft.ui.deleteScanPages
+import io.github.artcraftandroid.pdfcraft.ui.discardScan
+import io.github.artcraftandroid.pdfcraft.ui.importScanPhotos
+import io.github.artcraftandroid.pdfcraft.ui.keepScanAfterAsking
+import io.github.artcraftandroid.pdfcraft.ui.keepScanPages
+import io.github.artcraftandroid.pdfcraft.ui.moveScanPage
+import io.github.artcraftandroid.pdfcraft.ui.takeScanPhoto
 
 /**
  * The document screen (#460): the scan's pages in a grid, two across on a phone. A tap opens the

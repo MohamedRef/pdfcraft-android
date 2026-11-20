@@ -19,6 +19,8 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.github.artcraftandroid.pdfcraft.ui.onScanPhoto
+import io.github.artcraftandroid.pdfcraft.ui.takeScanPhoto
 
 /**
  * Where each photo Scan asks for is taken (#294): PdfCraft's camera screen or the phone's camera
