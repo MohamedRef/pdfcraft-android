@@ -59,7 +59,7 @@ internal fun AppViewModel.requestScanPreview(index: Int, page: ScanPage, flatten
             Diag.event(DiagArea.Scan, "preview_kept", "index" to index + 1, "ms" to android.os.SystemClock.elapsedRealtime() - keptStarted)
             withContext(Dispatchers.Main) {
                 if (scanPreviewWanted != key) return@withContext
-                scanPreview = ScanPreviewShown(key, image, m.quarterTurns, m.flattened, m.kind, m.fingers)
+                scanPreview = AppViewModel.ScanPreviewShown(key, image, m.quarterTurns, m.flattened, m.kind, m.fingers)
                 scanPreviewStats[page.key] = ScanTestPreview(true, true, android.os.SystemClock.elapsedRealtime() - keptStarted, image.width, image.height, filter.mode)
                 requestScanTiles(index, page, flatten)
             }
@@ -120,7 +120,7 @@ internal fun AppViewModel.requestScanPreview(index: Int, page: ScanPage, flatten
             // a newer request may have come in while this one ran: only the wanted one is shown
             if (scanPreviewWanted != key) return@withContext
             if (p != null && image != null) {
-                scanPreview = ScanPreviewShown(key, image, p.quarterTurns.toInt(), scanCameOutFlat(p), p.kind, p.fingers)
+                scanPreview = AppViewModel.ScanPreviewShown(key, image, p.quarterTurns.toInt(), scanCameOutFlat(p), p.kind, p.fingers)
                 scanPreviewStats[page.key] = ScanTestPreview(
                     true, p.reused, ms, p.width.toInt(), p.height.toInt(), filter.mode,
                     lightReused = p.lightReused, lookParts = scanLookParts(p.timings),
