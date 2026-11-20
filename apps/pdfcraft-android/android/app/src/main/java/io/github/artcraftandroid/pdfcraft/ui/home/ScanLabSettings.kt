@@ -160,6 +160,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_camera_bar, o.cameraBar) { lab.update(o.copy(cameraBar = it)) }
     // the live outline tries turned looks while it finds nothing (#295)
     Sw(R.string.scan_lab_live_turned, o.liveTurned) { lab.update(o.copy(liveTurned = it)) }
+    // auto-capture from a less sure outline and in dimmer light (#296)
+    Sw(R.string.scan_lab_auto_eased, o.autoEased) { lab.update(o.copy(autoEased = it)) }
     // the screens one job each (#455): Adjust borders after a photo (#458), Enhance (#459)
     Sw(R.string.scan_lab_steps, o.steps) { lab.update(o.copy(steps = it)) }
     // saved scans kept to be opened and saved again (#461)
