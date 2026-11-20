@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auto-capture eased: steady from a less sure outline, More light only in a darker room (#296) -->
+<resources>
+    <string name="scan_lab_auto_eased">Captura automática con menos luz y un contorno menos seguro</string>
+</resources>

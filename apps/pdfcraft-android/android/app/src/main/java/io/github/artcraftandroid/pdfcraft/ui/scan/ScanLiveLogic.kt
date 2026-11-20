@@ -124,11 +124,16 @@ internal data class ScanLiveOutline(
  * corner moved more than [STABLE_MOVE_SHARE] of the diagonal between two of them. Corners keep
  * their order between frames even when the detector names them from another corner.
  */
-internal class ScanLiveTracker(private val frameAspect: Float = 3f / 4f) {
+internal class ScanLiveTracker(private val frameAspect: Float = 3f / 4f, private val sureFrom: Float = STABLE_CONFIDENCE) {
     private var smoothed: FloatArray? = null
     private var lastSeen = Long.MIN_VALUE
     private val history = ArrayDeque<Pair<Long, FloatArray>>()
     private val sure = ArrayDeque<Boolean>()
+
+    // what the steady test saw, for the log (#296): kept across resets, for the whole time the camera shows
+    private var detections = 0
+    private var unsure = 0
+    private val moves = ArrayList<Float>()
 
     /** Time of the last detection that found the page, or null. */
     val lastFoundAt: Long? get() = lastSeen.takeIf { it != Long.MIN_VALUE }
@@ -144,6 +149,10 @@ internal class ScanLiveTracker(private val frameAspect: Float = 3f / 4f) {
         if (!d.found || d.points.size != 8) return at(d.at)
         val prev = smoothed
         val fresh = if (prev == null) d.points.copyOf() else reorder(prev, d.points)
+        detections++
+        if (d.confidence < sureFrom) unsure++
+        // the corners' move from the last detection, when it came less than STALE_MS before (#296)
+        history.lastOrNull()?.let { (at, p) -> if (d.at - at <= STALE_MS && moves.size < MAX_MOVES) moves.add(maxMove(p, fresh)) }
         val next = when {
             prev == null || d.at - lastSeen > STALE_MS || maxMove(prev, fresh) > JUMP_SHARE -> {
                 history.clear()
@@ -155,7 +164,7 @@ internal class ScanLiveTracker(private val frameAspect: Float = 3f / 4f) {
         smoothed = next
         lastSeen = d.at
         history.addLast(d.at to fresh)
-        sure.addLast(d.confidence >= STABLE_CONFIDENCE)
+        sure.addLast(d.confidence >= sureFrom)
         while (history.size > STABLE_COUNT) {
             history.removeFirst()
             sure.removeFirst()
@@ -175,6 +184,19 @@ internal class ScanLiveTracker(private val frameAspect: Float = 3f / 4f) {
                 ScanLiveOutline(null, stable = false, fading = false)
             }
         }
+    }
+
+    /**
+     * What the steady test saw while the camera showed (#296): detections, how many were under the
+     * confidence it counts as sure, and the corners' moves between detections in % of the diagonal.
+     */
+    fun diag(): Array<Pair<String, Any?>> {
+        val sorted = moves.sorted()
+        fun pct(q: Float): Double = if (sorted.isEmpty()) -1.0 else Math.round(sorted[Math.round((sorted.size - 1) * q)] * 1000.0) / 10.0
+        return arrayOf(
+            "detections" to detections, "unsure" to unsure, "moves" to sorted.size,
+            "moves_over" to sorted.count { it > STABLE_MOVE_SHARE }, "move_p50_pct" to pct(0.5f), "move_p90_pct" to pct(0.9f),
+        )
     }
 
     private fun steady(): Boolean {
@@ -217,6 +239,12 @@ internal class ScanLiveTracker(private val frameAspect: Float = 3f / 4f) {
         const val STABLE_COUNT = 6
         const val STABLE_MS = 400L
         const val STABLE_CONFIDENCE = 0.6f
+
+        /** The confidence counted as sure with auto-capture eased (#296): the detector's own accept. */
+        const val STABLE_CONFIDENCE_EASED = 0.5f
+
+        /** The most corner moves kept for the log. */
+        const val MAX_MOVES = 5_000
         const val STABLE_MOVE_SHARE = 0.012f
     }
 }
@@ -247,6 +275,13 @@ internal data class ScanLiveScene(
 internal object ScanLiveHintRules {
     const val MISSING_MS = 1_500L
     const val DARK_LUMA = 55f
+
+    /**
+     * The light floor with auto-capture eased (#296). On the owner's phone, 2026-11-20, the frames
+     * that found his pages sat at a mean luma of 45 to 72, and the photos taken there (luma 49 to
+     * 61) came out without a merge; at 55, More light held a quarter of those frames back from Ready.
+     */
+    const val DARK_LUMA_EASED = 40f
     const val EDGE_SHARE = 0.015f
     const val MIN_AREA_SHARE = 0.22f
     const val MAX_SIDE_RATIO = 1.7f
@@ -254,10 +289,10 @@ internal object ScanLiveHintRules {
 }
 
 /** The hint the scene calls for, ignoring how long the current one has shown; null while there is nothing to say yet. */
-internal fun scanLiveHintFor(scene: ScanLiveScene, frameAspect: Float = 3f / 4f): ScanLiveHint? {
+internal fun scanLiveHintFor(scene: ScanLiveScene, frameAspect: Float = 3f / 4f, darkLuma: Float = ScanLiveHintRules.DARK_LUMA): ScanLiveHint? {
     val p = scene.points
     if (p == null || p.size != 8) return if (scene.missingMs >= ScanLiveHintRules.MISSING_MS) ScanLiveHint.PointAtDocument else null
-    if (scene.meanLuma < ScanLiveHintRules.DARK_LUMA) return ScanLiveHint.MoreLight
+    if (scene.meanLuma < darkLuma) return ScanLiveHint.MoreLight
     val e = ScanLiveHintRules.EDGE_SHARE
     if (scene.cutOff || (0 until 4).any { i -> p[2 * i] < e || p[2 * i] > 1 - e || p[2 * i + 1] < e || p[2 * i + 1] > 1 - e }) return ScanLiveHint.FitPage
     if (quadArea(p, frameAspect) / frameAspect < ScanLiveHintRules.MIN_AREA_SHARE) return ScanLiveHint.MoveCloser
@@ -311,4 +346,48 @@ private fun sideRatio(p: FloatArray, aspect: Float): Float {
     }
     fun ratio(a: Float, b: Float): Float = if (min(a, b) <= 0f) Float.MAX_VALUE else max(a, b) / min(a, b)
     return max(ratio(side(0), side(2)), ratio(side(1), side(3)))
+}
+
+/** The light floor and the confidence the steady test counts as sure (#296): eased, or as before. */
+internal data class ScanLiveEase(val darkLuma: Float, val sureFrom: Float) {
+    /** The log's fields: whether eased, and the two values. */
+    fun diag(eased: Boolean): Array<Pair<String, Any?>> = arrayOf("eased" to eased, "light_floor" to darkLuma.toDouble(), "sure_from" to sureFrom.toDouble())
+
+    companion object {
+        fun of(eased: Boolean): ScanLiveEase =
+            if (eased) ScanLiveEase(ScanLiveHintRules.DARK_LUMA_EASED, ScanLiveTracker.STABLE_CONFIDENCE_EASED)
+            else ScanLiveEase(ScanLiveHintRules.DARK_LUMA, ScanLiveTracker.STABLE_CONFIDENCE)
+    }
+}
+
+/**
+ * How long each advice was called for while the camera showed, and how long Ready was held back
+ * by the phone moving (gyroscope), for one `live_hints` line when the camera closes (#296).
+ */
+internal class ScanLiveHintTimes {
+    private val ms = LongArray(ScanLiveHint.entries.size + 1)
+    private var last: Long? = null
+    private var lastIndex = ScanLiveHint.entries.size
+    private var lastReadyMoving = false
+    private var readyMovingMs = 0L
+
+    /** The advice called for at [now] ([wanted], null for none), and whether the phone was still then. */
+    fun add(wanted: ScanLiveHint?, still: Boolean, now: Long) {
+        last?.let { l ->
+            val d = (now - l).coerceAtLeast(0L)
+            ms[lastIndex] += d
+            if (lastReadyMoving) readyMovingMs += d
+        }
+        last = now
+        lastIndex = wanted?.ordinal ?: ScanLiveHint.entries.size
+        lastReadyMoving = wanted == ScanLiveHint.Ready && !still
+    }
+
+    fun diag(): Array<Pair<String, Any?>> {
+        val out = ArrayList<Pair<String, Any?>>()
+        for (h in ScanLiveHint.entries) out.add("${h.id}_ms" to ms[h.ordinal])
+        out.add("none_ms" to ms[ScanLiveHint.entries.size])
+        out.add("ready_moving_ms" to readyMovingMs)
+        return out.toTypedArray()
+    }
 }

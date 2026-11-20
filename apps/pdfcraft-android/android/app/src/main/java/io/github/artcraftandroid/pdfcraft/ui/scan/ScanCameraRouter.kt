@@ -129,7 +129,7 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         // pages made at full size for Save wait while the camera is open (#504)
         val open = m.target != null
         androidx.compose.runtime.LaunchedEffect(open) { vm().fullPages.camera(open) }
-        if (m.target != null) ScanCameraScreen(m, vm().scanPages.map { it.thumb }, actions, vm().scanBook, vm().scanLab.options.cameraBar, vm().scanLab.options.liveTurned)
+        if (m.target != null) ScanCameraScreen(m, vm().scanPages.map { it.thumb }, actions, vm().scanBook, vm().scanLab.options.cameraBar, vm().scanLab.options.liveTurned, vm().scanLab.options.autoEased)
     }
 
     /** Import on the document screen (#460): the photo picker straight away, the camera not opened. */
