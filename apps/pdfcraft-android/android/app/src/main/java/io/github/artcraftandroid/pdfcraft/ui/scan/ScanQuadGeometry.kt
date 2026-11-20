@@ -241,8 +241,18 @@ internal const val SNAP_HOLD_MS = 600L
 /** How far either way of a side the edge finder looks, as a share of the photo's diagonal. */
 internal const val SNAP_SEARCH_SHARE = 0.012f
 
-/** Whether letting go of a handle, still for [stillMs], snaps it: only with Snap on and not held still. */
-internal fun snapOnRelease(snapOn: Boolean, stillMs: Long, pull: Boolean = false): Boolean = snapOn && (pull || stillMs < SNAP_HOLD_MS)
+/**
+ * Whether letting go of a handle, still for [stillMs], snaps it: only with Snap on. Without the
+ * pull, not after holding still. With the pull (#514), at every lift; with the gentle snap too
+ * (#773), only a handle the pull had on an edge when the finger lifted ([caught]): one pulled
+ * free, or never caught, stays where the finger put it.
+ */
+internal fun snapOnRelease(snapOn: Boolean, stillMs: Long, pull: Boolean = false, gentle: Boolean = false, caught: Boolean = false): Boolean =
+    snapOn && when {
+        !pull -> stillMs < SNAP_HOLD_MS
+        gentle -> caught
+        else -> true
+    }
 
 /**
  * What a snap gives back, applied: the edge finder's corners when one of the sides asked for
