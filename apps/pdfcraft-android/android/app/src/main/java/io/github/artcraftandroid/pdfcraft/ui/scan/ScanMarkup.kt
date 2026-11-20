@@ -11,6 +11,7 @@ import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.SCAN_PREVIEW_SIDE
 import io.github.artcraftandroid.pdfcraft.ui.ScanPage
 import kotlinx.coroutines.withContext
+import io.github.artcraftandroid.pdfcraft.ui.scanPreviewBitmap
 
 /*
  * Markup on a scanned page (#495), the app's side: which page is open in the Markup screen, the
