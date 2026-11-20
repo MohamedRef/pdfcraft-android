@@ -134,7 +134,7 @@ internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, 
     }
     Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (model.route) {
-            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar)
+            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar, turnedLooks)
             else -> if (bar) ScanCameraPermissionView(model.route, actions) else NoCameraView(model.route, actions)
         }
     }
@@ -164,7 +164,7 @@ private fun NoCameraView(route: ScanCaptureRoute, actions: ScanCameraActions) {
 
 /** The camera, once allowed. */
 @Composable
-private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean) {
+private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean, turnedLooks: Boolean) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
