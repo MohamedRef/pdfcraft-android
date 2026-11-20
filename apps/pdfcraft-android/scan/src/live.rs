@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use pdfcraft_geom::perspective::Point;
 
-use crate::detect::{Detection, QuadSource, one_look, with_lines};
+use crate::detect::{Detection, QuadSource, one_look_at, with_lines};
 use crate::models::{EDGES, load};
 use crate::{Photo, Pyramid, Quad, RefineOptions, ScanError, refine};
 
@@ -53,8 +53,18 @@ pub struct LiveQuad {
 /// (0, 90, 180 or 270: CameraX's `imageInfo.rotationDegrees`); the result is in shares of the
 /// upright frame. Bytes past `width × height × 4` are ignored.
 pub fn detect_frame(rgba: &[u8], width: u32, height: u32, rotation_degrees: u32) -> Result<LiveQuad, ScanError> {
+    detect_frame_at(rgba, width, height, rotation_degrees, 0)
+}
+
+/// [`detect_frame`] with the upright frame shown to the network turned by `look_degrees` (#295):
+/// 0 or one of the still search's turns (±30, ±60, ±90), so a page lying at a slant in the frame
+/// is found by one of the frames that follow. Any other turn is refused.
+pub fn detect_frame_at(rgba: &[u8], width: u32, height: u32, rotation_degrees: u32, look_degrees: i16) -> Result<LiveQuad, ScanError> {
+    if !crate::detect::look_angle_allowed(look_degrees) {
+        return Err(ScanError::BadFrame("its look must be 0, ±30, ±60 or ±90 degrees"));
+    }
     let photo = upright_frame(rgba, width, height, rotation_degrees)?;
-    Ok(find(&photo, load(EDGES)))
+    Ok(find_at(&photo, load(EDGES), look_degrees))
 }
 
 /// The frame as an upright RGB photo, after checking what was given.
@@ -101,9 +111,14 @@ pub(crate) fn upright_frame(rgba: &[u8], width: u32, height: u32, rotation_degre
 /// The page in an upright frame, with the detector network `model` (the line detector without
 /// it).
 pub(crate) fn find(photo: &Photo, model: Option<Arc<rten::Model>>) -> LiveQuad {
+    find_at(photo, model, 0)
+}
+
+/// [`find`] with the network's one look turned by `degrees` (#295).
+pub(crate) fn find_at(photo: &Photo, model: Option<Arc<rten::Model>>, degrees: i16) -> LiveQuad {
     let luma = photo.luma();
     let mean_luma = (luma.data.iter().map(|&v| u64::from(v)).sum::<u64>() as f64 / luma.data.len().max(1) as f64) as f32;
-    let found = match model.as_deref().and_then(|model| one_look(model, photo)) {
+    let found = match model.as_deref().and_then(|model| one_look_at(model, photo, degrees)) {
         Some(found) => found,
         // the model file is not installed (or could not be run): the line detector
         None => with_lines(photo),

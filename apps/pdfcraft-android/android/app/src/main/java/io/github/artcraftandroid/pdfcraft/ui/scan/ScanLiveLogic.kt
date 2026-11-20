@@ -52,6 +52,47 @@ internal fun scanFrameShareToView(shareX: Float, shareY: Float, frameAspect: Flo
     return ViewPoint(left + shareX.coerceIn(0f, 1f) * w, top + shareY.coerceIn(0f, 1f) * h)
 }
 
+/**
+ * The turns the live outline's one look per frame takes while it finds nothing (#295), in the
+ * still search's order (`ANGLES` in `detect.rs`, after the look as it is). A page lying at a slant
+ * in the frame is found only by one of them: on frames made from the owner's photos of
+ * 2026-11-19 the look as it is found the page on 3 of 12, the turns on 11.
+ */
+internal val SCAN_LIVE_LOOKS = listOf(0, 90, -90, -30, 30, -60, 60)
+
+/** How many frames a page just lost is looked for at the turn that found it, before the others are tried. */
+internal const val SCAN_LIVE_LOOK_HOLD = 2
+
+/**
+ * The turn of each frame's look (#295), on the analysis thread: kept while the page is found, held
+ * for [SCAN_LIVE_LOOK_HOLD] frames once it is lost, then the next of [SCAN_LIVE_LOOKS]. Always 0
+ * when [turned] is off.
+ */
+internal class ScanLiveLooks(private val turned: Boolean) {
+    var angle = 0
+        private set
+    private var foundAt: Int? = null
+    private var misses = 0
+
+    /** What the frame looked at [angle] found; sets the next frame's turn. */
+    fun next(found: Boolean) {
+        if (!turned) return
+        if (found) {
+            foundAt = angle
+            misses = 0
+            return
+        }
+        misses++
+        val held = foundAt
+        if (held != null && misses <= SCAN_LIVE_LOOK_HOLD) {
+            angle = held
+            return
+        }
+        foundAt = null
+        angle = SCAN_LIVE_LOOKS[(SCAN_LIVE_LOOKS.indexOf(angle) + 1).mod(SCAN_LIVE_LOOKS.size)]
+    }
+}
+
 /** One answer of the frame detector, its points in shares of the upright frame. */
 internal data class ScanLiveDetection(
     val points: FloatArray,

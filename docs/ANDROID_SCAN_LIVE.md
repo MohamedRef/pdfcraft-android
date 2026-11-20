@@ -39,7 +39,7 @@ diagnostics log.
    options. Off, no analysis runs and the camera is exactly #294's.
 2. **Diagnostics log** (`scan`): `live_frame` for one frame in ten (`frame`, `ms` for the whole
    call, `native_ms`, `width`, `height`, `rotation`, `found`, `confidence`, `luma`, `cut_off`);
-   `live_summary` when the camera closes (`frames`, `found`, `avg_ms`, `max_ms`, `shown_ms`), from
+   `live_summary` when the camera closes (`frames`, `found`, `found_turned` since #295, `avg_ms`, `max_ms`, `shown_ms`), from
    which the detection rate is `frames / shown_ms`; `camera_live_option` when the option changes;
    and on each photo's `camera` line `live`, `live_found`, `live_stable`, `live_hint`.
 3. **Kept scans**: `capture` in the page file adds `live`, `live_found`, `live_stable`,

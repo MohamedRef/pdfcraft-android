@@ -255,15 +255,26 @@ fn with_model(model: &rten::Model, photo: &Photo) -> Option<Detection> {
 /// unsure: for a camera frame (#295), where the next frame is the next try. Under the same least
 /// confidence as [`detect`] nothing was found. `None` when the model cannot be run.
 pub(crate) fn one_look(model: &rten::Model, photo: &Photo) -> Option<Detection> {
+    one_look_at(model, photo, 0)
+}
+
+/// [`one_look`] with the photo shown to the network turned by `degrees` (#295): a camera frame
+/// can try another of the still search's turns each time, as the next frame is the next try.
+pub(crate) fn one_look_at(model: &rten::Model, photo: &Photo, degrees: i16) -> Option<Detection> {
     if photo.width < 16 || photo.height < 16 {
         return Some(Detection::NOTHING);
     }
     let (small, scale) = shrink(photo, SIDE);
-    let (quad, confidence) = pass(model, photo, &small, scale, 0)?;
+    let (quad, confidence) = pass(model, photo, &small, scale, degrees)?;
     if confidence < LEAST {
-        return Some(Detection { passes: 1, confidence, ..Detection::NOTHING });
+        return Some(Detection { passes: 1, confidence, angle: degrees, ..Detection::NOTHING });
     }
-    Some(Detection { quad, confidence, source: QuadSource::Model, angle: 0, passes: 1 })
+    Some(Detection { quad, confidence, source: QuadSource::Model, angle: degrees, passes: 1 })
+}
+
+/// The turns a look may be given: none, and the still search's own (`ANGLES`).
+pub fn look_angle_allowed(degrees: i16) -> bool {
+    degrees == 0 || ANGLES.contains(&degrees)
 }
 
 /// The engine's line detector on a copy of the photo.

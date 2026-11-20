@@ -10,7 +10,7 @@ use pdfcraft_scan::page::page_look_kind;
 use pdfcraft_scan::page_kind::{PageKind, PresetChoice, preset_from_id};
 use pdfcraft_scan::upright_pages::{PageTurn, followed, settle};
 use pdfcraft_scan::{
-    AspectSource, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_frame, detect_with,
+    AspectSource, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_with,
     page_base, refine,
 };
 
@@ -801,8 +801,17 @@ pub struct ScanLiveQuad {
 /// another turn is refused.
 #[uniffi::export]
 pub fn scan_detect_frame(rgba: Vec<u8>, width: u32, height: u32, rotation_degrees: u32) -> Result<ScanLiveQuad, MobileError> {
+    scan_detect_frame_at(rgba, width, height, rotation_degrees, 0)
+}
+
+/// [`scan_detect_frame`] with the upright frame shown to the network turned by `look_degrees`
+/// (#295): 0, or one of the still search's turns (±30, ±60, ±90), so the app can try another turn
+/// on each frame while nothing is found and a page lying at a slant still gets an outline. Any
+/// other turn is refused.
+#[uniffi::export]
+pub fn scan_detect_frame_at(rgba: Vec<u8>, width: u32, height: u32, rotation_degrees: u32, look_degrees: i16) -> Result<ScanLiveQuad, MobileError> {
     let clock = std::time::Instant::now();
-    let found = detect_frame(&rgba, width, height, rotation_degrees).map_err(|e| MobileError::Command(e.to_string()))?;
+    let found = pdfcraft_scan::detect_frame_at(&rgba, width, height, rotation_degrees, look_degrees).map_err(|e| MobileError::Command(e.to_string()))?;
     Ok(ScanLiveQuad {
         points: found.points.to_vec(),
         confidence: found.confidence,
@@ -2205,6 +2214,11 @@ mod tests {
         assert!(found.mean_luma > 60.0 && found.mean_luma < 200.0, "{found:?}");
         // refused, never a panic
         assert!(scan_detect_frame(rgba.clone(), 640, 480, 45).is_err());
+        // a turned look (#295): one of the still search's turns, nothing else
+        for look in [0i16, 30, -30, 60, -60, 90, -90] {
+            assert!(scan_detect_frame_at(rgba.clone(), 640, 480, 90, look).is_ok(), "{look}");
+        }
+        assert!(scan_detect_frame_at(rgba.clone(), 640, 480, 90, 45).is_err());
         assert!(scan_detect_frame(rgba[..100].to_vec(), 640, 480, 0).is_err());
         assert!(scan_detect_frame(Vec::new(), 0, 0, 0).is_err());
         // a grey frame: nothing, and its brightness

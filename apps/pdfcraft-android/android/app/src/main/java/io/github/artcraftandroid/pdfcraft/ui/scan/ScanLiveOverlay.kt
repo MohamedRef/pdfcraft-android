@@ -40,10 +40,14 @@ internal fun scanLiveAnalysis(): ImageAnalysis = ImageAnalysis.Builder()
  * executor. The frame is copied (rows packed) and closed before the detector runs. One frame in
  * [SAMPLE] is written to the diagnostics log; the screen gets every answer through [onResult].
  */
-internal class ScanLiveAnalyzer(private val onResult: (ScanLiveDetection) -> Unit) : ImageAnalysis.Analyzer {
+internal class ScanLiveAnalyzer(turnedLooks: Boolean = true, private val onResult: (ScanLiveDetection) -> Unit) : ImageAnalysis.Analyzer {
     private var buffer = ByteArray(0)
     private val frames = AtomicInteger(0)
     private val found = AtomicInteger(0)
+    /** Frames that found the page at a turned look (#295). */
+    private val foundTurned = AtomicInteger(0)
+    /** Each frame's turn (#295), changed on the analysis thread only. */
+    private val looks = ScanLiveLooks(turnedLooks)
     private var totalMs = 0L
     private var maxMs = 0L
 
@@ -57,16 +61,21 @@ internal class ScanLiveAnalyzer(private val onResult: (ScanLiveDetection) -> Uni
         image.close()
         if (!copied) return
         val started = SystemClock.elapsedRealtime()
-        val quad = runCatching { io.github.artcraftandroid.pdfcraft.core.scanDetectFrame(buffer, w.toUInt(), h.toUInt(), rotation.toUInt()) }.getOrNull() ?: return
+        val angle = looks.angle
+        val quad = runCatching { io.github.artcraftandroid.pdfcraft.core.scanDetectFrameAt(buffer, w.toUInt(), h.toUInt(), rotation.toUInt(), angle.toShort()) }.getOrNull() ?: return
         val ms = SystemClock.elapsedRealtime() - started
         val n = frames.incrementAndGet()
         if (quad.found) found.incrementAndGet()
+        if (quad.found && angle != 0) foundTurned.incrementAndGet()
+        looks.next(quad.found)
         totalMs += ms
         if (ms > maxMs) maxMs = ms
         if (n % SAMPLE == 1) {
             Diag.event(
                 DiagArea.Scan, "live_frame", "frame" to n, "ms" to ms, "native_ms" to quad.ms.toLong(), "width" to w, "height" to h, "rotation" to rotation,
                 "found" to quad.found, "confidence" to quad.confidence.toDouble(), "luma" to quad.meanLuma.toDouble(), "cut_off" to quad.cutOff,
+                // the turn the frame was looked at (#295)
+                "angle" to angle,
             )
         }
         val points = quad.points.toFloatArray()
@@ -78,7 +87,7 @@ internal class ScanLiveAnalyzer(private val onResult: (ScanLiveDetection) -> Uni
     fun logSummary(shownMs: Long) {
         val n = frames.get()
         if (n == 0) return
-        Diag.event(DiagArea.Scan, "live_summary", "frames" to n, "found" to found.get(), "avg_ms" to totalMs / n, "max_ms" to maxMs, "shown_ms" to shownMs)
+        Diag.event(DiagArea.Scan, "live_summary", "frames" to n, "found" to found.get(), "found_turned" to foundTurned.get(), "avg_ms" to totalMs / n, "max_ms" to maxMs, "shown_ms" to shownMs)
     }
 
     private companion object {
