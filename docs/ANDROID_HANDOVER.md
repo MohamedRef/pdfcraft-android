@@ -22,6 +22,12 @@
 - Merged so far: the `pdfcraft-scan` crate and single-pass pipeline (#331, #346), the Auto look (#346), true proportions (#353), edge refinement (#356), 1-bit black and white (#359), the detector network (#360), Flatten page (#365), testing options and kept scans (#367), upright pages (#370), grain and sharpening (#373), the native preview (#376).
 - **The scanner has run on the owner's phone since 13 November 2026** (0.0.27 and 0.0.28-beta, SM-S928B); what his logs showed is in [`ANDROID_SCAN_HANDOVER.md`](ANDROID_SCAN_HANDOVER.md#1a-what-has-run-on-the-owners-phone). He tests with the options and kept scans described in [`ANDROID_SCAN_TESTING.md`](ANDROID_SCAN_TESTING.md). Release 0.0.25-beta (25012) is the first to contain it.
 
+## RELEASE 0.0.46-beta (46012) — 2026-11-20 (the owner's go-ahead after the fixes from his 20 November scan)
+
+- Release PR publishes `0.0.46-beta` / ARM64 build `46012` (`pdfcraft.versionCode=4601`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.46-beta (46012)`.
+- Included: #772 (#296), #774 (#773), #775 (#290), #776 (#549).
+- Measured on the owner's diagnostics log of 2026-11-20 and his kept photos of 2026-11-19 on the Mac (numbers only; his photos stay outside the repository). Nothing in it was tried on a phone or tablet.
+
 ## RELEASE 0.0.45-beta (45012) — 2026-11-20 (the owner's go-ahead: fix what his 19 November scan showed, then release)
 
 - Release PR publishes `0.0.45-beta` / ARM64 build `45012` (`pdfcraft.versionCode=4501`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.45-beta (45012)`.
