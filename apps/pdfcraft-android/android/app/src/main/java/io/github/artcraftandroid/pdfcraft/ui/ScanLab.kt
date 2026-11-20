@@ -20,6 +20,15 @@ internal data class ScanLab(
     val finder: ScanFinder = ScanFinder.AUTO,
     /** Move the corners found onto the paper's edges on the full-size photo (#291). */
     val refine: Boolean = true,
+    /**
+     * The second look (#290): when the network finds nothing, or an unsure page with at most two of
+     * its sides on edges of the photo, the line detector is asked too, and its page is taken with
+     * three sides on edges over nothing, or all four over an unsure page. Off: the network alone,
+     * as before. On the owner's photos the line detector found the page the network missed on 2 of
+     * 3 (2026-11-20), and on a pile the top sheet on 2 of the 4 photos it was asked for, three of
+     * its corners on a third (2026-11-19).
+     */
+    val secondLook: Boolean = true,
     /** Work the page's proportions out from its perspective (#293), not its side lengths alone. */
     val perspective: Boolean = true,
     /** Match the page to a standard paper size when it is within 3 % of one (#293). */
@@ -313,14 +322,14 @@ internal data class ScanLab(
     /** Nothing differs from the scanner as it is meant to be used (keeping scans and reporting what the detectors see change no page). */
     val asDesigned: Boolean get() = copy(keep = false, inspect = false) == ScanLab()
 
-    fun findOptions() = ScanFindOptions(finder, refine)
+    fun findOptions() = ScanFindOptions(finder, refine, secondLook)
 
     /** The strength a look with its own [level] is applied at. */
     fun strengthFor(level: Int): Int = (strength ?: level).coerceIn(0, 100)
 
     /** The options as diagnostics fields: short lowercase words, booleans and numbers only. */
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
-        "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
+        "finder" to finderId(finder), "refine" to refine, "second_look" to secondLook, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "paper_shared" to paperShared, "card_sure" to cardSure, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
         "denoise" to denoise, "grain_white" to grainWhite, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "strict_book" to strictBook, "book_gutter" to bookGutter, "line_flatten" to lineFlatten, "flatten_reuse" to flattenReuse, "skip_flat" to skipFlat, "parallel_pages" to parallelPages, "parallel_save" to parallelSave,
         "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "background_pages" to backgroundPages, "full_pages_ahead" to fullPagesAhead, "sizes_ahead" to sizesAhead, "ask_discard" to askDiscard, "auto_look" to autoLook, "remove_fingers" to removeFingers, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
@@ -329,7 +338,7 @@ internal data class ScanLab(
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
-        .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
+        .put("finder", finderId(finder)).put("refine", refine).put("second_look", secondLook).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("paper_shared", paperShared).put("card_sure", cardSure).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
         .put("sharpen", sharpen).put("denoise", denoise).put("grain_white", grainWhite).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("strict_book", strictBook).put("book_gutter", bookGutter).put("line_flatten", lineFlatten).put("flatten_reuse", flattenReuse).put("skip_flat", skipFlat).put("parallel_pages", parallelPages).put("parallel_save", parallelSave)
         .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("background_pages", backgroundPages).put("full_pages_ahead", fullPagesAhead).put("sizes_ahead", sizesAhead).put("ask_discard", askDiscard).put("auto_look", autoLook).put("remove_fingers", removeFingers).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
@@ -337,7 +346,7 @@ internal data class ScanLab(
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
-        "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
+        "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine), "second_look" to flag(secondLook),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "paper_shared" to flag(paperShared), "card_sure" to flag(cardSure), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "grain_white" to flag(grainWhite), "preview" to flag(preview), "crop" to flag(cropTools), "detect_note" to flag(cropDetectNote), "flatten_auto_on" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
         "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "strict_book" to flag(strictBook), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten), "flatten_reuse" to flag(flattenReuse), "skip_flat" to flag(skipFlat), "parallel_pages" to flag(parallelPages), "parallel_save" to flag(parallelSave),
@@ -380,6 +389,7 @@ internal data class ScanLab(
                 keep = on("keep", default.keep),
                 finder = ScanFinder.entries.firstOrNull { finderId(it) == values["finder"] } ?: default.finder,
                 refine = on("refine", default.refine),
+                secondLook = on("second_look", default.secondLook),
                 perspective = on("perspective", default.perspective),
                 snapPaper = on("snap", default.snapPaper),
                 paperShared = on("paper_shared", default.paperShared),
@@ -462,6 +472,12 @@ data class ScanFinding(
     val curvedOpposite: Boolean = false,
     /** The search that was made, so the crop screen does not make it again when it found nothing (#443). */
     val asked: ScanFindOptions? = null,
+    /** What the second look did (#290): `not_asked`, `kept` or `taken`. */
+    val secondLook: String = "not_asked",
+    /** The network's page's sides on edges of the photo when the second look weighed it (#290), else 0. */
+    val networkSides: Int = 0,
+    /** The line detector's page's sides on edges of the photo when it was asked (#290), else 0. */
+    val linesSides: Int = 0,
 )
 
 /** A page as Save made it, for a kept scan's page file. */
@@ -653,6 +669,8 @@ internal fun scanTestPageJson(
                 JSONObject().put("source", it.source).put("confidence", Math.round(it.confidence * 1000.0) / 1000.0).put("angle", it.angle)
                     .put("passes", it.passes).put("refined_sides", it.refinedSides).put("curved_sides", it.curvedSides)
                     .put("curved_opposite", it.curvedOpposite)
+                    // #290: the second look
+                    .put("second_look", it.secondLook).put("network_sides", it.networkSides).put("lines_sides", it.linesSides)
             } ?: JSONObject.NULL,
         )
         .put("look", look ?: JSONObject.NULL).put("strength", strength ?: JSONObject.NULL).put("flatten", flatten)

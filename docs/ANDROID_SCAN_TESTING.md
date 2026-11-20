@@ -34,6 +34,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 |---|---|---|
 | Find the page with | Automatic: the network (#290), or the line detector when its model is missing | Neural network only · Lines only (the detector before #290) · Nothing (the whole photo) |
 | Refine edges on the full photo (#291) | On | Off: the corners are the detector's own, from its small copy of the photo |
+| Ask the line detector too when the network is unsure (#290) | On | Off: the network alone, as before. On: when the network finds nothing, or an unsure page (under 0.7) with at most two sides on edges of the photo, the line detector is asked too; its page is taken with three sides on edges over nothing, all four over an unsure page. Only with the detector on Auto and Refine edges on. Log: `second_look`, `network_sides`, `lines_sides` on `photo`; the page file's `finding` has the same three |
 | Proportions from perspective (#293) | On | Off: from the lengths of the page's sides, as before |
 | Match standard paper sizes (#293) | On | Off: the page keeps the shape worked out for it |
 | Show pages as they will be saved (#301) | On | Off: the scan screen shows the camera's photo with its outline, as before; nothing is previewed |
