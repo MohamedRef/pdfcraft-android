@@ -267,6 +267,9 @@ pub struct PageResult {
     pub flatten_reused: bool,
     /// The page was found flat already and not flattened (#549).
     pub flatten_skipped_flat: bool,
+    /// The flattening decision the page was made with, when flattening was asked for: kept by the
+    /// app's bridge so the page made again with another look is not flattened again (#549).
+    pub flatten_decision: Option<FlattenDecision>,
     /// The page's grain as the Auto look measured it: the standard deviation of its noise on
     /// blank paper, in grey levels of 255 (`None` for the other looks).
     pub noise: Option<f32>,
@@ -429,6 +432,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         line_flatten: None,
         flatten_reused: false,
         flatten_skipped_flat: false,
+        flatten_decision: None,
         noise: None,
         paper_spread: None,
         white_point: None,
@@ -477,7 +481,7 @@ pub fn process_page_stored(request: &PageRequest<'_>, also: &[crate::size::SizeC
         flatten_check,
         trim,
         line_flatten,
-        flatten_decision: _,
+        flatten_decision,
         flatten_reused,
         flatten_skipped_flat,
         mut timings,
@@ -522,6 +526,7 @@ pub fn process_page_stored(request: &PageRequest<'_>, also: &[crate::size::SizeC
         line_flatten,
         flatten_reused,
         flatten_skipped_flat,
+        flatten_decision,
         noise,
         paper_spread,
         white_point,

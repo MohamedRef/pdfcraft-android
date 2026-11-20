@@ -129,6 +129,8 @@ internal fun scanPageRequest(
     lineFlatten = lab.lineFlatten,
     // the preview's flattening decision taken over at full size (#549)
     flattenReuse = lab.flattenReuse,
+    // every page's flattening decision kept for the scan, not only the last previews' (#549)
+    flattenKeepAll = lab.flattenKeepAll,
     // a page already flat is not flattened (#549)
     skipFlat = lab.skipFlat,
     sideProportions = !lab.perspective,
