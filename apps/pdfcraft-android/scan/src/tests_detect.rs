@@ -202,3 +202,33 @@ fn a_named_detector_is_the_only_one_asked() {
     assert!(off.quad.is_none() && off.source == QuadSource::None && off.passes == 0, "{off:?}");
     assert_eq!(Finder::default(), Finder::Auto);
 }
+
+/// The second look (#290): the line detector is asked only when the network was not convinced,
+/// and its page taken only with enough of its sides on edges.
+#[test]
+fn the_line_detector_is_asked_only_when_the_network_is_not_convinced() {
+    use crate::detect::{Detection, second_look_takes, second_look_wanted};
+    let quad = Quad::new([[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0]]).unwrap();
+    let network = |confidence: f32, found: bool| Detection {
+        quad: found.then_some(quad),
+        confidence,
+        source: if found { QuadSource::Model } else { QuadSource::None },
+        angle: 0,
+        passes: 7,
+    };
+    // nothing found (the owner's photos of 2026-11-19 and -20: 0.22 to 0.39)
+    assert!(second_look_wanted(&network(0.39, false), 0));
+    // unsure, with few sides on edges
+    assert!(second_look_wanted(&network(0.63, true), 0));
+    assert!(second_look_wanted(&network(0.56, true), 2));
+    // unsure but three sides on edges: kept as it is
+    assert!(!second_look_wanted(&network(0.58, true), 3));
+    // sure: never
+    assert!(!second_look_wanted(&network(0.88, true), 0));
+    // no model file: the line detector already answered
+    let lines = Detection { quad: Some(quad), confidence: 0.5, source: QuadSource::Lines, angle: 0, passes: 0 };
+    assert!(!second_look_wanted(&lines, 0));
+    // over nothing, three sides on edges are enough; over a page, all four
+    assert!(second_look_takes(false, 3) && second_look_takes(false, 4) && !second_look_takes(false, 2));
+    assert!(second_look_takes(true, 4) && !second_look_takes(true, 3));
+}

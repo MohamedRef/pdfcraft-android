@@ -35,7 +35,28 @@ next photo.
 5. The corners found are refined on the full-size photo (#291).
 
 Without the model file the engine's line detector is asked, as before. When the network ran and
-was not convinced, the line detector is **not** asked: on the photos below it was right on none.
+was not convinced, the line detector was **not** asked until #290's second look: on the ten
+reference photos below it was right on none.
+
+**The second look** (testing option *Ask the line detector too when the network is unsure*, on).
+When the network finds nothing, or an unsure page (under 0.7) with at most two of its four sides
+on edges of the photo (the refine of #291), the line detector is asked too. Its page is taken
+with three sides on edges when the network found nothing, and with all four over an unsure page;
+it keeps the line detector's confidence of 0.5, so the page is still offered for a check (#758).
+What decided the gate, on the owner's photos (on a computer; the photos stay outside the
+repository):
+
+- 2026-11-20, 10 pages: the network found nothing on 3. Detect again with the line detector found
+  the page on 2 of them; he kept one exactly as found and moved the other's corners. The 7 pages
+  the network found had 3 sides on edges, and he moved their corners by 0 to 10 % of the diagonal:
+  three sides on edges are left alone.
+- 2026-11-19, a pile of sheets: where the network found nothing (2 photos) the line detector
+  found the top sheet on one, and three of its four corners on the other. Where the network's page
+  had no side on an edge and cut across sheets, the line detector's had four and was the top
+  sheet. On the seven photos where the network's page was right, it had four sides on edges each
+  time, so the line detector is not asked.
+- On the ten reference photos the line detector found nothing where the network found nothing
+  (G, H), so the second look changes nothing there.
 
 ## Measured
 

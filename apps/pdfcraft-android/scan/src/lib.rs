@@ -61,7 +61,7 @@ pub mod warp;
 
 pub use aspect::{AspectSource, Focal, Paper, PaperMatch, Proportions, proportions, proportions_by_sides, proportions_by_sides_matched, proportions_matched};
 pub use capture::{MergeFrame, MergeOutcome, MergeRequest, PhotoSharpness, merge_frames, photo_sharpness};
-pub use detect::{Detection, Finder, QuadSource, detect, detect_with};
+pub use detect::{Detection, Finder, QuadSource, SECOND_LOOK_MOST_SIDES, detect, detect_with, second_look_takes, second_look_wanted};
 pub use encode::Format;
 pub use enhance::{AutoOutput, AutoParams, DEFAULT_SHARPEN, PaperMode, auto};
 pub use error::ScanError;

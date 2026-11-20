@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The second look: the line detector asked too when the network is not convinced (#290) -->
+<resources>
+    <string name="scan_lab_second_look">Consultare anche il rilevatore di linee quando la rete non è sicura</string>
+</resources>

@@ -160,10 +160,16 @@ internal fun AppViewModel.onScanPhoto(ok: Boolean) {
             *(doc?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
             "refined_sides" to (doc?.refined?.count { it } ?: 0), "curved_sides" to (doc?.curved?.count { it } ?: 0), "curved_opposite" to scanCurvedOpposite(doc?.curved.orEmpty()),
             "finder" to ScanLab.finderId(lab.finder), "refine" to lab.refine, "straightened" to straightened,
+            // the second look (#290): whether the line detector was asked, and the sides on edges it weighed
+            "second_look" to (doc?.secondLook?.let(::scanSecondLookId) ?: "not_asked"), "network_sides" to (doc?.networkSides?.toInt() ?: 0),
+            "lines_sides" to (doc?.linesSides?.toInt() ?: 0),
             *io.github.artcraftandroid.pdfcraft.ui.scan.scanBookDiag(book, lab.bookGutter, bookOrder, cut, bookMs),
         )
         val finding = doc?.let { d ->
-            ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it }, scanCurvedOpposite(d.curved), lab.findOptions())
+            ScanFinding(
+                d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it }, scanCurvedOpposite(d.curved), lab.findOptions(),
+                secondLook = scanSecondLookId(d.secondLook), networkSides = d.networkSides.toInt(), linesSides = d.linesSides.toInt(),
+            )
         }
         // Adjust borders waits for this answer before Next (#458)
         scanSteps.markSearched(f.absolutePath)
@@ -282,4 +288,11 @@ internal fun AppViewModel.discardScan(asked: Boolean = false) {
     // a scan opened from its PDF and given up on leaves the PDF as it is (#513)
     scanEdit.dropped()
     tools.toolScreen = null
+}
+
+/** The log's word for what the second look did (#290). */
+internal fun scanSecondLookId(look: io.github.artcraftandroid.pdfcraft.core.ScanSecondLook): String = when (look) {
+    io.github.artcraftandroid.pdfcraft.core.ScanSecondLook.NOT_ASKED -> "not_asked"
+    io.github.artcraftandroid.pdfcraft.core.ScanSecondLook.KEPT -> "kept"
+    io.github.artcraftandroid.pdfcraft.core.ScanSecondLook.TAKEN -> "taken"
 }

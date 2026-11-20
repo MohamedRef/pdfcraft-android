@@ -296,6 +296,25 @@ pub fn detect(photo: &Photo) -> Detection {
     detect_with(photo, Finder::Auto)
 }
 
+/// The second look (#290): an unsure network page with at most this many of its sides on edges of
+/// the photo has the line detector asked too.
+pub const SECOND_LOOK_MOST_SIDES: usize = 2;
+
+/// Whether the line detector is asked after the network's answer `found`, whose page has
+/// `network_sides` of its sides on edges of the photo (0 without a page): when the network found
+/// nothing, or an unsure page (under 0.7) with at most [`SECOND_LOOK_MOST_SIDES`] sides on edges.
+/// Not after the line detector's own answer (no model file).
+pub fn second_look_wanted(found: &Detection, network_sides: usize) -> bool {
+    found.source != QuadSource::Lines && (found.quad.is_none() || (found.confidence < SURE && network_sides <= SECOND_LOOK_MOST_SIDES))
+}
+
+/// Whether the line detector's page, with `lines_sides` of its sides on edges of the photo, is
+/// taken: over nothing found, with 3 sides or more; over an unsure network page, with all 4. On
+/// the owner's photos a right page had all four sides on edges, a wrong one at most three.
+pub fn second_look_takes(network_found: bool, lines_sides: usize) -> bool {
+    if network_found { lines_sides == 4 } else { lines_sides >= 3 }
+}
+
 /// Find the page in `photo` with the detector `finder` names.
 pub fn detect_with(photo: &Photo, finder: Finder) -> Detection {
     if photo.width < 16 || photo.height < 16 {

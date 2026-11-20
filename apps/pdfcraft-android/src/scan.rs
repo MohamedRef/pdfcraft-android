@@ -10,8 +10,8 @@ use pdfcraft_scan::page::page_look_kind;
 use pdfcraft_scan::page_kind::{PageKind, PresetChoice, preset_from_id};
 use pdfcraft_scan::upright_pages::{PageTurn, followed, settle};
 use pdfcraft_scan::{
-    AspectSource, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_with,
-    page_base, refine,
+    AspectSource, Detection, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, Refined,
+    detect_with, page_base, refine, second_look_takes, second_look_wanted,
 };
 
 use crate::MobileError;
@@ -601,6 +601,24 @@ pub struct ScanDocument {
     /// For the same sides: the edge bends, so the page is not flat.
     pub curved: Vec<bool>,
     pub timings: Vec<ScanTiming>,
+    /// What the second look did (#290).
+    pub second_look: ScanSecondLook,
+    /// The network's page's sides on edges of the photo, when the second look weighed it; else 0.
+    pub network_sides: u8,
+    /// The line detector's page's sides on edges of the photo, when it was asked; else 0.
+    pub lines_sides: u8,
+}
+
+/// What the second look did (#290).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ScanSecondLook {
+    /// Not asked: the option off, another detector named, the closer look off, or the network sure
+    /// enough or with three or more sides on edges.
+    NotAsked,
+    /// The line detector was asked, and the network's answer kept.
+    Kept,
+    /// The line detector's page was taken.
+    Taken,
 }
 
 /// The one directory scan functions read from and write to.
@@ -843,11 +861,16 @@ pub struct ScanFindOptions {
     pub finder: ScanFinder,
     /// Move the corners found onto the paper's edges at full size (#291).
     pub refine: bool,
+    /// The second look (#290): with `Auto` and the closer look on, the line detector is asked too
+    /// when the network found nothing, or an unsure page with at most two sides on edges of the
+    /// photo, and its page is taken when enough of its sides lie on edges.
+    #[uniffi(default = false)]
+    pub second_look: bool,
 }
 
 impl Default for ScanFindOptions {
     fn default() -> Self {
-        ScanFindOptions { finder: ScanFinder::Auto, refine: true }
+        ScanFindOptions { finder: ScanFinder::Auto, refine: true, second_look: false }
     }
 }
 
@@ -880,7 +903,7 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
     let photo = Photo::decode(&bytes).map_err(|e| MobileError::Command(e.to_string()))?;
     drop(bytes);
     lap("scan_decode", &mut timings);
-    let found = detect_with(
+    let mut found = detect_with(
         &photo,
         match options.finder {
             ScanFinder::Auto => Finder::Auto,
@@ -890,6 +913,35 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
         },
     );
     lap("scan_detect", &mut timings);
+    // the second look (#290): the line detector too when the network found nothing, or an unsure
+    // page with few of its sides on edges; the refined page it settles on is kept for below
+    let mut second_look = ScanSecondLook::NotAsked;
+    let (mut network_sides, mut lines_sides) = (0u8, 0u8);
+    let mut settled: Option<(Pyramid, Option<Refined>)> = None;
+    if options.second_look && options.refine && options.finder == ScanFinder::Auto && found.source != QuadSource::Lines {
+        let pyramid = Pyramid::new(photo.luma());
+        let on_edges = |r: &Refined| r.sides.iter().filter(|s| s.refined).count();
+        let network = found.quad.map(|q| refine(&pyramid, &q, &RefineOptions::default()));
+        let network_count = network.as_ref().map_or(0, on_edges);
+        network_sides = network_count as u8;
+        let mut kept = network;
+        if second_look_wanted(&found, network_count) {
+            let lines = detect_with(&photo, Finder::Lines);
+            let lines_fit = lines.quad.map(|q| refine(&pyramid, &q, &RefineOptions::default()));
+            let lines_count = lines_fit.as_ref().map_or(0, on_edges);
+            lines_sides = lines_count as u8;
+            if lines.quad.is_some() && second_look_takes(found.quad.is_some(), lines_count) {
+                // the network's passes stay in the log: they were made
+                found = Detection { passes: found.passes, ..lines };
+                kept = lines_fit;
+                second_look = ScanSecondLook::Taken;
+            } else {
+                second_look = ScanSecondLook::Kept;
+            }
+            lap("scan_second_look", &mut timings);
+        }
+        settled = Some((pyramid, kept));
+    }
     let source = match found.source {
         QuadSource::Model => ScanQuadSource::Model,
         QuadSource::Lines => ScanQuadSource::Lines,
@@ -908,6 +960,9 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
             refined: vec![false; 4],
             curved: vec![false; 4],
             timings,
+            second_look,
+            network_sides,
+            lines_sides,
         });
     };
     if !options.refine {
@@ -922,11 +977,26 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
             refined: vec![false; 4],
             curved: vec![false; 4],
             timings,
+            second_look,
+            network_sides,
+            lines_sides,
         });
     }
-    let pyramid = Pyramid::new(photo.luma());
-    drop(photo);
-    let refined = refine(&pyramid, &quad, &RefineOptions::default());
+    let refined = match settled {
+        Some((_, Some(done))) => {
+            drop(photo);
+            done
+        }
+        Some((pyramid, None)) => {
+            drop(photo);
+            refine(&pyramid, &quad, &RefineOptions::default())
+        }
+        None => {
+            let pyramid = Pyramid::new(photo.luma());
+            drop(photo);
+            refine(&pyramid, &quad, &RefineOptions::default())
+        }
+    };
     lap("scan_refine", &mut timings);
     Ok(ScanDocument {
         found: true,
@@ -938,6 +1008,9 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
         refined: refined.sides.iter().map(|s| s.refined).collect(),
         curved: refined.sides.iter().map(|s| s.curved).collect(),
         timings,
+        second_look,
+        network_sides,
+        lines_sides,
     })
 }
 
@@ -2265,7 +2338,7 @@ mod tests {
         assert_eq!(found.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_decode", "scan_detect", "scan_refine"]);
 
         // the testing options (#288): each detector alone, the closer look off, and nothing at all
-        let with = |finder, refine| find_in(&root, &shot.to_string_lossy(), ScanFindOptions { finder, refine }).unwrap();
+        let with = |finder, refine| find_in(&root, &shot.to_string_lossy(), ScanFindOptions { finder, refine, second_look: false }).unwrap();
         assert_eq!(with(ScanFinder::Auto, true).corners, found.corners);
         assert_eq!(with(ScanFinder::Network, true).corners, found.corners);
         let lines = with(ScanFinder::Lines, true);
@@ -2288,6 +2361,20 @@ mod tests {
         image::RgbImage::from_fn(640, 480, |x, y| image::Rgb([90 + (x % 3) as u8, 90 + (y % 3) as u8, 90])).save(&blank).unwrap();
         let none = find_in(&root, &blank.to_string_lossy(), ScanFindOptions::default()).unwrap();
         assert!(!none.found && none.source == ScanQuadSource::None && none.corners == [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0], "{none:?}");
+        assert_eq!(none.second_look, ScanSecondLook::NotAsked);
+        // the second look (#290): a sure page is not looked at again, and is the same page
+        let looked = find_in(&root, &shot.to_string_lossy(), ScanFindOptions { second_look: true, ..ScanFindOptions::default() }).unwrap();
+        assert_eq!((looked.second_look, looked.corners.clone()), (ScanSecondLook::NotAsked, found.corners.clone()));
+        assert_eq!(looked.network_sides, 4);
+        assert_eq!(looked.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_decode", "scan_detect", "scan_refine"]);
+        // nothing to find: the line detector is asked, finds nothing either, and the whole photo stays
+        let blank_looked = find_in(&root, &blank.to_string_lossy(), ScanFindOptions { second_look: true, ..ScanFindOptions::default() }).unwrap();
+        assert!(!blank_looked.found && blank_looked.second_look == ScanSecondLook::Kept && blank_looked.lines_sides == 0, "{blank_looked:?}");
+        assert!(blank_looked.timings.iter().any(|t| t.stage == "scan_second_look"));
+        // another detector named: no second look
+        let named =
+            find_in(&root, &blank.to_string_lossy(), ScanFindOptions { finder: ScanFinder::Network, refine: true, second_look: true }).unwrap();
+        assert_eq!(named.second_look, ScanSecondLook::NotAsked);
         // outside the root: refused
         let other = temp("find-other");
         assert!(find_in(&other, &shot.to_string_lossy(), ScanFindOptions::default()).is_err());
