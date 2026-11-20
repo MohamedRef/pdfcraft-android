@@ -96,7 +96,7 @@ class ScanPullTest {
         assertEquals(false, set.diag().toMap()["snap_while_dragging"])
         assertEquals(30, set.json().getInt("pull_catch_dp"))
         // out of range values keep the default
-        assertEquals(PULL_RELEASE_DP, ScanLab.decode("release_dp=999").pullReleaseDp)
+        assertEquals(PULL_RELEASE_DP, ScanLab.decode("pull_release=999").pullReleaseDp)
         assertTrue(ScanLab.decode("keep=0").snapWhileDragging)
     }
 }

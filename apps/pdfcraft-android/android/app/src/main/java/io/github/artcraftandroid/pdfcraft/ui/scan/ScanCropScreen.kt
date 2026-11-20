@@ -276,10 +276,11 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
         }
     }
 
-    fun snap(handle: QuadHandle, stillMs: Long) {
-        // with the pull (#514) placing by hand is pulling past the release distance, or Snap off
-        if (!snapOnRelease(snapOn, stillMs, pulling)) {
-            if (snapOn) stats = stats.copy(snapsHeld = stats.snapsHeld + 1)
+    fun snap(handle: QuadHandle, stillMs: Long, caughtAtLift: Boolean = false) {
+        // with the pull (#514) placing by hand is pulling past the release distance, or Snap off;
+        // with the gentle snap (#773) a handle off every edge at the lift stays where the finger put it
+        if (!snapOnRelease(snapOn, stillMs, pulling, lab.gentleSnap, caughtAtLift)) {
+            if (snapOn) stats = if (pulling && lab.gentleSnap) stats.copy(snapsFree = stats.snapsFree + 1) else stats.copy(snapsHeld = stats.snapsHeld + 1)
             return
         }
         val asked = sidesToSnap(handle)
@@ -335,6 +336,8 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             DiagArea.Scan, "crop", "index" to scanLogPageNumber(index), "done" to done, "opened_by" to (steps?.opener?.id ?: "crop_button"), *s.diag(),
             // #515: in a pass over several pages, the page's place in it and where the person went
             "batch" to (batch != null), "batch_at" to (batch?.at ?: 0), "batch_pages" to (batch?.count ?: 0), "batch_go" to dir,
+            // #773: the gentle snap, and the pull's distances in use
+            "gentle_snap" to lab.gentleSnap, "catch_dp" to lab.pullCatchInUse, "release_dp" to lab.pullReleaseInUse,
         )
         when {
             batch != null && done -> batch.onLeave(dir, corners, s)
@@ -531,11 +534,13 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                         }
                         held = null
                         heldSpan = null
+                        // on an edge when the finger lifts (#773): with the gentle snap only such a handle snaps again
+                        val onEdgeAtLift = caught != null
                         letGo("lifted")
                         free = null
                         badShape = false
                         pullWanted.value = null
-                        if (h != null) snap(h, SystemClock.uptimeMillis() - lastMove)
+                        if (h != null) snap(h, SystemClock.uptimeMillis() - lastMove, onEdgeAtLift)
                     },
                     onDragCancel = {
                         held = null
@@ -570,7 +575,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                         if (d.getDistance() > 0.5f) lastMove = SystemClock.uptimeMillis()
                         free = moved
                         val k = caught
-                        val releasePx = max(lab.pullReleaseDp, lab.pullCatchDp).dp.toPx()
+                        val releasePx = max(lab.pullReleaseInUse, lab.pullCatchInUse).dp.toPx()
                         if (k != null && pullLetsGo(moved, k, h, releasePx, f.width, f.height)) letGo("pulled")
                         if (caught == null) {
                             if (!moved.contentEquals(latest.value)) {
@@ -579,7 +584,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                                 onEdge = List(4) { s -> onEdge[s] && !sidesToSnap(h)[s] }
                             }
                             if (snapOn) {
-                                val catchPx = lab.pullCatchDp.dp.toPx()
+                                val catchPx = lab.pullCatchInUse.dp.toPx()
                                 val photoW = (info?.uprightW ?: thumb.width).toFloat()
                                 pullWanted.value = ScanPullAsk(dragSerial, moved.copyOf(), h, catchPx, catchPx * photoW / f.width, f.width, f.height)
                             }

@@ -94,6 +94,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_card_sure, o.cardSure) { lab.update(o.copy(cardSure = it)) }
     // a dragged corner or side is pulled onto the paper's edge while the finger moves (#514)
     Sw(R.string.scan_lab_snap_drag, o.snapWhileDragging) { lab.update(o.copy(snapWhileDragging = it)) }
+    // a closer catch, an easier let-go, and no snap after a lift off the edge (#773)
+    Sw(R.string.scan_lab_gentle_snap, o.gentleSnap) { lab.update(o.copy(gentleSnap = it)) }
     Sw(R.string.scan_lab_crop, o.cropTools) { lab.update(o.copy(cropTools = it)) }
     // borders and looks for several pages in one pass (#515)
     Sw(R.string.scan_lab_batch, o.batchBorders) { lab.update(o.copy(batchBorders = it)) }
