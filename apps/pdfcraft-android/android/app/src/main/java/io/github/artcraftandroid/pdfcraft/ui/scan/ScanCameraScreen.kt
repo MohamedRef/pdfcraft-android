@@ -122,7 +122,7 @@ internal class ScanCameraActions(
  * so everything after the shot is as it was with the phone's camera app.
  */
 @Composable
-internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null, bar: Boolean = false, turnedLooks: Boolean = true) {
+internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null, bar: Boolean = false, turnedLooks: Boolean = true, autoEased: Boolean = true) {
     val file = model.target ?: return
     BackHandler { actions.onClose() }
     // the permission may have been granted in the system settings meanwhile
@@ -134,7 +134,7 @@ internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, 
     }
     Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (model.route) {
-            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar, turnedLooks)
+            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar, turnedLooks, autoEased)
             else -> if (bar) ScanCameraPermissionView(model.route, actions) else NoCameraView(model.route, actions)
         }
     }
@@ -164,7 +164,7 @@ private fun NoCameraView(route: ScanCaptureRoute, actions: ScanCameraActions) {
 
 /** The camera, once allowed. */
 @Composable
-private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean, turnedLooks: Boolean) {
+private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean, turnedLooks: Boolean, autoEased: Boolean) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -190,7 +190,10 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
     var zoom by remember { mutableFloatStateOf(ScanZoom.MIN) }
     val transformer = remember { MutableCoordinateTransformer() }
     // the live outline (#295): the analyzer's answers, smoothed, and the advice under the viewfinder
-    val tracker = remember { ScanLiveTracker() }
+    // auto-capture eased (#296): the light floor and the confidence the steady test counts as sure
+    val ease = remember(autoEased) { ScanLiveEase.of(autoEased) }
+    val tracker = remember { ScanLiveTracker(sureFrom = ease.sureFrom) }
+    val hintTimes = remember { ScanLiveHintTimes() }
     val holder = remember { ScanLiveHintHolder() }
     var outline by remember { mutableStateOf<ScanLiveOutline?>(null) }
     var hint by remember { mutableStateOf<ScanLiveHint?>(null) }
@@ -239,6 +242,8 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             analysis.clearAnalyzer()
             analysisExecutor.shutdown()
             analyzer.logSummary(SystemClock.elapsedRealtime() - openedAt)
+            // what held auto-capture back (#296): how long each advice was called for, and what the steady test saw
+            if (live) Diag.event(DiagArea.Scan, "live_hints", *ease.diag(autoEased), *hintTimes.diag(), *tracker.diag())
         }
     }
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -436,8 +441,9 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             tick = now
             val shown = tracker.at(now).also { if (it.points == null) outline = null }
             val missing = if (shown.points != null) 0L else now - (tracker.lastFoundAt ?: openedAt)
-            val wanted = scanLiveHintFor(ScanLiveScene(shown.points, outline?.stable == true, lastLuma, lastCutOff, missing))
+            val wanted = scanLiveHintFor(ScanLiveScene(shown.points, outline?.stable == true, lastLuma, lastCutOff, missing), darkLuma = ease.darkLuma)
             hint = holder.update(wanted, now)
+            hintTimes.add(wanted, stillness.still(now), now)
             if (autoOn) {
                 val before = auto.phase
                 val (next, shoot) = auto.reduce(ScanAutoEvent.Seen(ScanAutoInputs(now, hint == ScanLiveHint.Ready, stillness.still(now), shown.points != null, lastSignature)))

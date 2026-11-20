@@ -19,10 +19,10 @@ and the native call tested on drawn frames on a desktop (#398).
    the new answer; a jump of more than 15 % of the diagonal, or an outline older than 500 ms, is
    taken at once. Without an answer the outline stays 350 ms, then fades for 250 ms. Corners keep
    their order when the detector names them from another corner.
-4. **Steady**: the last 6 answers, over at least 400 ms, all with confidence ≥ 0.6 and no corner
-   moving more than 1.2 % of the diagonal between two of them.
+4. **Steady**: the last 6 answers, over at least 400 ms, all with confidence ≥ 0.6 (0.5 with auto-capture eased,
+   #296) and no corner moving more than 1.2 % of the diagonal between two of them.
 5. **Advice** (`scanLiveHintFor`, most important first): no page for 1.5 s → *Point the camera at
-   the document*; mean brightness under 55 → *More light needed*; a corner within 1.5 % of the
+   the document*; mean brightness under 55 (40 with auto-capture eased, #296) → *More light needed*; a corner within 1.5 % of the
    frame's edge → *Fit the whole page in the frame*; the page under 22 % of the frame → *Move
    closer*; opposite sides more than 1.7 × apart → *Hold the phone flatter over the page*; not
    steady → *Hold still*; steady → *Ready*. A new line replaces the old one only after 400 ms
@@ -41,7 +41,8 @@ diagnostics log.
    call, `native_ms`, `width`, `height`, `rotation`, `found`, `confidence`, `luma`, `cut_off`);
    `live_summary` when the camera closes (`frames`, `found`, `found_turned` since #295, `avg_ms`, `max_ms`, `shown_ms`), from
    which the detection rate is `frames / shown_ms`; `camera_live_option` when the option changes;
-   and on each photo's `camera` line `live`, `live_found`, `live_stable`, `live_hint`.
+   and on each photo's `camera` line `live`, `live_found`, `live_stable`, `live_hint`. Since #296,
+   `live_hints` when the camera closes: each advice's time and what the steady test saw.
 3. **Kept scans**: `capture` in the page file adds `live`, `live_found`, `live_stable`,
    `live_hint` and `preview_quad`, the outline at the shutter (8 shares of the upright frame).
 
