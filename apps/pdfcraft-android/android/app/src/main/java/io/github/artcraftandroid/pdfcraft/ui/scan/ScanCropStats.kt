@@ -55,6 +55,8 @@ data class ScanCropStats(
     val sidesOnEdge: List<Boolean>? = null,
     /** Visits made in a pass over several pages (#515). */
     val batchVisits: Int = 0,
+    /** Lifts left where the finger put them, off any edge, with the gentle snap (#773). */
+    val snapsFree: Int = 0,
 ) {
     operator fun plus(o: ScanCropStats) = ScanCropStats(
         visits + o.visits, cornerDrags + o.cornerDrags, sideDrags + o.sideDrags, snapsAsked + o.snapsAsked,
@@ -63,7 +65,7 @@ data class ScanCropStats(
         loupeDecodes + o.loupeDecodes, o.snapOn, ms + o.ms, max(movedPct, o.movedPct),
         if (o.visits > 0) o.cornersOff else cornersOff, detectsOther + o.detectsOther, detectsSkipped + o.detectsSkipped,
         catches + o.catches, pulledFree + o.pulledFree, badShapes + o.badShapes, if (o.visits > 0) o.sidesOnEdge ?: sidesOnEdge else sidesOnEdge,
-        batchVisits + o.batchVisits,
+        batchVisits + o.batchVisits, snapsFree + o.snapsFree,
     )
 
     /** As diagnostics fields: numbers and booleans only. */
@@ -75,6 +77,7 @@ data class ScanCropStats(
         "loupe_decodes" to loupeDecodes, "snap" to snapOn, "ms" to ms, "moved_pct" to round3(movedPct),
         "corners_off" to cornersOff, "catches" to catches, "pulled_free" to pulledFree, "bad_shapes" to badShapes,
         "sides_on_edge" to (sidesOnEdge?.count { it } ?: -1), "batch_visits" to batchVisits,
+        "snaps_free" to snapsFree,
     )
 
     /** As JSON, for a kept scan's page file. */

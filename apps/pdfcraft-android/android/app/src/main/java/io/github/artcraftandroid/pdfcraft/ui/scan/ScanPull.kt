@@ -10,11 +10,20 @@ import kotlin.math.hypot
  * without a phone is here, so it can be tested on the desktop.
  */
 
-/** The catch distance, in dp, when the testing values do not say otherwise. */
-internal const val PULL_CATCH_DP = 20
+/**
+ * The catch distance, in dp, when the testing values do not say otherwise: 12 with the gentle snap
+ * (#773), where 20 caught handles the owner meant to place off the edge.
+ */
+internal const val PULL_CATCH_DP = 12
 
-/** The release distance, in dp: larger than the catch, so a caught handle does not flicker. */
-internal const val PULL_RELEASE_DP = 32
+/** The release distance, in dp: larger than the catch, so a caught handle does not flicker. 20 since #773. */
+internal const val PULL_RELEASE_DP = 20
+
+/** The catch distance before the gentle snap (#773), still used with it off. */
+internal const val PULL_CATCH_DP_FIRM = 20
+
+/** The release distance before the gentle snap (#773), still used with it off. */
+internal const val PULL_RELEASE_DP_FIRM = 32
 
 /** A handle caught by an edge: the corners it shows, the finger's place on the photo when it was caught (shares), and what caught it. */
 internal class ScanPullCaught(val quad: FloatArray, val atX: Float, val atY: Float, val target: String, val distancePx: Float, val since: Long)

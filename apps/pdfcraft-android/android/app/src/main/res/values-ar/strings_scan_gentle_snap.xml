@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The gentle snap on Adjust borders: a closer catch, an easier let-go, no snap after a lift off the edge (#773) -->
+<resources>
+    <string name="scan_lab_gentle_snap">محاذاة أخف في ضبط الحواف (التقاط أقرب، بلا قفزة بعد الإفلات)</string>
+</resources>
