@@ -285,8 +285,7 @@ The English text is in
 * add the same key to the matching file in `values-ar/`
 * keep each `name`, the placeholders (`%1$s`, `%2$d`, which you may move) and escapes such as `\'`
 
-The store listing is in `fastlane/metadata/android/en-US/`; a copy in a folder for your language (`es-ES`, `pt-BR`)
-translates it too. On Android 13 and newer, PdfCraft's language can be set on its own under Settings ▸ Apps ▸
+The store listing is in `fastlane/metadata/android/en-US/` (English only). On Android 13 and newer, PdfCraft's language can be set on its own under Settings ▸ Apps ▸
 PdfCraft ▸ Language. A few messages from the PDF engine, such as some errors and the names in Undo, are English
 for now.
 
