@@ -259,7 +259,7 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
 - **Every model is a separate pinned file with its notice**: `MODELS` in `models.rs`, an entry
   in `assets/models/ATTRIBUTION.txt` (a test checks both), its licence text beside it, a line on
   the Licences screen (`AppRoot.kt`), and its export in `tools/scan-models/README.md`.
-- **Text people read comes from `strings.xml`, in English and the six translations.** Three
+- **Text people read comes from `strings.xml`, in English and Arabic (the only two interface languages).** Three
   JVM tests enforce it: `UiTextTest` (no English in code), `CopyConsistencyTest` (US spelling;
   no "engine", "native", "JSON", "OCR", "picture", "..." in English text),
   `TranslationPlaceholdersTest` (the same `%1$s` in every language).

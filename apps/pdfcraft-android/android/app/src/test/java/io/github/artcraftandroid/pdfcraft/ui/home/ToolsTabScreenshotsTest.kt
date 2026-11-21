@@ -22,7 +22,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Pictures of Home ▸ Tools for UI review (#539): the one list of tools, by category, at a small
- * and a common phone size, in English, Arabic (right to left), German and French (long words).
+ * and a common phone size, in English and Arabic (right to left).
  * Nothing is compared. Off unless Gradle gets -Ppdfcraft.screenshots=true; written to
  * app/build/screenshots (docs/ANDROID_SCREENSHOTS.md).
  */
@@ -52,8 +52,6 @@ class ToolsTabScreenshotsTest {
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun english360() = draw("en_360x640")
     @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi") fun english384Dark() = draw("en_384x832", ThemeChoice.Dark)
     @Test @Config(qualifiers = "ar-w384dp-h832dp-xhdpi") fun arabic384() = draw("ar_384x832")
-    @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi") fun german320() = draw("de_320x640")
-    @Test @Config(qualifiers = "fr-w360dp-h640dp-xhdpi") fun french360() = draw("fr_360x640")
 
     /** The whole list at once: two phone screens at most (#539). */
     @Test @Config(qualifiers = "en-w360dp-h1400dp-xhdpi") fun englishWhole() = draw("en_360_whole")

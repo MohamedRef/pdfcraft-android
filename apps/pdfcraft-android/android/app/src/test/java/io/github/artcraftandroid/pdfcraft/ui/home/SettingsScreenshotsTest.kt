@@ -26,7 +26,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Pictures of Settings' pages for UI review (#462): every page, light and dark, at a small and a
- * common phone size, in English, Arabic (right to left) and French (long words). Nothing is
+ * common phone size, in English and Arabic (right to left). Nothing is
  * compared; the files are for a person to look at. Off unless Gradle gets -Ppdfcraft.screenshots=true;
  * written to app/build/screenshots (docs/ANDROID_SCREENSHOTS.md). No photo is ever drawn here.
  */
@@ -67,7 +67,6 @@ class SettingsScreenshotsTest {
     @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi") fun english384() = drawAll("en_384x832")
     @Test @Config(qualifiers = "ar-w360dp-h640dp-xhdpi") fun arabic360() = drawAll("ar_360x640")
     @Test @Config(qualifiers = "ar-w384dp-h832dp-xhdpi") fun arabic384() = drawAll("ar_384x832")
-    @Test @Config(qualifiers = "fr-w360dp-h640dp-xhdpi") fun french360() = drawAll("fr_360x640", listOf(ThemeChoice.Light))
 
     /** Each page whole, for the rows below the fold. */
     @Test @Config(qualifiers = "en-w384dp-h2400dp-xhdpi") fun englishWhole() = drawAll("en_384_whole", listOf(ThemeChoice.Light))

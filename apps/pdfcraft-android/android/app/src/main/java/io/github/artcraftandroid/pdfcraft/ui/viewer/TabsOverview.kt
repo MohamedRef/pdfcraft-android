@@ -125,6 +125,10 @@ fun TabsOverview(vm: AppViewModel) {
                     )
                 }
             }
+            BarIcon(LucideIcons.FolderOpen, stringResource(R.string.tabs_open_file), {
+                vm.tabs.closeOverview()
+                vm.tabs.openFile("overview")
+            })
             BarIcon(LucideIcons.Plus, stringResource(R.string.tabs_open_another), {
                 vm.tabs.closeOverview()
                 // from the viewer this goes Home and keeps the document in its tab; Home is already there
