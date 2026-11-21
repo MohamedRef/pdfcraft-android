@@ -39,4 +39,7 @@
     <string name="scan_camera_blocked_no_pages">No pages yet. Take a photo first.</string>
     <string name="scan_camera_blocked_busy">Wait until the photo is added.</string>
     <string name="scan_camera_blocked_undo">Nothing to undo. Undo takes back photos taken with this camera since it opened.</string>
+    <!-- Review pages opens the pages, with one tap back to the camera (#780) -->
+    <string name="scan_lab_review_return">Review pages opens the pages, with Back to camera</string>
+    <string name="scan_review_back_camera">Back to camera</string>
 </resources>
