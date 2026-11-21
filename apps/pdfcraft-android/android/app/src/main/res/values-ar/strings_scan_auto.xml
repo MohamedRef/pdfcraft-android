@@ -5,4 +5,6 @@
     <string name="scan_auto_tip">الالتقاط التلقائي مفعّل: ثبّت الجهاز فوق الصفحة وسيلتقط الصورة.</string>
     <string name="scan_auto_setting">الالتقاط التلقائي</string>
     <string name="scan_auto_skip">جارٍ التقاط الصورة. اضغط هنا لتخطي هذه الصفحة.</string>
+    <!-- The capture checks (#781) -->
+    <string name="scan_lab_capture_guards">فحوص الالتقاط: الصفحة الظاهرة عند الضغط، تركيز تم استبداله، وعدم تكرار الصورة التلقائية</string>
 </resources>

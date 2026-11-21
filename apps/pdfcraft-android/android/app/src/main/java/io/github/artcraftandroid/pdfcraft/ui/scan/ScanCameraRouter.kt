@@ -204,6 +204,7 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
                 vm().scanLab.options.cameraBar, vm().scanLab.options.liveTurned, vm().scanLab.options.autoEased, vm().scanLab.options.sheetCheck,
                 // Review pages, Undo and Done each a button (#780); the pages' photos tell which are this camera's
                 buttons = vm().scanLab.options.cameraButtons, pagePaths = vm().scanPages.map { it.file.path },
+                captureGuards = vm().scanLab.options.captureGuards,
             )
         }
     }

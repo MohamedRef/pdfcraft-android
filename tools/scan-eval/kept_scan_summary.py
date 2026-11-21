@@ -224,6 +224,9 @@ def summarise_pages(paths, wrong_accepted=0):
             "from_recent": tally(v.get("from_recent") for _, v in facts),
             "edited_from_viewer": tally(v.get("edited_from_viewer") for _, v in facts),
             "auto_shot": tally(dig(v, "capture", "auto_shot") for _, v in facts),
+            # how each capture started and where auto-capture was when the photo was asked for (#781)
+            "focus_via": tally(dig(v, "capture", "focus_via") for _, v in facts),
+            "auto_phase": tally(dig(v, "capture", "auto_phase") for _, v in facts),
         },
         "options": {
             key: tally(dig(v, "options", key) for _, v in facts) for key in ("finder", "refine", "second_look", "flatten_auto", "upright")
@@ -287,6 +290,10 @@ def summarise_pages(paths, wrong_accepted=0):
         "page_file_ms": {
             "preview.ms": spread(dig(v, "preview", "ms") for _, v in saved if dig(v, "preview", "shown") and dig(v, "preview", "ms")),
             "capture.capture_ms": spread(dig(v, "capture", "capture_ms") for _, v in facts),
+            # -1 is "not known" (an import, the first photo of a camera), not a time (#781)
+            "capture.focus_wait_ms": spread(x for x in (dig(v, "capture", "focus_wait_ms") for _, v in facts) if _num(x) and x >= 0),
+            "capture.shot_ms": spread(x for x in (dig(v, "capture", "shot_ms") for _, v in facts) if _num(x) and x >= 0),
+            "capture.since_shot_ms": spread(x for x in (dig(v, "capture", "since_shot_ms") for _, v in facts) if _num(x) and x >= 0),
             "capture.sharpness_ms": spread(dig(v, "capture", "sharpness_ms") for _, v in facts),
             "capture.merge.burst_ms": spread(dig(v, "capture", "merge", "burst_ms") for _, v in facts),
             "capture.merge.merge_ms": spread(dig(v, "capture", "merge", "merge_ms") for _, v in facts),
@@ -307,7 +314,9 @@ LOG_TALLIES = {
     "page": ("edges_found", "corners_moved", "flattened", "flatten_why", "flatten_reused", "flatten_skipped_flat", "turn_source", "quarter_turns", "look", "preset", "out_format"),
     "page_ready": ("made", "why", "by", "reused"),
     "full_page_ready": ("why", "flatten_reused"),
-    "camera": ("source", "mode", "auto_shot", "live_found", "live_stable", "live_hint", "merged", "focused"),
+    "camera": ("source", "mode", "auto_shot", "live_found", "live_stable", "live_hint", "live_wanted", "merged", "focused", "focus_via", "auto_phase", "signature_known"),
+    "camera_auto_phase": ("phase", "why"),
+    "camera_auto_rearm": ("why",),
     "camera_sharpness": ("measured", "blurred_unverified", "auto_shot"),
     "crop": ("done", "opened_by", "batch"),
     "crop_detect": ("found", "source", "finder", "other", "skipped", "note"),
@@ -326,6 +335,10 @@ LOG_SPREADS = {
     "share": ("pages", "bytes_per_page"),
     "scan_ready": ("pages",),
     "live_summary": ("frames", "found", "found_turned"),
+    # what the steady test and the gyroscope saw, and how far a page's signature moved while auto-capture waited (#781)
+    "live_hints": ("detections", "unsure", "run_max", "steady_times", "runs_stale", "runs_jumped", "gyro_over_pct", "gyro_p50", "gyro_p90"),
+    "camera_auto_rearm": ("looks", "diff_last", "diff_p50", "diff_max", "mean_diff_last", "mean_diff_p50", "mean_diff_max"),
+    "camera_auto_summary": ("ready", "armed", "lost_page", "lost_ready", "lost_still", "fired", "refused", "same_page", "taken", "failed", "skipped", "adopted", "absent", "differs", "shutter", "shutter_searching", "shutter_arming", "shutter_waiting"),
     "unsure_offer": ("pages", "not_found", "low_confidence", "scan_pages"),
 }
 
@@ -389,7 +402,8 @@ def summarise_log(text, since=None, until=None):
             if any(key in row for row in rows):
                 out["tallies"][f"{event}.{key}"] = tally(_plain(row.get(key)) for row in rows)
         for key in LOG_SPREADS.get(event, ()):
-            got = spread(row.get(key) for row in rows)
+            # -1 is the log's "not known" here too (a signature difference with no page to compare, #781)
+            got = spread(row.get(key) for row in rows if not (_num(row.get(key)) and row[key] < 0))
             if got:
                 out["spreads"][f"{event}.{key}"] = got
         for key in sorted({k for row in rows for k in row if k == "ms" or k.endswith("_ms")}):

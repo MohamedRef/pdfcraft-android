@@ -382,6 +382,15 @@ internal data class ScanLab(
      * More, then Add page, as at first.
      */
     val reviewReturn: Boolean = true,
+    /**
+     * The camera's capture checks (#781), none of them a threshold: the page a photo is of is the
+     * one in view when it was asked for, not when its file is written (the outline kept with it and
+     * auto-capture's wait for a new page follow from that); a page not known then is learned from
+     * the first one seen after; an automatic photo that failed, or of a page that only looked
+     * different for a moment, is not taken again by itself; and a focus that another one replaced
+     * does not release the photo waiting for it. Off: all of these as before.
+     */
+    val captureGuards: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans and reporting what the detectors see change no page). */
     val asDesigned: Boolean get() = copy(keep = false, inspect = false) == ScanLab()
@@ -410,6 +419,7 @@ internal data class ScanLab(
         "camera_buttons" to cameraButtons,
         "review_borders" to reviewBorders,
         "review_return" to reviewReturn,
+        "capture_guards" to captureGuards,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -425,6 +435,7 @@ internal data class ScanLab(
         .put("camera_buttons", cameraButtons)
         .put("review_borders", reviewBorders)
         .put("review_return", reviewReturn)
+        .put("capture_guards", captureGuards)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -440,6 +451,7 @@ internal data class ScanLab(
         "camera_buttons" to flag(cameraButtons),
         "review_borders" to flag(reviewBorders),
         "review_return" to flag(reviewReturn),
+        "capture_guards" to flag(captureGuards),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -550,6 +562,7 @@ internal data class ScanLab(
                 cameraButtons = on("camera_buttons", default.cameraButtons),
                 reviewBorders = on("review_borders", default.reviewBorders),
                 reviewReturn = on("review_return", default.reviewReturn),
+                captureGuards = on("capture_guards", default.captureGuards),
             )
         }
     }

@@ -103,6 +103,8 @@ internal data class ScanLiveDetection(
     val at: Long,
     /** The page's signature for auto-capture (#296), when the page was found. */
     val signature: FloatArray? = null,
+    /** The averaged signature (#781, [SCAN_SIGNATURE_MEAN_PX]): measured for the log, decides nothing. */
+    val signatureMean: FloatArray? = null,
 )
 
 /** The outline shown, and what the tracker makes of it. */
@@ -135,6 +137,16 @@ internal class ScanLiveTracker(private val frameAspect: Float = 3f / 4f, private
     private var unsure = 0
     private val moves = ArrayList<Float>()
 
+    // what the steady test needs from a phone to be set (#781): the time between detections, why a run of them ended, and how long the runs were
+    private val gaps = ArrayList<Long>()
+    private var lastDetectionAt: Long? = null
+    private var stale = 0
+    private var jumps = 0
+    private var run = 0
+    private var runMax = 0
+    private var steadyTimes = 0
+    private var wasSteady = false
+
     /** Time of the last detection that found the page, or null. */
     val lastFoundAt: Long? get() = lastSeen.takeIf { it != Long.MIN_VALUE }
 
@@ -143,6 +155,8 @@ internal class ScanLiveTracker(private val frameAspect: Float = 3f / 4f, private
         lastSeen = Long.MIN_VALUE
         history.clear()
         sure.clear()
+        run = 0
+        wasSteady = false
     }
 
     fun update(d: ScanLiveDetection): ScanLiveOutline {
@@ -153,8 +167,14 @@ internal class ScanLiveTracker(private val frameAspect: Float = 3f / 4f, private
         if (d.confidence < sureFrom) unsure++
         // the corners' move from the last detection, when it came less than STALE_MS before (#296)
         history.lastOrNull()?.let { (at, p) -> if (d.at - at <= STALE_MS && moves.size < MAX_MOVES) moves.add(maxMove(p, fresh)) }
+        // the time since the detection before (#781): the steady test's times assume about ten a second
+        lastDetectionAt?.let { if (gaps.size < MAX_MOVES) gaps.add((d.at - it).coerceAtLeast(0L)) }
+        lastDetectionAt = d.at
         val next = when {
             prev == null || d.at - lastSeen > STALE_MS || maxMove(prev, fresh) > JUMP_SHARE -> {
+                // why the run of detections so far ends (#781): the one before is too old, or the page jumped
+                if (prev != null) if (d.at - lastSeen > STALE_MS) stale++ else jumps++
+                run = 0
                 history.clear()
                 sure.clear()
                 fresh
@@ -169,7 +189,13 @@ internal class ScanLiveTracker(private val frameAspect: Float = 3f / 4f, private
             history.removeFirst()
             sure.removeFirst()
         }
-        return ScanLiveOutline(next, steady(), fading = false)
+        // sure detections in a row without a jump or a pause: the steady test asks for STABLE_COUNT of them
+        run = if (d.confidence >= sureFrom) run + 1 else 0
+        if (run > runMax) runMax = run
+        val steady = steady()
+        if (steady && !wasSteady) steadyTimes++
+        wasSteady = steady
+        return ScanLiveOutline(next, steady, fading = false)
     }
 
     /** The outline at [now] with no new detection. */
@@ -193,9 +219,14 @@ internal class ScanLiveTracker(private val frameAspect: Float = 3f / 4f, private
     fun diag(): Array<Pair<String, Any?>> {
         val sorted = moves.sorted()
         fun pct(q: Float): Double = if (sorted.isEmpty()) -1.0 else Math.round(sorted[Math.round((sorted.size - 1) * q)] * 1000.0) / 10.0
+        val waits = gaps.sorted()
+        fun gap(q: Float): Long = if (waits.isEmpty()) -1L else waits[Math.round((waits.size - 1) * q)]
         return arrayOf(
             "detections" to detections, "unsure" to unsure, "moves" to sorted.size,
             "moves_over" to sorted.count { it > STABLE_MOVE_SHARE }, "move_p50_pct" to pct(0.5f), "move_p90_pct" to pct(0.9f),
+            // #781: the time between detections, the runs ended by a pause or a jump, the longest run of sure ones, and how often the outline became steady
+            "gap_p50_ms" to gap(0.5f), "gap_p90_ms" to gap(0.9f), "gap_max_ms" to gap(1f), "gaps_over" to waits.count { it > STALE_MS },
+            "runs_stale" to stale, "runs_jumped" to jumps, "run_max" to runMax, "steady_times" to steadyTimes, "steady_needs" to STABLE_COUNT,
         )
     }
 
