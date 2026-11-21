@@ -114,3 +114,28 @@ fn the_gate_fails_when_the_detector_returns_the_whole_photo() {
         assert!(failed.contains(&metric), "{metric} did not catch a detector that finds nothing: {failed:?}");
     }
 }
+
+/// The looks ordered by how the page lies (#785) find the same outline on every one of the 40
+/// drawn photos, to the pixel, in no more looks.
+#[test]
+fn ordered_looks_find_the_same_outline_on_the_40_drawn_photos() {
+    use crate::detect::{CornerRule, LookOrder, detect_by, detect_in_order};
+    let (mut before, mut after, mut by_truth, mut found) = (0u32, 0u32, 0u32, 0u32);
+    for entry in entries() {
+        let photo = crate::Photo::decode(&entry.photo).unwrap();
+        let fixed = detect_by(&photo, Finder::Network, CornerRule::Sheet);
+        let ordered = detect_in_order(&photo, Finder::Network, CornerRule::Sheet, LookOrder::Upright(None));
+        let truth = entry.corners.and_then(|c| crate::Quad::from_shares(&c, photo.width, photo.height).ok());
+        let near = detect_in_order(&photo, Finder::Network, CornerRule::Sheet, LookOrder::Upright(truth));
+        assert_eq!((ordered.quad, ordered.angle, ordered.confidence), (fixed.quad, fixed.angle, fixed.confidence), "{}", entry.name);
+        assert_eq!((near.quad, near.angle, near.confidence), (fixed.quad, fixed.angle, fixed.confidence), "{}", entry.name);
+        assert!(ordered.passes <= fixed.passes && near.passes <= fixed.passes, "{}", entry.name);
+        before += u32::from(fixed.passes);
+        after += u32::from(ordered.passes);
+        by_truth += u32::from(near.passes);
+        found += u32::from(fixed.quad.is_some());
+    }
+    println!(
+        "40 drawn photos, {found} found: {before} looks in the fixed order, {after} by the first look's corners, {by_truth} by the true outline"
+    );
+}

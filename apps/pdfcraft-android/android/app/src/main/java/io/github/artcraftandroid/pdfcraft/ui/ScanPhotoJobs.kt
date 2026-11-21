@@ -138,7 +138,9 @@ internal fun AppViewModel.onScanPhoto(ok: Boolean) {
         val straightened = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(f.path)?.straightened == true
         val doc = eng?.takeUnless { straightened }?.let {
             withContext(Dispatchers.IO) { runCatching { it.prepareOcrModels(getApplication()) } }
-            withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentWith(f.absolutePath, lab.findOptions()) } }
+            // the outline the camera showed at the shutter says how the page lies (#785); it is never taken for the page
+            val outline = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(f.path)?.previewQuad?.takeIf { lab.orderLooks && it.size == 8 }?.toList()
+            withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentNear(f.absolutePath, lab.findOptions(), outline) } }
                 .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_find_document", e) }.getOrNull()
         }
         val edges = doc?.takeIf { it.found }?.corners?.takeIf { it.size == 8 }?.toFloatArray()
@@ -166,6 +168,8 @@ internal fun AppViewModel.onScanPhoto(ok: Boolean) {
             // the sheet check: which corners were taken, the looks refused for their shape, and the page's skew in degrees
             "corner_pick" to (doc?.cornerPick?.let(::scanCornerPickId) ?: "none"), "shapes_refused" to (doc?.shapesRefused?.toInt() ?: 0),
             "skew" to (doc?.skew?.toDouble() ?: 0.0), "sheet_check" to lab.sheetCheck,
+            // the turned looks ordered by how the page lies (#785): the option, and what the order went by
+            "order_looks" to lab.orderLooks, "look_order" to (doc?.lookOrder?.let(::scanLooksById) ?: "fixed"),
             *io.github.artcraftandroid.pdfcraft.ui.scan.scanBookDiag(book, lab.bookGutter, bookOrder, cut, bookMs),
         )
         val finding = doc?.let { d ->
@@ -173,6 +177,7 @@ internal fun AppViewModel.onScanPhoto(ok: Boolean) {
                 d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it }, scanCurvedOpposite(d.curved), lab.findOptions(),
                 secondLook = scanSecondLookId(d.secondLook), networkSides = d.networkSides.toInt(), linesSides = d.linesSides.toInt(),
                 cornerPick = scanCornerPickId(d.cornerPick), shapesRefused = d.shapesRefused.toInt(), skew = d.skew.toDouble(),
+                lookOrder = scanLooksById(d.lookOrder),
             )
         }
         // Adjust borders waits for this answer before Next (#458)
@@ -310,6 +315,13 @@ internal fun scanSecondLookId(look: io.github.artcraftandroid.pdfcraft.core.Scan
     io.github.artcraftandroid.pdfcraft.core.ScanSecondLook.KEPT -> "kept"
     io.github.artcraftandroid.pdfcraft.core.ScanSecondLook.TAKEN -> "taken"
     io.github.artcraftandroid.pdfcraft.core.ScanSecondLook.REFUSED -> "refused"
+}
+
+/** What the order of the page search's turned looks went by (#785), as the log and a kept page's file name it. */
+internal fun scanLooksById(by: io.github.artcraftandroid.pdfcraft.core.ScanLooksBy): String = when (by) {
+    io.github.artcraftandroid.pdfcraft.core.ScanLooksBy.FIXED -> "fixed"
+    io.github.artcraftandroid.pdfcraft.core.ScanLooksBy.OUTLINE -> "outline"
+    io.github.artcraftandroid.pdfcraft.core.ScanLooksBy.FIRST_LOOK -> "first_look"
 }
 
 /** The sheet check's choice of corners as the log and a kept page's file name it. */
