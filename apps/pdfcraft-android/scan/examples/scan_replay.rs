@@ -211,6 +211,8 @@ fn main() {
                 Some("white") => Some(false),
                 _ => None,
             },
+            // fingers at the page's edge removed (#466); files from before then have no such option
+            remove_fingers: options["remove_fingers"].as_bool().unwrap_or(false),
             ..PageRequest::new(&bytes, left)
         };
         match process_page(&request) {
@@ -240,6 +242,20 @@ fn main() {
                         _ => String::new(),
                     }
                 );
+                // the finger step, against what the phone recorded for the page (#466)
+                if let Some(f) = page.fingers {
+                    let phone = &facts["auto_decisions"];
+                    println!(
+                        "    fingers: {} found, {} over print, {} filled{}",
+                        f.found,
+                        f.over_print,
+                        f.filled,
+                        match (phone["fingers"].as_i64(), phone["fingers_over_print"].as_i64(), phone["fingers_filled"].as_i64()) {
+                            (Some(a), Some(b), Some(c)) if a >= 0 => format!("; the phone {a}, {b}, {c}"),
+                            _ => String::new(),
+                        }
+                    );
+                }
                 let file = out.join(format!("{}.{}", name.replace('/', "-"), page.format.extension()));
                 std::fs::write(&file, &page.bytes).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
             }

@@ -27,6 +27,7 @@ pub mod eval;
 #[cfg(any(test, feature = "synth"))]
 pub mod eval_set;
 pub mod exif;
+pub mod first;
 pub mod flatten;
 pub mod flatten_guard;
 pub mod inspect;
@@ -96,6 +97,8 @@ mod tests_detect;
 mod tests_eval;
 #[cfg(test)]
 mod tests_eval_set;
+#[cfg(test)]
+mod tests_first;
 #[cfg(test)]
 mod tests_flatten;
 #[cfg(test)]

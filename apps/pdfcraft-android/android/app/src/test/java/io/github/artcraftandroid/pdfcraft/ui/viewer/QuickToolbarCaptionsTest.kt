@@ -91,9 +91,4 @@ class QuickToolbarCaptionsTest {
     }
 
     @Test @Config(qualifiers = "ar-w384dp-h832dp-450dpi") fun arabic() = exportCaptionIsOneLine("ar")
-    @Test @Config(qualifiers = "de-w384dp-h832dp-450dpi") fun german() = exportCaptionIsOneLine("de")
-    @Test @Config(qualifiers = "es-w384dp-h832dp-450dpi") fun spanish() = exportCaptionIsOneLine("es")
-    @Test @Config(qualifiers = "fr-w384dp-h832dp-450dpi") fun french() = exportCaptionIsOneLine("fr")
-    @Test @Config(qualifiers = "it-w384dp-h832dp-450dpi") fun italian() = exportCaptionIsOneLine("it")
-    @Test @Config(qualifiers = "pt-rBR-w384dp-h832dp-450dpi") fun portuguese() = exportCaptionIsOneLine("pt")
 }

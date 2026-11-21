@@ -259,6 +259,17 @@ class TabsController internal constructor(private val vm: AppViewModel) {
     }
 
     /** Go to Home to open another document, keeping this one open in its tab. */
+    /**
+     * Choose a PDF file from the device and open it in a tab of its own; the document in front
+     * stays open in its tab, as on opening from Home. [from] is `strip`, `menu` or `overview`.
+     */
+    fun openFile(from: String) {
+        Diag.event(DiagArea.Viewer, "tab_open_file", "from" to from, "tabs" to tabs.size)
+        // a PDF chosen here is only opened, never handed to a tool a Home tile was about to start
+        vm.home.pendingTool = null
+        vm.pickFiles(FilePickKind.Open)
+    }
+
     fun openAnother() {
         val current = vm.document ?: return
         val eng = vm.engine ?: return

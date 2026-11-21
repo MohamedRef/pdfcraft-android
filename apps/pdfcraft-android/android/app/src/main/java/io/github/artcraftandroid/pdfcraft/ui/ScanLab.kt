@@ -347,6 +347,13 @@ internal data class ScanLab(
      * the seven found right changed.
      */
     val sheetCheck: Boolean = true,
+    /**
+     * A page that is not made yet is shown at once in a first picture (#785): straightened by its
+     * corners in its look from the photo's thumbnail, without flattening, the classifier's turn, the
+     * document type or the finger search, until the page itself is made. The camera's pages button
+     * shows the page as made too. Nothing saved changes. Off: the photo until the page is made, as before.
+     */
+    val firstPicture: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans and reporting what the detectors see change no page). */
     val asDesigned: Boolean get() = copy(keep = false, inspect = false) == ScanLab()
@@ -370,6 +377,7 @@ internal data class ScanLab(
         "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "background_pages" to backgroundPages, "full_pages_ahead" to fullPagesAhead, "sizes_ahead" to sizesAhead, "ask_discard" to askDiscard, "auto_look" to autoLook, "remove_fingers" to removeFingers, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
         "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "camera_bar" to cameraBar, "live_turned" to liveTurned, "auto_eased" to autoEased, "steps" to steps, "recent_scans" to recentScans, "edit_from_viewer" to editFromViewer, "snap_while_dragging" to snapWhileDragging, "pull_catch_dp" to pullCatchInUse, "pull_release_dp" to pullReleaseInUse, "gentle_snap" to gentleSnap, "batch_borders" to batchBorders, "check_unsure" to checkUnsure, "tools_in_reach" to toolsInReach, "markup" to markup, "markup_colours" to markupColours, "markup_edge" to markupEdge, "markup_ink" to markupInk, "auto_encode" to autoEncode, "size_override" to (size ?: "none"), "keep" to keep, "inspect" to inspect,
         "sheet_check" to sheetCheck,
+        "first_picture" to firstPicture,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -380,6 +388,7 @@ internal data class ScanLab(
         .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("background_pages", backgroundPages).put("full_pages_ahead", fullPagesAhead).put("sizes_ahead", sizesAhead).put("ask_discard", askDiscard).put("auto_look", autoLook).put("remove_fingers", removeFingers).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
         .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("camera_bar", cameraBar).put("live_turned", liveTurned).put("auto_eased", autoEased).put("steps", steps).put("recent_scans", recentScans).put("edit_from_viewer", editFromViewer).put("snap_while_dragging", snapWhileDragging).put("pull_catch_dp", pullCatchInUse).put("pull_release_dp", pullReleaseInUse).put("gentle_snap", gentleSnap).put("batch_borders", batchBorders).put("check_unsure", checkUnsure).put("tools_in_reach", toolsInReach).put("markup", markup).put("markup_colours", markupColours).put("markup_edge", markupEdge).put("markup_ink", markupInk).put("auto_encode", autoEncode).put("size_override", size ?: JSONObject.NULL).put("inspect", inspect)
         .put("sheet_check", sheetCheck)
+        .put("first_picture", firstPicture)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -390,6 +399,7 @@ internal data class ScanLab(
         "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "bg_pages" to flag(backgroundPages), "full_ahead" to flag(fullPagesAhead), "sizes_ahead" to flag(sizesAhead), "ask_discard" to flag(askDiscard), "auto_look" to flag(autoLook), "fingers" to flag(removeFingers), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
         "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "camera_bar" to flag(cameraBar), "live_turned" to flag(liveTurned), "auto_eased" to flag(autoEased), "steps" to flag(steps), "recent" to flag(recentScans), "edit_viewer" to flag(editFromViewer), "snap_drag" to flag(snapWhileDragging), "pull_catch" to pullCatchDp.toString(), "pull_release" to pullReleaseDp.toString(), "gentle_snap" to flag(gentleSnap), "batch" to flag(batchBorders), "check_unsure" to flag(checkUnsure), "reach" to flag(toolsInReach), "markup" to flag(markup), "markup_colours" to flag(markupColours), "markup_edge" to flag(markupEdge), "ink" to flag(markupInk), "auto_encode" to flag(autoEncode), "size" to (size ?: ""), "inspect" to flag(inspect),
         "sheet_check" to flag(sheetCheck),
+        "first_picture" to flag(firstPicture),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -495,6 +505,7 @@ internal data class ScanLab(
                 size = values["size"]?.takeIf { it in SIZES },
                 inspect = on("inspect", default.inspect),
                 sheetCheck = on("sheet_check", default.sheetCheck),
+                firstPicture = on("first_picture", default.firstPicture),
             )
         }
     }
@@ -705,6 +716,8 @@ internal fun scanTestPageJson(
     paperHint: String? = null,
     /** Whether the page could be matched to ID card (#759); null when not known. */
     cardPaper: Boolean? = null,
+    /** The page's first picture (#785): whether one was made, how long it took and from what; null when none was asked. */
+    firstPicture: JSONObject? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -796,6 +809,8 @@ internal fun scanTestPageJson(
         .put("edited_from_viewer", viewerSource != null)
         .put("source", viewerSource ?: JSONObject.NULL)
         .put("strength_applied", applied?.let { JSONObject().put("strength", it.strength).put("source", it.source).put("fixed", it.fixed) } ?: JSONObject.NULL)
+        // #785: the first picture shown while the page was made; never the page that was saved
+        .put("first_picture", firstPicture ?: JSONObject.NULL)
     page.put(
         "result",
         result?.let {

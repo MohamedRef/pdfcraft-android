@@ -85,6 +85,8 @@ change was made after the build he ran, or his logs have no line for it.
 | #758 | After any capture or import the document screen offers "N pages may have the wrong borders" with Check, for the pages whose page wasn't found or was found under the detector's sure mark (0.7, `SURE` in `detect.rs`) and that nobody has looked at, and Check opens #515's borders pass on those pages only. From the owner's log of 2026-11-19 (Many pages, 12 photos: 2 saved as whole photos and 2 as ID cards without a word) | Done in code, not run on a phone | this PR | Testing option `checkUnsure` (key `check_unsure`, on). Log `unsure_offer` (`pages`, `not_found`, `low_confidence`, `scan_pages`, `sure`), `unsure_offer_dismissed`, and `batch_open from=unsure`. Kept page file: `unsure`. Unit tests only. Not checked: on a phone, and how many pages under 0.7 are really wrong on other scans (on that one scan it would have offered 7 pages, 1 of them right) |
 | #759 | A scan's pages share one paper size, and a page is matched to ID card only from a sure outline (the owner chose both rules, 2026-11-19). From his scan of that day: one of six photos of the same A4 page came out Letter and one at 1.51, and two parts of a pile of A4 sheets came out as ID cards | Done in code, not run on a phone | this PR | Engine: `aspect::PaperMatch` (a hint within 10 %, `HINT_SNAP`; ID card allowed or not), `PageRequest::paper_hint`/`card_paper`, the same on `ScanPageRequest`, in the preview cache's key, and `ScanPreview::paper`. App: `scanPaperHintFor` takes the paper most of the other sure pages came out at (two at least, more than half), `scanCardPaperFor` uses #758's unsure rule. Testing options `paperShared` (`paper_shared`, on) and `cardSure` (`card_sure`, on). Log `paper_hint`, `card_paper` on `preview` and `page`, `paper_size` on `preview`. Kept page file `paper_hint`, `card_paper`. Measured on drawn pages only (`tests_proportions`, the bridge's test). Not checked: on a phone; the pages made before a scan's paper is known are made again once, in the background |
 | #764 | A scan reopened after the app started again (Recent scans, the viewer's Edit, or restored after Android closed the app) was made without the scanner's models: no automatic turn, no flattening network. From the owner's log of 2026-11-19: all 12 pages of a reopened scan came back unturned and the kept page files said the three models were `missing` | Fixed in code, not run on a phone | this PR | `restoreScan` prepares the models before the pages are put in the scan, so the log shows `model_files` and `model_states` before the first `page_ready`. No testing option (a fix, nothing to compare). Not checked: on a phone; the reopened scan's first page now waits for the engine and the model files (a few milliseconds once they are unpacked) |
+| #785, #549 | A page not made yet is shown at once in a first picture: straightened by its corners in its look from the photo's quarter-size thumbnail, no decoding, no flattening, classifier, document type or finger search; the page itself is made as before and replaces it. From the owner's log of 2026-11-21: a page 2.4–4.1 s, twelve pages 25 s | Done in code, not run on a phone; Kotlin not compiled here | this PR | Testing option "Show each page at once in a quick version while it is made" (`first_picture`, on). Desktop replay on his 12 photos: 110 ms at the median against 2.9 s for the preview. Saved pages unchanged. Log: `page_first`, `first_ms` on `page_ready` and `scan_ready`. A page the classifier turns shows unturned first. [ANDROID_SCAN_FIRST_PICTURE.md](ANDROID_SCAN_FIRST_PICTURE.md) |
+| #787 | Save keeps the scan until the place its PDF goes to has it. On main the `saved` line was logged, the photos were deleted (Recent scans off, or pages for an open document) and the pages, steps and name were cleared before the PDF was written to Downloads, inserted or put back, so a refused write lost the scan. A finding in the code, not a report from the phone | Fixed in code, not run on a phone; the failures in the tests are injected | this PR | `saveScanNow` (`ui/ScanSaveJobs.kt`) ends with `scanCommitSave` (`ui/scan/ScanSaveCommit.kt`): the destination first, then the `saved` line (with `destination`), Recent scans and the photos, then the screen is cleared. A failure before the pages are there leaves everything and says so (`save_failed`, the reason and "Your pages are still here"); a failure after it is only logged, so the pages are never saved twice. `DocumentFiles.saveToDownloads` now fails when the entry is not published (`publishDownload`: an update of no row was taken as saved). Pages for an open document are inserted and waited for (`AppViewModel.toolNow`), not queued; a document closed meanwhile is said and the next Save makes a PDF of its own. `ScanViewerEditController.putBack` answers `ScanPutBack`; an edit that fails is undone step by step (`edit_undo`) and the scan keeps its target, and if the undo fails the target is dropped so the same edits are never made over half a change. A PDF whose file refuses the write (`not_written`) still ends the scan as before: the pages are in the open PDF, and the viewer offers Save a copy. Not done: a kept scan (`ScanLab`) is written before the destination and has no outcome field; a save that fails after a kept scan was written leaves that kept scan, and saving again writes another. The view model's path has no test on the JVM: `ScanSaveCommitTest` runs the same steps over a temporary folder; on a phone, fill the storage or revoke the file's permission to see it |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
 the owner's phone or his test set are open. Each issue has a comment saying the same in detail.
@@ -163,6 +165,9 @@ AppViewModel.saveScan, per page
         page_look               look.rs: Auto (enhance/: light, grain, sharpen, tone),
                                 black and white (enhance/bw.rs), the engine's other looks
     doc_create from the page images, then text recognition, then the PDF is saved
+    scanCommitSave (#787)       the destination first (Downloads, the open document, or the PDF
+                                the scan was opened from); only then `saved`, Recent scans, the
+                                photos and the cleared screen. A refused write keeps the scan
 ```
 
 - **Native code**: `apps/pdfcraft-android/scan` (crate `pdfcraft-scan`, about 7 900 lines with
@@ -261,7 +266,7 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
 - **Every model is a separate pinned file with its notice**: `MODELS` in `models.rs`, an entry
   in `assets/models/ATTRIBUTION.txt` (a test checks both), its licence text beside it, a line on
   the Licences screen (`AppRoot.kt`), and its export in `tools/scan-models/README.md`.
-- **Text people read comes from `strings.xml`, in English and the six translations.** Three
+- **Text people read comes from `strings.xml`, in English and Arabic (the only two interface languages).** Three
   JVM tests enforce it: `UiTextTest` (no English in code), `CopyConsistencyTest` (US spelling;
   no "engine", "native", "JSON", "OCR", "picture", "..." in English text),
   `TranslationPlaceholdersTest` (the same `%1$s` in every language).
@@ -286,6 +291,9 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
   the fast "Provenance, release notes and workflow checks", then "Merge gate", plus "Conventional
   title". A pull request that changes only Kotlin/resources skips the Rust jobs; one that changes
   only docs or scripts skips the Rust and Android jobs (`scripts/ci_changed_paths.py`).
+- Where a preview's time goes, and a first picture's, on a folder of kept scans:
+  `cargo run --release -p pdfcraft-scan --example scan_first_timing -- <folder> [threads] [out_dir]`
+  ([ANDROID_SCAN_FIRST_PICTURE.md](ANDROID_SCAN_FIRST_PICTURE.md)).
 - Measuring on drawn photos or a test set: `scan-eval` ([ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md)).
 - Measuring against a reference scanner: `tools/scan-eval/README.md` (`reference_pairs.py`,
   with `scan_reference look`). Measuring orientation, flattening and detection on the same
@@ -342,6 +350,19 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
   checkpoint and checked against a NumPy forward pass (`tools/scan-models/export_uvdoc.py`).
 - **`rten` 0.26** ran all three models as exported: depthwise convolutions, hard-swish,
   reflected padding, PReLU, a batch dimension left open, weights stored as 16-bit floats.
+- **A screen drawn over another must take every touch** (#782, 21 Nov). The camera screen let a
+  touch on its empty parts, and on the shutter while it was grey, through to Enhance underneath,
+  where Rotate lies under the shutter: two pages of a kept scan were turned a quarter "by hand"
+  that way, and one was saved sideways. It looked like a fault of the proportions or the
+  orientation step until the log's `turn action=rotate` lines were found with the camera open.
+  Before looking for a wrong decision in the native code, look in the page file for
+  `turns.source`: `manual` means a press of Rotate. `ANDROID_SCAN_CAMERA.md` has the account.
+- **A finger is more than its skin** (#784, 21 Nov). On two pages of a kept scan the fill left a
+  dark streak and the thumb's shadowed flank beside a white patch: only skin-coloured pixels were
+  the finger. The region now takes the finger's sides in shadow and the line it casts, and a
+  finger that still goes on past it is left alone (`fingers_filled` under `fingers`). Figures in
+  `ANDROID_SCAN_DEFECTS.md`. `scan_replay` now runs the finger step when the page file says it
+  was on, and prints its counts beside the phone's.
 - Thresholds that came from ten photos and are waiting for more data: the detector's
   acceptance (0.5), the orientation vote (0.5 of the vote, half of the tiles), the grain floor
   (2 grey levels), the sharpening default (30 of 100).

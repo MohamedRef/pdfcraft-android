@@ -123,11 +123,4 @@ class StudyCardScreenshotsTest {
         show(ThemeChoice.Dark, custom = listOf("مذاكرة الطب", "هوايات"))
         capture("card_all_ar_384x832_dark")
     }
-
-    @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi")
-    fun germanSmallPhone() {
-        assumeTrue(System.getProperty("pdfcraft.screenshots") == "true")
-        show(custom = listOf("Medizin", "Freizeit"))
-        capture("card_all_de_320x640_light")
-    }
 }

@@ -1,10 +1,11 @@
 # Scanner: fingers, glare spots and stains (#306)
 
-**State: research prototype. No page the app makes changes. A testing option reports what it
-finds in kept scans (below); nothing else calls it.**
+**State: the automatic look fills fingers with this (#466, `remove_fingers`); glare and stains
+are a research prototype that a testing option reports in kept scans (below).**
 The finger search has been set on the owner's photos (#466, 13 Nov): it finds the three fingers
-on his ten reference photos and nothing else on them. Glare and stains are still as first
-written, on drawn pages only. Putting the finger fill into the automatic look is #466.
+on his ten reference photos and nothing else on them. On 21 Nov the fill was set again on a kept
+scan from his phone, where it had left dark pieces of two thumbs (#784, "The whole finger"
+below). Glare and stains are still as first written, on drawn pages only.
 
 Code: `apps/pdfcraft-android/scan/src/defects.rs`, tests in `tests_defects.rs`.
 
@@ -24,6 +25,10 @@ There are two fills, and the caller chooses:
 - `fill_fingers` puts paper over every finger. Nothing is made up: what the finger hid stays
   hidden, and paper shows where the finger was. `Defects::fingers_over_print` says how many
   hid print, so the app can tell the person that only a new photo brings it back.
+
+Either fill takes a finger whole or not at all: a finger that goes on past what was found
+(`Region::ragged` over `FINGER_RAGGED`) is left as it is, and the count of fingers filled is then
+smaller than the count found.
 
 (Until #466 the ring decided for fingers too. On the owner's photos every finger had print
 within the ring, since people hold a page by its margin, so nothing would ever have been
@@ -46,6 +51,20 @@ glare is clipped light. It works on a copy at most 800 pixels long; its masks ar
   when it touches the page's border, covers 0.15–15 % of the page, meets the border over
   2.5–40 % of the short side, reaches into the page at least 0.25 times that width, fills at
   least 40 % of the box around it, and is skin for at least half (the rest is the nail).
+- **The whole finger.** Skin is the finger's lit part. Around it, what is darker than 93 % of the
+  paper (`FINGER_PAPER`) and wider than 1.6 % of the short side (twice `FINGER_SOLID_PRINT`:
+  print is thinner) joins the finger when it is within 0.6 of the finger's width at the border
+  from the skin (`FINGER_SHADOW`): its sides in shadow. Then whatever is darker than that,
+  however thin, within 0.8 % of the short side (`FINGER_RIM`): the dark line it casts along its
+  edge. Both go from pixel to neighbouring pixel and never across paper, so print that does not
+  touch the finger is not reached, and print that does (a form's frame running under it) loses
+  that 0.8 % beside it at most. The region's area is the whole finger's; whether print runs up
+  to it is asked of the skin and of the whole finger, and either says yes.
+- **Whether a fill would be clean.** `Region::ragged` is the share of the band 1.2 % of the short
+  side wide just around the whole finger (`RAGGED_BAND`) that is neither paper nor print (dark
+  and wider than print). Over 10 % (`FINGER_RAGGED`) the finger goes on past what was found (a
+  sleeve, the rest of the hand, a wide shadow) and is not filled: paper over part of it would
+  leave the rest cut off beside a white patch.
 - **Glare.** In the uncorrected page: regions where at least two channels are 250 or more,
   covering at least 0.2 % of the page, whose surroundings 3 to 8 % of the page's width away
   (print left out) are at least 10 % darker than the region's core (the halo of a highlight,
@@ -67,6 +86,35 @@ starting values were: 1–12 % of the page, 4–14 % of the short side at the bo
 of 0.7 of that width added here at first).
 
 ## What was measured, and on what
+
+### A kept scan of twelve pages from the owner's phone (21 Nov, on a desktop, #784)
+
+Two of the twelve photos show a hand holding the sheet, the thumb over the bottom margin and
+over the printed frame of a form. Each page was made again from its photo with the corners and
+options its page file records, and the finger step run on the look's output.
+
+| | Thumb 1 (lit; a near-black line along one side) | Thumb 2 (a third of its width lit, both sides in shadow) |
+|---|---|---|
+| Region found, working pixels: skin alone, then the whole finger | 8 575, 9 665 | 4 107, 6 657 |
+| Pixels of the thumb's extent darker than 128 after the fill: before this change, after | 1 548, 0 | 21 414, 0 |
+| The same, darker than 230 (not white) | 4 545, 0 | 29 987, 0 |
+| Dark pixels within 30 pixels around the thumb (the frame's lines): before the fill, after | 505, 315 | 995, 630 |
+| `ragged` with the skin alone, with the whole finger | 0.16, 0.00 | 0.68, 0.00 |
+
+The thumb's extent has 86 985 and 106 244 pixels at the pages' sizes (1596 × 2257, 1786 × 2526).
+Before the change the first page showed a white patch with a dark streak along one side, the
+second a white patch with the thumb's dark flank beside it. After it both show paper, and the
+form's frame stops at the patch and goes on at its other side: the 190 and 365 dark pixels lost
+around the thumb are the frame's lines within about 12 pixels of it. Nothing beyond 30 pixels
+of the thumb changes on either page. The other ten pages report no finger before and after,
+one of them with a hand in the photo outside the page. Both thumbs hid print (the frame), and
+both pages say so (`fingers_over_print` 1).
+
+Not measured: any other photo with a finger; a finger beside a photograph or a solid block of
+ink (drawn only: the fill is then refused or, when the block is smaller than the reach and
+touches the finger, the block goes with it); the step's time, on a phone or steadily on the
+desktop (the added work, an opening of the working copy and two bands, is done only for a
+region already taken for a finger, so a page without one does none of it).
 
 ### The owner's ten reference photos (fingers only, 13 Nov, on a desktop)
 
@@ -110,6 +158,12 @@ Pages drawn in code (1200 × 1600, bars of "print" every 30 pixels), on a deskto
   with the nail inside it. A 14-pixel and a 40-pixel strip of skin colour along the right edge,
   a band across the whole top and a round stamp in the margin: no finger. A finger over print:
   flagged; `fill_blank` leaves it, `fill_fingers` fills it and changes no print elsewhere.
+- A thumb 120 pixels of skin wide and 330 long from the bottom edge, with a dark grey side 56
+  pixels wide and a 6-pixel near-black line along the other side, over a form's frame (two lines
+  4 pixels thick): found whole, filled; none of its 182 × 330 extent is left off the paper's
+  colour (17 160 pixels were with the skin alone), the frame is untouched from 40 pixels beside
+  it, the print above is as it was. A finger beside a dark grey block 645 × 220 along the edge
+  (a sleeve): found, not filled, the page unchanged byte for byte.
 - A clipped spot 60 pixels across with a halo fading over 60 pixels: on blank paper found and
   filled (centre within 6 levels of the paper); over print found, flagged, not filled.
   Pure white paper with print and no halo: no glare.
@@ -143,8 +197,8 @@ not run; `flagged` (fingers and glare over print); `inspect_look_ms`, `defects_m
 - Detection precision and recall on a real set (the issue asks for 40 photos with fingers and
   100 without), and the share of fills that look clean: three fingers on ten photos is all there
   is so far.
-- The app does not fill anything yet: wiring `fill_fingers` into the automatic look, with a
-  notice when a finger hid print and a way back, is #466.
+- A line the finger hid is not drawn on across the patch (a form's frame stops at it): that
+  would be making print up.
 - Glare and stains on real photos: not looked at. On the ten photos the stain search called the
   thumb a stain until the finger search found it; nothing else was checked.
 - Glare by merging two frames (#297) and the capture-time hints (#295): need the in-app camera.

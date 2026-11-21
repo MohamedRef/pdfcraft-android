@@ -78,6 +78,17 @@ impl Photo {
         Ok(if turned { (h, w, jpeg) } else { (w, h, jpeg) })
     }
 
+    /// The upright size of a JPEG or PNG file and what the camera wrote about its lens, from its
+    /// header alone (no pixel is decoded), with the same limits as [`Photo::decode`]: what
+    /// [`Photo::decode_with_camera`] would say of them.
+    pub fn upright_size_with_camera(bytes: &[u8]) -> Result<(u32, u32, Camera), ScanError> {
+        let (width, height, _) = Photo::upright_size(bytes)?;
+        let reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|_| ScanError::Unreadable)?;
+        let mut decoder = reader.into_decoder().map_err(|_| ScanError::Unreadable)?;
+        let lens = decoder.exif_metadata().ok().flatten().map(|exif| camera(&exif)).unwrap_or_default();
+        Ok((width, height, lens))
+    }
+
     /// The photo in shades of grey.
     pub fn luma(&self) -> Luma {
         let data = self.rgb.as_chunks::<3>().0.iter().map(|p| luma(*p)).collect();
