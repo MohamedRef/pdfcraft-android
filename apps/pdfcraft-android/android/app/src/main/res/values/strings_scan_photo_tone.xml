@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Clean scan's own tone curve for the photographs on a page of print (#784) -->
+<resources>
+    <string name="scan_lab_photo_tone">Keep the shadows and highlights of photographs on a page (Clean scan)</string>
+</resources>

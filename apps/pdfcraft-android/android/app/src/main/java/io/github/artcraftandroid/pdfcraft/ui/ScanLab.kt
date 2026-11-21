@@ -391,6 +391,14 @@ internal data class ScanLab(
      * does not release the photo waiting for it. Off: all of these as before.
      */
     val captureGuards: Boolean = true,
+    /**
+     * Clean scan gives the photographs found on a page of print the Photo document type's strength
+     * inside them (#784), so their shadows and highlights are kept while the print around them is
+     * cleaned as before. Needs the document types. On drawn pages, 21 November 2026: the fine
+     * detail of a photograph's shadows kept 0.51 of its depth instead of 0.00, of its highlights
+     * 1.22 instead of 0.24. Off: one curve for the whole page, as before.
+     */
+    val photoTone: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans and reporting what the detectors see change no page). */
     val asDesigned: Boolean get() = copy(keep = false, inspect = false) == ScanLab()
@@ -420,6 +428,7 @@ internal data class ScanLab(
         "review_borders" to reviewBorders,
         "review_return" to reviewReturn,
         "capture_guards" to captureGuards,
+        "photo_tone" to photoTone,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -436,6 +445,7 @@ internal data class ScanLab(
         .put("review_borders", reviewBorders)
         .put("review_return", reviewReturn)
         .put("capture_guards", captureGuards)
+        .put("photo_tone", photoTone)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -452,6 +462,7 @@ internal data class ScanLab(
         "review_borders" to flag(reviewBorders),
         "review_return" to flag(reviewReturn),
         "capture_guards" to flag(captureGuards),
+        "photo_tone" to flag(photoTone),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -563,6 +574,7 @@ internal data class ScanLab(
                 reviewBorders = on("review_borders", default.reviewBorders),
                 reviewReturn = on("review_return", default.reviewReturn),
                 captureGuards = on("capture_guards", default.captureGuards),
+                photoTone = on("photo_tone", default.photoTone),
             )
         }
     }
@@ -628,6 +640,10 @@ internal data class ScanTestResult(
     val flattenReused: Boolean = false,
     /** The page was found flat already and not flattened (#549). */
     val flattenSkippedFlat: Boolean = false,
+    /** The share of the page whose photographs took their own tone curve (#784); null when that was not asked for or the filter is not Clean scan. */
+    val photoToneShare: Double? = null,
+    /** Groups of blocks read as photographs and left out of it because the finger step had filled them (#784); null as above. */
+    val photoToneFingers: Int? = null,
 )
 
 /**
@@ -886,6 +902,8 @@ internal fun scanTestPageJson(
                 .put("noise", it.noise?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 100.0) / 100.0 } ?: JSONObject.NULL)
                 .put("paper_spread", it.paperSpread?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 10000.0) / 10000.0 } ?: JSONObject.NULL)
                 .put("white_point", it.whitePoint?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 1000.0) / 1000.0 } ?: JSONObject.NULL)
+                .put("photo_tone_share", it.photoToneShare?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 10000.0) / 10000.0 } ?: JSONObject.NULL)
+                .put("photo_tone_fingers", it.photoToneFingers ?: JSONObject.NULL)
                 .put("flatten_check", it.flattenCheck?.let(::scanFlattenCheckJson) ?: JSONObject.NULL)
                 .put("flatten_trim", it.trim?.let(::scanTrimJson) ?: JSONObject.NULL)
                 .put("line_flatten", it.lineFlatten?.let(::scanLineFlattenJson) ?: JSONObject.NULL)

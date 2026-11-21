@@ -302,6 +302,39 @@ impl<'a> Renderer<'a> {
         self.rows(threads, 3, |y, out, light| self.row(y, out, light))
     }
 
+    /// Mix this look into `data` (the whole page in another look, RGB8) by `weights`: a pixel of
+    /// weight 1 becomes this look's, one of weight 0 stays, in between a mix of the two. Rows
+    /// without weight are not touched, so the cost is that of the weighted part of the page.
+    /// On `threads` threads (row bands; the bytes are the same for any number).
+    pub fn blend(&self, data: &mut [u8], weights: &Weights<'_>, threads: usize) {
+        let (w, h) = (self.page.width as usize, self.page.height as usize);
+        if data.len() != w * h * 3 || w == 0 || h == 0 {
+            return;
+        }
+        let band = h.div_ceil(threads.clamp(1, 8)).max(1);
+        std::thread::scope(|scope| {
+            for (b, chunk) in data.chunks_mut(band * w * 3).enumerate() {
+                scope.spawn(move || {
+                    let (mut light, mut mine, mut weight) = (vec![0f32; self.gain[0].w * 3], vec![0u8; w * 3], vec![0f32; w]);
+                    for (i, row) in chunk.chunks_mut(w * 3).enumerate() {
+                        let y = b * band + i;
+                        if !weights.row(y, &mut weight) {
+                            continue;
+                        }
+                        self.row(y, &mut mine, &mut light);
+                        for ((o, m), &k) in row.as_chunks_mut::<3>().0.iter_mut().zip(mine.as_chunks::<3>().0).zip(&weight) {
+                            if k > 0.0 {
+                                for (o, &m) in o.iter_mut().zip(m) {
+                                    *o = (f32::from(*o) + (f32::from(m) - f32::from(*o)) * k + 0.5) as u8;
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    }
+
     /// The luminance of the page with the look, for the pixels marked in `wanted` (0 for the
     /// others; rows with none are skipped).
     pub fn toned_luma(&self, wanted: &[bool]) -> Vec<u8> {
@@ -315,6 +348,45 @@ impl<'a> Renderer<'a> {
             }
         }
         out
+    }
+}
+
+/// A weight per pixel of a `width` × `height` page from a coarse grid of `cols` × `rows` weights
+/// laid over the whole page (a block photo mask): bilinear between the cells' centres.
+pub(crate) struct Weights<'a> {
+    pub cols: usize,
+    pub rows: usize,
+    pub weight: &'a [f32],
+    pub width: usize,
+    pub height: usize,
+}
+
+impl Weights<'_> {
+    /// Whether the grid is usable and has any weight at all.
+    pub fn any(&self) -> bool {
+        self.cols > 0 && self.rows > 0 && self.weight.len() == self.cols * self.rows && self.weight.iter().any(|&w| w > 0.0)
+    }
+
+    /// The weights of page row `y` into `into` (one per pixel); false when the row has none.
+    pub fn row(&self, y: usize, into: &mut [f32]) -> bool {
+        if !(self.cols > 0 && self.rows > 0 && self.weight.len() == self.cols * self.rows) || self.height == 0 || self.width == 0 {
+            return false;
+        }
+        let v = ((y as f32 + 0.5) * self.rows as f32 / self.height as f32 - 0.5).clamp(0.0, (self.rows - 1) as f32);
+        let r0 = v.floor() as usize;
+        let (r1, fv) = ((r0 + 1).min(self.rows - 1), v - r0 as f32);
+        let (top, bottom) = (&self.weight[r0 * self.cols..(r0 + 1) * self.cols], &self.weight[r1 * self.cols..(r1 + 1) * self.cols]);
+        if top.iter().chain(bottom).all(|&w| w <= 0.0) {
+            return false;
+        }
+        for (x, out) in into.iter_mut().enumerate().take(self.width) {
+            let u = ((x as f32 + 0.5) * self.cols as f32 / self.width as f32 - 0.5).clamp(0.0, (self.cols - 1) as f32);
+            let c0 = u.floor() as usize;
+            let (c1, fu) = ((c0 + 1).min(self.cols - 1), u - c0 as f32);
+            let (a, b) = (top[c0] + (top[c1] - top[c0]) * fu, bottom[c0] + (bottom[c1] - bottom[c0]) * fu);
+            *out = (a + (b - a) * fv).clamp(0.0, 1.0);
+        }
+        true
     }
 }
 

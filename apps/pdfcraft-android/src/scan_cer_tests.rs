@@ -89,6 +89,7 @@ fn sharpening_print_does_not_make_text_recognition_worse() {
             keep_paper: false,
             shape: Default::default(),
             grain_white: true,
+            photo_gentle: true,
         };
         let Pixels::Rgb(data) = apply_full(page, Look::Auto, &params).unwrap().pixels else { panic!("Clean scan gives colour") };
         Rgb { width: page.width, height: page.height, data }

@@ -102,6 +102,9 @@ internal fun AppViewModel.requestScanPreview(index: Int, page: ScanPage, flatten
             "skip_flat" to lab.skipFlat, "flatten_skipped_flat" to (p?.flattenSkippedFlat ?: false),
             // the automatic look decided the page's flattening (#466)
             "flatten_decided" to autoFlatten,
+            // the photographs' own tone curve (#784): the option, the share of the page that took it, fingers left out
+            "photo_tone" to lab.photoTone, "photo_tone_share" to (p?.photoTone?.share?.toDouble() ?: -1.0),
+            "photo_tone_fingers" to (p?.photoTone?.fingersLeftOut?.toLong() ?: -1L),
             // fingers at the page's edge removed after Clean scan (#466)
             *io.github.artcraftandroid.pdfcraft.ui.scan.scanFingersDiag(io.github.artcraftandroid.pdfcraft.ui.scan.scanRemovesFingers(lab, page.auto), io.github.artcraftandroid.pdfcraft.ui.scan.ScanFingerCounts.of(p?.fingers)),
             // the person's own choice for the page, and the strip of table trimmed from a flattened one (#302)
