@@ -33,8 +33,13 @@ internal data class ScanBatchPass(
     val changed: Set<String> = emptySet(),
     /** How many pages with markup were in the chosen ones when it opened (#495). */
     val withMarks: Int = 0,
+    /** Where it opened from (#783): `selection`, `offer`, or for a review of flagged pages `unsure` or `save`. */
+    val from: String = "selection",
 ) {
     val key: String? get() = keys.getOrNull(at)
+
+    /** A review of the pages whose borders need a check (#783), not a pass over chosen pages. */
+    val review: Boolean get() = scanBatchIsReview(from)
 }
 
 /** Where a pass goes from [pass] when the page shown is left towards [dir] (-1, +1; 0 is the tick): null when it ends. */
@@ -139,4 +144,10 @@ internal class ScanBatchState {
 
     /** The unsure pages whose offer the person closed (#758): it comes back only for others. */
     var unsureDismissed by mutableStateOf<Set<String>>(emptySet())
+
+    /** "N pages may have the wrong borders" before Save PDF or Share (#783), or null. */
+    var saveAsk by mutableStateOf<ScanReviewSaveAsk?>(null)
+
+    /** The pages the person chose to save as they are (#783): Save does not ask about them again. They stay marked. */
+    var saveAccepted: Set<String> = emptySet()
 }

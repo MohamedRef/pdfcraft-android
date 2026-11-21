@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The review of pages whose borders need a check (#783): the mark on the document screen, the borders pass's words and the question before Save -->
+<resources>
+    <string name="scan_lab_review_borders">تمييز الصفحات التي تحتاج حوافها إلى مراجعة، والسؤال قبل حفظها</string>
+    <string name="scan_review_badge">راجِع الحواف</string>
+    <string name="scan_review_place">%1$d من %2$d للمراجعة</string>
+    <string name="scan_review_unsure">قد تكون هذه الحواف غير صحيحة. اسحب الزوايا إلى الصفحة.</string>
+    <string name="scan_review_save_body">لم يُعثر على صفحة فيها، أو أن حوافها غير مؤكدة. الصفحة التي لا تراجعها تُحفظ كما هي الآن.</string>
+    <string name="scan_review_save_anyway">حفظ على أي حال</string>
+    <string name="scan_review_share_anyway">مشاركة على أي حال</string>
+    <string name="scan_review_leave_title">الاحتفاظ بالحواف التي حرّكتها؟</string>
+    <string name="scan_review_leave_body">«تجاهل» يعيد هذه الصفحة كما كانت. الصفحات التي غادرتها تحتفظ بحوافها.</string>
+</resources>

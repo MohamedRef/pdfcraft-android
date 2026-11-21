@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -34,6 +35,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
@@ -61,19 +63,35 @@ internal class ScanBordersStep(
 )
 
 /** A borders pass's place (#515): page [at] (from 1) of [count], and leaving the page shown towards -1, +1 or 0 (the tick) with its corners. */
-internal class ScanBatchNav(val at: Int, val count: Int, val onLeave: (Int, FloatArray, ScanCropStats) -> Unit, val onBack: () -> Unit)
+internal class ScanBatchNav(
+    val at: Int,
+    val count: Int,
+    val onLeave: (Int, FloatArray, ScanCropStats) -> Unit,
+    val onBack: () -> Unit,
+    /** In a review of flagged pages (#783): what the page shown was when it opened; null in a pass over chosen pages. */
+    val review: ScanReviewState? = null,
+    /** Back with corners moved on the page shown asks first (#783), and Keep comes here; null when Back does not ask. */
+    val onBackKeep: ((FloatArray, ScanCropStats) -> Unit)? = null,
+    /** Discard to that question: the page shown stays as it was and the pass ends. */
+    val onBackDrop: (() -> Unit)? = null,
+)
 
 /** The pass's counter between Previous and Next (#515). */
 @Composable
 internal fun ScanBatchNavRow(nav: ScanBatchNav, onGo: (Int) -> Unit) {
     val c = pdfColors
+    // a review counts the pages to check; the page's own number in the scan is in the header above (#783)
+    val reviewing = nav.review != null
+    // with the review, the arrows point the way the pages go in a right-to-left language too
+    val rtl = reviewing && LocalLayoutDirection.current == LayoutDirection.Rtl
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        ScanBarButton(LucideIcons.ChevronLeft, stringResource(R.string.tools_previous_page), nav.at > 1) { onGo(-1) }
+        ScanBarButton(if (rtl) LucideIcons.ChevronRight else LucideIcons.ChevronLeft, stringResource(R.string.tools_previous_page), nav.at > 1) { onGo(-1) }
         Text(
-            stringResource(R.string.tools_page_of, nav.at, nav.count), color = c.text, fontSize = 15.sp,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            stringResource(if (reviewing) R.string.scan_review_place else R.string.tools_page_of, nav.at, nav.count), color = c.text, fontSize = 15.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.weight(1f).padding(horizontal = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
         )
-        ScanBarButton(LucideIcons.ChevronRight, stringResource(if (nav.at < nav.count) R.string.tools_next_page else R.string.common_done)) { onGo(if (nav.at < nav.count) 1 else 0) }
+        ScanBarButton(if (rtl) LucideIcons.ChevronLeft else LucideIcons.ChevronRight, stringResource(if (nav.at < nav.count) R.string.tools_next_page else R.string.common_done)) { onGo(if (nav.at < nav.count) 1 else 0) }
     }
 }
 
@@ -92,7 +110,10 @@ internal fun ScanBordersHeader(step: ScanBordersStep, index: Int) {
                     Text(stringResource(R.string.scan_borders_searching), color = c.textSecondary, fontSize = 13.sp)
                 }
                 ScanBordersFinding.NotFound -> Text(stringResource(R.string.scan_borders_not_found), color = c.text, fontSize = 14.sp)
-                ScanBordersFinding.Found -> Unit
+                // in a review (#783): why a page whose outline was found is shown
+                ScanBordersFinding.Found -> if (step.batch?.review == ScanReviewState.Unsure) {
+                    Text(stringResource(R.string.scan_review_unsure), color = c.text, fontSize = 14.sp)
+                }
             }
         }
     }

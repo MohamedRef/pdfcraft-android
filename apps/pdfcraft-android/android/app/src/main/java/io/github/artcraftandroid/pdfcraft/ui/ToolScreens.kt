@@ -18,7 +18,9 @@ import io.github.artcraftandroid.pdfcraft.ui.scan.clearScanMarks
 import io.github.artcraftandroid.pdfcraft.ui.scan.openScanMarkup
 import io.github.artcraftandroid.pdfcraft.ui.scan.scanCornersChanging
 import io.github.artcraftandroid.pdfcraft.ui.scan.answerScanBatchMarks
+import io.github.artcraftandroid.pdfcraft.ui.scan.answerScanReviewSave
 import io.github.artcraftandroid.pdfcraft.ui.scan.cancelScanBatch
+import io.github.artcraftandroid.pdfcraft.ui.scan.scanReviewOf
 import io.github.artcraftandroid.pdfcraft.ui.scan.endScanLookBatch
 import io.github.artcraftandroid.pdfcraft.ui.scan.leaveScanBatchPage
 import io.github.artcraftandroid.pdfcraft.ui.scan.scanBatchLost
@@ -876,6 +878,11 @@ data class ScanPage(
     val auto: io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks = io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks(),
     /** Marks made by hand on the page (#495): eraser, pen, highlighter and text; null for none. */
     val marks: io.github.artcraftandroid.pdfcraft.ui.scan.ScanMarks? = null,
+    /**
+     * What the draft knew of the page's borders when it was reopened (#783); null for a page taken or
+     * imported in this run of the app, whose search's report ([finding]) says it.
+     */
+    val reviewKept: io.github.artcraftandroid.pdfcraft.ui.scan.ScanReviewState? = null,
 ) {
     /** The page among the scan's pages: the two halves of a spread share one photo [file]. */
     val key: String get() = book?.let { "${file.absolutePath}#${it.side}" } ?: file.absolutePath
@@ -942,12 +949,25 @@ fun ScanScreen(vm: AppViewModel) {
     vm.scanBatch.asking?.let { ask ->
         io.github.artcraftandroid.pdfcraft.ui.scan.ScanBatchMarksDialog(ask.marked.size, onKeep = { vm.answerScanBatchMarks(remove = false) }, onRemove = { vm.answerScanBatchMarks(remove = true) })
     }
+    // "N pages may have the wrong borders" before Save PDF or Share stores them as they are (#783)
+    vm.scanBatch.saveAsk?.let { ask ->
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanReviewSaveDialog(
+            ask.keys.size, ask.share,
+            onCheck = { vm.answerScanReviewSave(check = true, save = false) },
+            onSave = { vm.answerScanReviewSave(check = false, save = true) },
+            onCancel = { vm.answerScanReviewSave(check = false, save = false) },
+        )
+    }
     // Borders for several pages in one pass (#515): Adjust borders on each chosen page in turn
     val batchPass = vm.scanBatch.borders
     val batchAt = batchPass?.key?.let { k -> pages.indexOfFirst { it.key == k } } ?: -1
     LaunchedEffect(batchPass, batchAt) { if (batchPass != null && batchAt < 0) vm.scanBatchLost() }
     if (batchPass != null && batchAt >= 0) {
         val p = pages[batchAt]
+        // the review (#783): Back on a page whose corners were moved asks, and these are its answers
+        val reviewOn = vm.scanLab.options.reviewBorders
+        val keepOnBack: (FloatArray, io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats) -> Unit = { q, stats -> vm.leaveScanBatchPage(0, q, stats, back = true) }
+        val dropOnBack: () -> Unit = { vm.cancelScanBatch(dropped = true) }
         io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropScreen(
             p, batchAt, vm.scanLab.options,
             onDone = { _, _ -> }, onCancel = {},
@@ -962,6 +982,10 @@ fun ScanScreen(vm: AppViewModel) {
                     batchPass.at + 1, batchPass.keys.size,
                     onLeave = { dir, q, stats -> vm.leaveScanBatchPage(dir, q, stats) },
                     onBack = { vm.cancelScanBatch() },
+                    // a review of flagged pages (#783): what this page is, and Back asking about moved corners
+                    review = if (batchPass.review && reviewOn) vm.scanReviewOf(p) else null,
+                    onBackKeep = if (reviewOn) keepOnBack else null,
+                    onBackDrop = if (reviewOn) dropOnBack else null,
                 ),
             ),
         )

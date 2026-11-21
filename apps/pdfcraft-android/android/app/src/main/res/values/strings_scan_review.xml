@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The review of pages whose borders need a check (#783): the mark on the document screen, the borders pass's words and the question before Save -->
+<resources>
+    <string name="scan_lab_review_borders">Mark pages whose borders need a check, and ask before saving them</string>
+    <string name="scan_review_badge">Check borders</string>
+    <string name="scan_review_place">%1$d of %2$d to check</string>
+    <string name="scan_review_unsure">These borders may be wrong. Drag the corners to the page.</string>
+    <string name="scan_review_save_body">No page was found on them, or their borders are uncertain. A page you do not check is saved as it is now.</string>
+    <string name="scan_review_save_anyway">Save anyway</string>
+    <string name="scan_review_share_anyway">Share anyway</string>
+    <string name="scan_review_leave_title">Keep the borders you moved?</string>
+    <string name="scan_review_leave_body">Discard puts this page back as it was. The pages you already left keep their borders.</string>
+</resources>
