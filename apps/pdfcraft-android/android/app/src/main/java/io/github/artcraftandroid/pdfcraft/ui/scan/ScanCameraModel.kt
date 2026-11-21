@@ -149,9 +149,43 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
         if (target != null && route != ScanCaptureRoute.InApp && route != ScanCaptureRoute.ImportOnly && granted) route = ScanCaptureRoute.InApp
     }
 
-    fun hide() {
+    /** The camera screen closes. [keepSession] for Review pages (#780): the photos Undo knows are kept for the way back. */
+    fun hide(keepSession: Boolean = false) {
         target = null
         merging = false
+        if (!keepSession) session = ScanCameraSession()
+    }
+
+    /** The photos this camera handed to the scan since it opened (#780): what Undo takes back and what Done waits for. */
+    var session by mutableStateOf(ScanCameraSession())
+        private set
+
+    /** A photo went to the scan, at [at] (elapsed milliseconds). */
+    fun sessionHanded(path: String, at: Long) {
+        session = session.handed(path, at)
+    }
+
+    /** The scan's pages as they are now: photos among them are pages, and the log says how long each took to become one. */
+    fun sessionSeen(pagePaths: List<String>, at: Long) {
+        val before = session
+        val next = before.seen(pagePaths)
+        if (next == before) return
+        for (h in before.newlySeen(pagePaths)) Diag.event(DiagArea.Scan, "camera_page", "wait_ms" to (at - h.at), "pages" to pagePaths.size, "pending" to next.pending)
+        session = next
+    }
+
+    /** Photos that never became pages are given up on. */
+    fun sessionExpire(at: Long) {
+        val before = session
+        val next = before.expired(at)
+        if (next == before) return
+        Diag.event(DiagArea.Scan, "camera_page_lost", "count" to (before.handed.size - next.handed.size), "waited_ms" to ScanCameraSession.PENDING_MS)
+        session = next
+    }
+
+    /** Undo took the photo at [path] back. */
+    fun sessionUndone(path: String) {
+        session = session.undone(path)
     }
 
     private companion object {

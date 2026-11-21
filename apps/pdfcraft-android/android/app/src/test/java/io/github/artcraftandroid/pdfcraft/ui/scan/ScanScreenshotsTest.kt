@@ -83,21 +83,33 @@ class ScanScreenshotsTest {
         val frame = drawnPage(960, 1280, tilted = true, background = 0xFF3A3530.toInt()).asImageBitmap()
         val thumb = drawnPage(90, 120, tilted = false, background = 0xFFE0E0E0.toInt()).asImageBitmap()
         var mode by androidx.compose.runtime.mutableStateOf<ScanCameraMode?>(ScanCameraMode.Single)
+        // Review pages, Undo and Done as separate buttons (#780): null is the bar before them
+        var controls by androidx.compose.runtime.mutableStateOf<ScanCameraControls?>(null)
         rule.setContent {
             val m = mode
-            if (m != null) CameraBars(model, m, frame, thumb)
+            if (m != null) CameraBars(model, m, frame, thumb, controls)
             else Box(Modifier.fillMaxSize().background(Color.Black)) { ScanCameraPermissionView(ScanCaptureRoute.AskPermission, actions) }
         }
         for (m in ScanCameraMode.entries) {
             mode = m
             shoot("camera_${m.id}_$config")
         }
+        // the separate buttons in Many pages: before the first photo, with three pages, and while a photo is on its way
+        mode = ScanCameraMode.Batch
+        val all = ScanCameraControl.entries.toSet()
+        controls = scanCameraControls(all, pages = 0, pending = 0, undoable = false, busy = false)
+        shoot("camera_buttons_empty_$config")
+        controls = scanCameraControls(all, pages = 3, pending = 0, undoable = true, busy = false)
+        shoot("camera_buttons_pages_$config")
+        controls = scanCameraControls(all, pages = 3, pending = 1, undoable = true, busy = false)
+        shoot("camera_buttons_adding_$config")
+        controls = null
         mode = null
         shoot("camera_permission_$config")
     }
 
     @androidx.compose.runtime.Composable
-    private fun CameraBars(model: ScanCameraModel, mode: ScanCameraMode, frame: ImageBitmap, thumb: ImageBitmap) {
+    private fun CameraBars(model: ScanCameraModel, mode: ScanCameraMode, frame: ImageBitmap, thumb: ImageBitmap, controls: ScanCameraControls? = null) {
         Column(Modifier.fillMaxSize().background(Color.Black)) {
             ScanCameraTopBar(model, actions, live = true, torchAvailable = true, torch = false, onTorch = {})
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -106,6 +118,12 @@ class ScanScreenshotsTest {
                 ScanZoomButton(1f, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp)) {}
             }
             ScanCameraModeRow(mode, bookAvailable = true) {}
+            if (controls != null) {
+                ScanCameraActionBar(controls, thumb.takeIf { controls.pages > 0 }, finishing = false, onImport = {}, onControl = {}) {
+                    Box(Modifier.size(72.dp).clip(CircleShape).background(Color.White))
+                }
+                return@Column
+            }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { ScanImportButton {} }
                 Box(Modifier.size(72.dp).clip(CircleShape).background(Color.White))

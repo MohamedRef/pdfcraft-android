@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -112,6 +113,12 @@ internal class ScanCameraActions(
     val onAskPermission: () -> Unit,
     /** Open the app's page in the system settings, to allow the camera there. */
     val onOpenSettings: () -> Unit,
+    /** Review pages (#780): the camera steps aside for the pages so far; the scan is not ended. */
+    val onReview: () -> Unit = {},
+    /** Undo (#780): the last photo this camera took comes out of the scan; the camera stays open. */
+    val onUndo: () -> Unit = {},
+    /** Done (#780), apart from Close: the scan's pages are finished with. As Close until a caller says otherwise. */
+    val onDone: () -> Unit = onClose,
 )
 
 /**
@@ -122,7 +129,11 @@ internal class ScanCameraActions(
  * so everything after the shot is as it was with the phone's camera app.
  */
 @Composable
-internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null, bar: Boolean = false, turnedLooks: Boolean = true, autoEased: Boolean = true, sheetCheck: Boolean = true) {
+internal fun ScanCameraScreen(
+    model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null, bar: Boolean = false, turnedLooks: Boolean = true, autoEased: Boolean = true, sheetCheck: Boolean = true,
+    /** Review pages, Undo and Done each a button (#780, with [bar]); [pagePaths] are the pages' photo files, in the pages' order. */
+    buttons: Boolean = false, pagePaths: List<String> = emptyList(),
+) {
     val file = model.target ?: return
     BackHandler { actions.onClose() }
     // the permission may have been granted in the system settings meanwhile
@@ -134,7 +145,7 @@ internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, 
     }
     Box(Modifier.fillMaxSize().background(Color.Black).scanCameraKeepsTouches().windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (model.route) {
-            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar, turnedLooks, autoEased, sheetCheck)
+            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar, turnedLooks, autoEased, sheetCheck, buttons && bar, pagePaths)
             else -> if (bar) ScanCameraPermissionView(model.route, actions) else NoCameraView(model.route, actions)
         }
     }
@@ -178,7 +189,10 @@ private fun NoCameraView(route: ScanCaptureRoute, actions: ScanCameraActions) {
 
 /** The camera, once allowed. */
 @Composable
-private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean, turnedLooks: Boolean, autoEased: Boolean, sheetCheck: Boolean) {
+private fun CameraView(
+    file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean, turnedLooks: Boolean, autoEased: Boolean, sheetCheck: Boolean,
+    controlsOn: Boolean, pagePaths: List<String>,
+) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -200,6 +214,15 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
     var shutterAt by remember { mutableStateOf(0L) }
     // the mode (#457): One page closes the camera after the photo; with the old bar every photo is added
     val mode = model.modeShown(book)
+    // Review pages, Undo and Done (#780): photos taken here, the line that follows one, the reason a control cannot act, and Done waiting for a photo to become a page
+    var accepts by remember { mutableIntStateOf(0) }
+    var cue by remember { mutableStateOf(false) }
+    var blocked by remember { mutableStateOf<ScanCameraBlock?>(null) }
+    var blockedAt by remember { mutableStateOf(0L) }
+    var finishing by remember { mutableStateOf(false) }
+    // a photo that arrives after this screen was left is not added to the scan, and opens no camera again
+    val left = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    DisposableEffect(Unit) { onDispose { left.set(true) } }
     // the zoom (#457): pinch or the 1×/2× button; 1× for each time the camera opens
     var zoom by remember { mutableFloatStateOf(ScanZoom.MIN) }
     val transformer = remember { MutableCoordinateTransformer() }
@@ -364,6 +387,11 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
 
         fun ended() {
             bursting = false
+            if (controlsOn && left.get()) {
+                files.forEach { it.delete() }
+                Diag.event(DiagArea.Scan, "camera_late", "frames" to saved.size)
+                return
+            }
             val ok = saved.isNotEmpty() && saved.first() == file && scanCaptureUsable(file.isFile, file.length())
             if (!ok) {
                 files.forEach { it.delete() }
@@ -398,6 +426,8 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             // the photo goes to the scan before Done (if pressed meanwhile) closes the screen
             actions.onCaptured(file, facts, scanCameraKeepsOpen(bar, mode, retaking, state.doneQueued), if (why.burst) saved.toList() else emptyList())
             dispatch(ScanCameraEvent.CaptureEnded(true, SystemClock.elapsedRealtime()))
+            // the line under the viewfinder says so at once (#780)
+            if (controlsOn) accepts++
         }
 
         fun shoot(i: Int) {
@@ -432,7 +462,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                 ?: dispatch(ScanCameraEvent.FocusEnded(false, SystemClock.elapsedRealtime()))
             ScanCameraEffect.Capture -> takePicture()
             ScanCameraEffect.ShowError -> error = true
-            ScanCameraEffect.Finish -> actions.onClose()
+            ScanCameraEffect.Finish -> if (controlsOn) actions.onDone() else actions.onClose()
         }
     }
 
@@ -463,7 +493,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                 val (next, shoot) = auto.reduce(ScanAutoEvent.Seen(ScanAutoInputs(now, hint == ScanLiveHint.Ready, stillness.still(now), shown.points != null, lastSignature)))
                 auto = next
                 if (next.phase != before) Diag.event(DiagArea.Scan, "camera_auto_phase", "phase" to next.phase.id)
-                if (shoot && state.shutterReady && camera != null && !model.merging) {
+                if (shoot && state.shutterReady && camera != null && !model.merging && !finishing) {
                     shutterAt = now
                     dispatch(ScanCameraEvent.Shutter(now))
                 } else if (shoot) {
@@ -484,6 +514,40 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
     LaunchedEffect(camera, zoom) { if (bar) camera?.cameraControl?.setZoomRatio(zoom) }
     // a new target is a new page: the screen is ready for it
     LaunchedEffect(file) { if (state.phase == ScanCameraPhase.Finished) state = ScanCameraState() }
+
+    // Review pages, Undo and Done (#780): what the bar shows and whether each can act now
+    val session = model.session
+    val busy = state.phase == ScanCameraPhase.Capturing || state.captureQueued || bursting || model.merging || finishing
+    val controls = scanCameraControls(scanCameraControlsShown(controlsOn, mode, retaking, pages.size), pages.size, session.pending, session.undoTarget(pagePaths) != null, busy)
+    // photos become pages a little after they are taken: the session is told when they have, and stops waiting for one that never does
+    LaunchedEffect(pagePaths) { if (controlsOn) model.sessionSeen(pagePaths, SystemClock.elapsedRealtime()) }
+    LaunchedEffect(session) {
+        val at = session.nextExpiry() ?: return@LaunchedEffect
+        delay((at - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
+        model.sessionExpire(SystemClock.elapsedRealtime())
+    }
+    // a photo taken, or the page count changed (a page added, or Undo): said under the viewfinder for a moment
+    val pagesSeen = remember { intArrayOf(pages.size) }
+    LaunchedEffect(accepts, pages.size) {
+        if (!controlsOn || (accepts == 0 && pages.size == pagesSeen[0])) return@LaunchedEffect
+        pagesSeen[0] = pages.size
+        cue = true
+        delay(ScanCameraCue.MS)
+        cue = false
+    }
+    LaunchedEffect(blockedAt) {
+        if (blocked != null) {
+            delay(ScanCameraCue.BLOCKED_MS)
+            blocked = null
+        }
+    }
+    // Done pressed while a photo was still becoming a page: it goes on once the page is there
+    LaunchedEffect(finishing, session.pending) {
+        if (finishing && session.pending == 0) {
+            finishing = false
+            dispatch(ScanCameraEvent.Done(SystemClock.elapsedRealtime(), keepQueued = true))
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         // top (#457): close, then icons with an on/off shape: light, auto-capture, grid, and ⋮ for the phone's camera app
@@ -578,12 +642,25 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             }
         }
         // the page outline's advice (#295), or the error of a failed capture
-        Box(Modifier.fillMaxWidth().height(32.dp).semantics { liveRegion = LiveRegionMode.Polite }, contentAlignment = Alignment.Center) {
+        Box(
+            // with the separate buttons the line may hold a sentence: it grows rather than cut it (#780)
+            (if (controlsOn) Modifier.fillMaxWidth().heightIn(min = 32.dp).padding(horizontal = 16.dp) else Modifier.fillMaxWidth().height(32.dp)).semantics { liveRegion = LiveRegionMode.Polite },
+            contentAlignment = Alignment.Center,
+        ) {
             val h = hint
+            val why = blocked?.let { scanCameraBlockText(it) }
             if (error) {
                 Text(stringResource(R.string.scan_camera_failed), color = Color.White, fontSize = 14.sp)
+            } else if (why != null) {
+                // a control that cannot act was pressed (#780): why
+                Text(stringResource(why), color = Color.White, fontSize = 14.sp, textAlign = TextAlign.Center)
+            } else if (controlsOn && (finishing || state.doneQueued)) {
+                Text(stringResource(R.string.scan_camera_finishing), color = Color.White, fontSize = 14.sp, textAlign = TextAlign.Center)
             } else if (bursting || model.merging) {
                 Text(stringResource(R.string.scan_merge_working), color = Color.White, fontSize = 14.sp)
+            } else if (cue && ScanCameraControl.Done in controls.shown) {
+                // the photo just taken, then the pages counted (#780)
+                ScanCameraCueLine(ScanCameraCue.of(controls.pages, controls.pending), controls.pages)
             } else if (autoOn && auto.phase == ScanAutoPhase.Arming) {
                 // the countdown can be skipped: this page is then left until a new one is in view
                 Text(
@@ -606,7 +683,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             }
         }
         val shutterLabel = stringResource(R.string.scan_camera_shutter)
-        val ready = state.shutterReady && camera != null && !failed && !bursting && !model.merging
+        val ready = state.shutterReady && camera != null && !failed && !bursting && !model.merging && !finishing
         val shutter: @Composable () -> Unit = {
             Box(Modifier.size(84.dp), contentAlignment = Alignment.Center) {
                 // the countdown before an automatic shot, around the shutter
@@ -625,7 +702,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                         .semantics { contentDescription = shutterLabel },
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (state.phase == ScanCameraPhase.Capturing || state.captureQueued || bursting || model.merging) CircularProgressIndicator(Modifier.size(32.dp), color = Color.Black, strokeWidth = 3.dp)
+                    if (state.phase == ScanCameraPhase.Capturing || state.captureQueued || bursting || model.merging || finishing) CircularProgressIndicator(Modifier.size(32.dp), color = Color.Black, strokeWidth = 3.dp)
                 }
             }
         }
@@ -633,6 +710,36 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
         if (bar) {
             // the mode row above the shutter (#457); a retake is one photo whatever the mode
             if (!retaking) ScanCameraModeRow(mode, book != null) { model.updateMode(it, book) }
+            if (controlsOn) {
+                // bottom (#780): Import and Review pages, the shutter, Undo and Done, each a button in a place of its own
+                ScanCameraActionBar(
+                    controls, if (retaking) null else pages.lastOrNull(), finishing || state.doneQueued, actions.onImport,
+                    onControl = { control ->
+                        val block = controls.block(control)
+                        if (block != ScanCameraBlock.None) {
+                            // it cannot act now: the line under the viewfinder says why
+                            blocked = block
+                            blockedAt = SystemClock.elapsedRealtime()
+                            Diag.event(DiagArea.Scan, "camera_action", *scanCameraActionDiag(control.id, "blocked", block, controls.pages, controls.pending))
+                        } else {
+                            blocked = null
+                            when (control) {
+                                ScanCameraControl.Review -> actions.onReview()
+                                ScanCameraControl.Undo -> actions.onUndo()
+                                // a photo still becoming a page is waited for; one being taken is waited for by the reducer
+                                ScanCameraControl.Done -> if (controls.pending > 0) {
+                                    finishing = true
+                                    Diag.event(DiagArea.Scan, "camera_action", *scanCameraActionDiag(control.id, "waits", ScanCameraBlock.Busy, controls.pages, controls.pending))
+                                } else {
+                                    dispatch(ScanCameraEvent.Done(SystemClock.elapsedRealtime(), keepQueued = true))
+                                }
+                            }
+                        }
+                    },
+                    shutter = shutter,
+                )
+                return@Column
+            }
             // bottom (#457): Import, the shutter, the last page with the count, each always in its place
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { ScanImportButton(actions.onImport) }

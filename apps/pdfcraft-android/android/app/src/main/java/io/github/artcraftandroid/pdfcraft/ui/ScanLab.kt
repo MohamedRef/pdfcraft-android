@@ -360,6 +360,13 @@ internal data class ScanLab(
      * grid alone, as before.
      */
     val continuousPages: Boolean = true,
+    /**
+     * The camera's bottom bar has Review pages, Undo and Done each as a button of its own (#780),
+     * with Import: the count is of the pages in the scan, a photo is confirmed under the viewfinder
+     * at once, and a button that cannot act says why. Needs the camera's modes and icon bar. Off:
+     * the one thumbnail that was also Done, as before.
+     */
+    val cameraButtons: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans and reporting what the detectors see change no page). */
     val asDesigned: Boolean get() = copy(keep = false, inspect = false) == ScanLab()
@@ -385,6 +392,7 @@ internal data class ScanLab(
         "sheet_check" to sheetCheck,
         "first_picture" to firstPicture,
         "continuous_pages" to continuousPages,
+        "camera_buttons" to cameraButtons,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -397,6 +405,7 @@ internal data class ScanLab(
         .put("sheet_check", sheetCheck)
         .put("first_picture", firstPicture)
         .put("continuous_pages", continuousPages)
+        .put("camera_buttons", cameraButtons)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -409,6 +418,7 @@ internal data class ScanLab(
         "sheet_check" to flag(sheetCheck),
         "first_picture" to flag(firstPicture),
         "continuous_pages" to flag(continuousPages),
+        "camera_buttons" to flag(cameraButtons),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -516,6 +526,7 @@ internal data class ScanLab(
                 sheetCheck = on("sheet_check", default.sheetCheck),
                 firstPicture = on("first_picture", default.firstPicture),
                 continuousPages = on("continuous_pages", default.continuousPages),
+                cameraButtons = on("camera_buttons", default.cameraButtons),
             )
         }
     }

@@ -116,9 +116,71 @@ JVM test cannot run it, so the test uses the screen as it is on a phone without 
 has the same outer layer). A scan kept before this change keeps such a turn: Rotate on the page,
 three times, puts it right.
 
+## Review pages, Undo and Done (#780)
+
+Until this change the last page's thumbnail, bottom right, was also Done: one target for "look at
+what I have" and "I am finished", and nothing to take a photo back with. In Many pages and Book
+the bottom bar now has five places, the same before and after the first photo:
+
+| Import | Review pages | shutter | Undo | Done |
+|---|---|---|---|---|
+
+(mirrored in Arabic). The four beside the shutter are equal shares of the width, each button at
+least 56 dp, and a place stays empty rather than close up, so the shutter is always in the middle.
+One page shows Import and, once the scan has pages, Review pages; a retake shows Import only.
+
+- **Review pages**: the last page with the page count on a badge, an empty page outline before the
+  first. It closes the camera without ending anything and shows the newest page in Enhance
+  (Retake, Borders, Rotate and the rest of its bar; a swipe or Back for the other pages). **Add page** (Enhance's
+  More menu, or the pages screen) brings the camera back, and Undo still knows the photos taken
+  before. With "Scan screens in steps" off it shows the scan screen as it was.
+- **Undo**: the last photo this camera took since it opened comes out of the scan, by the path
+  Delete on a page uses, so its file goes too; again, and the one before goes. A book photo's two
+  pages go together, wherever they were moved. Never an imported photo or a page that was in the
+  scan before the camera opened. Undo of the only page leaves an empty scan with the camera open;
+  closing the camera then ends the scan (logged as `discard` with 0 pages).
+- **Done**: the document screen, as the thumbnail did. A photo being taken is waited for; so is
+  one asked for and still focusing (it was dropped before), and one taken but not yet a page. If
+  that photo fails, the camera stays open with the error. The screen closes once.
+- **Close** (✕, Android's Back) is as before: with pages it leads to the document screen, losing
+  nothing; without, it ends the scan. A photo that arrives after the screen was left is deleted:
+  before, it could be added and the camera opened again.
+- **A button that cannot act** stays where it is, fainter and without its circle. Pressed, the
+  line under the viewfinder says why for three seconds: no pages yet; a photo is being added;
+  nothing here to undo. TalkBack reads the reason as the button's state. The rules are
+  `scanCameraControls` in `ScanCameraControls.kt`.
+- **After a photo** the line under the viewfinder says "Photo taken. Adding the page." at once,
+  then "3 pages in this scan" when the page is in (1.5 s; also after Undo). The count on the badge
+  and in that line is of pages in the scan, never of photos still on their way; a ring turns on
+  the Review pages button while one is.
+
+Taps, counted in the code and not on a phone: a page, 1 (the shutter); review the newest page, 1;
+back to the camera from there, 2 (More, Add page); retake a page under review, 1 (Retake) plus the
+shutter, after which the camera closes as a retake does; undo, 1; finish, 1.
+
+Testing option "Review pages, Undo and Done as separate camera buttons" (`camera_buttons`, on;
+it needs the camera's modes and icon bar). Off is the bar as it was, the old Done rules included.
+Log: `camera_action`, `camera_page`, `camera_page_lost`, `camera_late`
+([ANDROID_DIAGNOSTICS_LOG.md](ANDROID_DIAGNOSTICS_LOG.md)). Page file: `options.camera_buttons`.
+An undone photo is deleted with its page, so it is not in a kept scan.
+
+Verified: `ScanCameraControlsTest` (what the bar shows, when each button can act, Undo's choice
+with imports, book photos, pages deleted elsewhere and photos still on their way, Done with a
+photo focusing, failing, and with the option off); the pure code was compiled and those tests run
+on a desktop with a stand-alone Kotlin compiler. Not verified: everything on a phone or tablet;
+the Compose code of the bar (not compiled here; CI is its first compile); the look in Arabic and
+with large text (the screenshot test draws `camera_buttons_*` when asked, and was not run here);
+TalkBack; the time from the shutter to the count (`camera_page wait_ms` will say).
+
+Not done here, and why: a one-tap way back to the camera from Enhance (it needs the Enhance
+screen's file); Import during a scan still closes the camera for the imported pages (a cancelled
+picker leaves the camera as it was); the page joins the scan only after its thumbnail is read, so
+the count follows the photo by that long (`ui/ScanPhotoJobs.kt`); landscape and tablet proportions.
+
 ## Where the code is
 
 `ui/scan/ScanCameraLogic.kt` (decisions, reducer), `ScanCameraScreen.kt` (CameraX and the
 screen), `ScanCameraRouter.kt` (which camera, permission, import; registered by `MainActivity`),
-`ScanCameraModel.kt` (state and the setting), `ScanCameraSetting.kt` (the setting's row),
+`ScanCameraModel.kt` (state and the setting), `ScanCameraControls.kt` (Review pages, Undo and Done:
+the rules, #780), `ScanCameraBars.kt` (the bars), `ScanCameraSetting.kt` (the setting's row),
 `ScanCapture.kt` (what is recorded). Strings: `res/values*/strings_scan_camera.xml`.

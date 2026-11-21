@@ -112,8 +112,11 @@ internal sealed interface ScanCameraEvent {
     /** The capture ended: [ok] when the photo was written. */
     data class CaptureEnded(val ok: Boolean, override val at: Long) : ScanCameraEvent
 
-    /** Done (or Close) was pressed. */
-    data class Done(override val at: Long) : ScanCameraEvent
+    /**
+     * Done (or Close) was pressed. [keepQueued] (#780, the separate Done button): a photo asked for
+     * and still waiting for its focus is taken first, and a photo that fails keeps the camera open.
+     */
+    data class Done(override val at: Long, val keepQueued: Boolean = false) : ScanCameraEvent
 }
 
 /** What the screen must do after an event. */
@@ -140,6 +143,8 @@ internal data class ScanCameraState(
     val captureQueued: Boolean = false,
     /** Done was pressed during a capture: the screen closes once the capture ends. */
     val doneQueued: Boolean = false,
+    /** That Done came from the separate Done button (#780): the screen stays open when the photo it waits for fails. */
+    val doneKeeps: Boolean = false,
     /** When the last focus ended, and whether it focused; null before the first. */
     val lastFocusAt: Long? = null,
     val lastFocusOk: Boolean = false,
@@ -156,7 +161,9 @@ internal data class ScanCameraState(
      *   middle first and captures when that focus ends or [ScanCameraTiming.FOCUS_WAIT_MS] pass;
      * - a shutter press during a capture, or while a capture already waits, is ignored;
      * - a failed capture returns to Idle with an error shown, and the camera stays usable;
-     * - Done during a capture waits for it, so a photo being written is not lost.
+     * - Done during a capture waits for it, so a photo being written is not lost;
+     * - Done from the separate Done button (#780) also waits for a photo still focusing, and when
+     *   the photo it waited for fails the camera stays open with the error, so it can be taken again.
      */
     fun reduce(event: ScanCameraEvent): Pair<ScanCameraState, List<ScanCameraEffect>> = when (event) {
         is ScanCameraEvent.Shutter -> when {
@@ -185,13 +192,16 @@ internal data class ScanCameraState(
         }
         is ScanCameraEvent.CaptureEnded -> when {
             phase != ScanCameraPhase.Capturing -> this to emptyList()
-            doneQueued -> copy(phase = ScanCameraPhase.Finished, doneQueued = false) to (if (event.ok) emptyList() else listOf(ScanCameraEffect.ShowError)) + ScanCameraEffect.Finish
+            doneQueued && doneKeeps && !event.ok -> copy(phase = ScanCameraPhase.Idle, doneQueued = false, doneKeeps = false) to listOf(ScanCameraEffect.ShowError)
+            doneQueued -> copy(phase = ScanCameraPhase.Finished, doneQueued = false, doneKeeps = false) to (if (event.ok) emptyList() else listOf(ScanCameraEffect.ShowError)) + ScanCameraEffect.Finish
             event.ok -> copy(phase = ScanCameraPhase.Idle) to emptyList()
             else -> copy(phase = ScanCameraPhase.Idle) to listOf(ScanCameraEffect.ShowError)
         }
-        is ScanCameraEvent.Done -> when (phase) {
-            ScanCameraPhase.Capturing -> copy(doneQueued = true) to emptyList()
-            ScanCameraPhase.Finished -> this to emptyList()
+        is ScanCameraEvent.Done -> when {
+            phase == ScanCameraPhase.Capturing -> copy(doneQueued = true, doneKeeps = event.keepQueued) to emptyList()
+            phase == ScanCameraPhase.Finished -> this to emptyList()
+            // the photo asked for is taken first, then the screen closes (#780)
+            event.keepQueued && phase == ScanCameraPhase.Focusing && captureQueued -> copy(doneQueued = true, doneKeeps = true) to emptyList()
             else -> copy(phase = ScanCameraPhase.Finished, captureQueued = false) to listOf(ScanCameraEffect.Finish)
         }
     }

@@ -21,4 +21,30 @@
     <string name="scan_camera_setting_in_app">كاميرا PdfCraft</string>
     <string name="scan_camera_setting_phone">تطبيق الكاميرا في الجهاز</string>
     <string name="scan_camera_setting_body">يعمل تطبيق الكاميرا في الجهاز فقط عندما يكون مسموحًا لـ PdfCraft باستخدام الكاميرا.</string>
+    <!-- Review pages, Undo and Done as separate buttons (#780) -->
+    <string name="scan_lab_camera_buttons">أزرار منفصلة في الكاميرا لمراجعة الصفحات والتراجع وتم</string>
+    <string name="scan_camera_review_short">مراجعة</string>
+    <plurals name="scan_camera_review_pages">
+        <item quantity="zero">مراجعة الصفحات. لا توجد صفحات</item>
+        <item quantity="one">مراجعة الصفحات. صفحة واحدة</item>
+        <item quantity="two">مراجعة الصفحات. صفحتان</item>
+        <item quantity="few">مراجعة الصفحات. %1$d صفحات</item>
+        <item quantity="many">مراجعة الصفحات. %1$d صفحة</item>
+        <item quantity="other">مراجعة الصفحات. %1$d صفحة</item>
+    </plurals>
+    <string name="scan_camera_undo_photo">التراجع عن آخر صورة</string>
+    <string name="scan_camera_photo_taken">تم التقاط الصورة. جارٍ إضافة الصفحة.</string>
+    <plurals name="scan_camera_pages_now">
+        <item quantity="zero">لا توجد صفحات في هذا المسح</item>
+        <item quantity="one">صفحة واحدة في هذا المسح</item>
+        <item quantity="two">صفحتان في هذا المسح</item>
+        <item quantity="few">%1$d صفحات في هذا المسح</item>
+        <item quantity="many">%1$d صفحة في هذا المسح</item>
+        <item quantity="other">%1$d صفحة في هذا المسح</item>
+    </plurals>
+    <string name="scan_camera_pages_none">لا توجد صفحات في هذا المسح</string>
+    <string name="scan_camera_finishing">سيتم الإنهاء بعد هذه الصورة</string>
+    <string name="scan_camera_blocked_no_pages">لا توجد صفحات بعد. التقط صورة أولًا.</string>
+    <string name="scan_camera_blocked_busy">انتظر حتى تُضاف الصورة.</string>
+    <string name="scan_camera_blocked_undo">لا شيء للتراجع عنه. التراجع يزيل الصور التي التُقطت بهذه الكاميرا منذ فتحها.</string>
 </resources>
