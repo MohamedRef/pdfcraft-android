@@ -412,3 +412,107 @@ fn the_automatic_look_removes_a_finger_and_leaves_a_clean_page_alone() {
     assert_eq!((report.found, report.filled), (0, 0));
     assert!(same(&clean, &again));
 }
+
+/// A dark grey, the colour of a thumb's side in shadow and of a sleeve: not skin, not paper.
+const SHADE: [u8; 3] = [72, 68, 66];
+
+/// A thumb from the bottom edge as a hand holding the sheet shows it (the owner's kept scan of
+/// 21 November): `width` px of lit skin with a rounded end, a side in shadow `flank` px wide on
+/// its right, and the near-black line it casts on the paper along its left.
+fn thumb_with_a_shadowed_side(page: &mut Rgb, cx: u32, width: u32, length: u32, flank: u32) {
+    let (left, right) = (cx - width / 2 - 6, cx + width / 2 + flank);
+    let (mid, r) = ((left + right) as f32 / 2.0, (right - left) as f32 / 2.0);
+    let tip = (H - length) as f32 + r;
+    for y in H - length..H {
+        for x in left..right {
+            if (y as f32) < tip && (x as f32 - mid).hypot(y as f32 - tip) > r {
+                continue;
+            }
+            let colour = if x < cx - width / 2 {
+                INK
+            } else if x >= cx + width / 2 {
+                SHADE
+            } else {
+                [212, 160, 128]
+            };
+            set(page, x, y, colour);
+        }
+    }
+}
+
+/// A form's frame: two lines 4 px thick across the bottom margin, from side to side.
+fn frame(page: &mut Rgb, y: u32) {
+    for line in [y, y + 10] {
+        for yy in line..line + 4 {
+            for x in 100..1100 {
+                set(page, x, yy, INK);
+            }
+        }
+    }
+}
+
+/// How many pixels of the rectangle are not paper, to within the grain.
+fn not_paper(page: &Rgb, x0: u32, y0: u32, x1: u32, y1: u32) -> usize {
+    let mut n = 0;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            n += usize::from((0..3).any(|k| get(page, x, y)[k].abs_diff(PAPER[k]) > 8));
+        }
+    }
+    n
+}
+
+/// The owner's kept scan of 21 November: a thumb over a form's frame came out as a white patch
+/// with a dark streak along one side and the thumb's shadowed side still beside it. The finger
+/// is its skin with its side in shadow and the line it casts: all of it becomes paper, and the
+/// frame is as it was a little way from the thumb.
+#[test]
+fn a_thumb_with_a_side_in_shadow_is_filled_whole() {
+    let mut page = printed();
+    frame(&mut page, H - 200);
+    thumb_with_a_shadowed_side(&mut page, 400, 120, 330, 56);
+    let before = page.clone();
+    let found = find(&page, None).unwrap();
+    assert_eq!(found.fingers.len(), 1, "{:?}", found.fingers.iter().map(|r| r.area).collect::<Vec<_>>());
+    assert!(found.fingers[0].covers_ink, "the frame runs up to the thumb");
+    assert!(found.fingers[0].fills_clean(), "{}", found.fingers[0].ragged);
+    let report = remove_fingers(&mut page);
+    assert_eq!((report.found, report.over_print, report.filled), (1, 1, 1), "{report:?}");
+    // the thumb's whole extent, skin, shadowed side and cast line, is paper
+    let (left, right) = (400 - 60 - 6, 400 + 60 + 56);
+    assert!(not_paper(&before, left, H - 330, right, H) >= 40_000, "the drawn thumb is there before");
+    assert_eq!(not_paper(&page, left, H - 330, right, H), 0);
+    // the frame goes on from 40 px beside the thumb, and the print above is as it was
+    for x in [100, left - 40, right + 40, 1099] {
+        for y in [H - 200, H - 197, H - 190, H - 187] {
+            assert_eq!(get(&page, x, y), INK, "({x}, {y})");
+        }
+    }
+    for (x, y) in [(150, 200), (400, 1095), (1040, 600)] {
+        assert_eq!(get(&page, x, y), get(&before, x, y), "({x}, {y})");
+    }
+}
+
+/// A finger that goes on into something that is not skin and is too big to be its shadow (a
+/// sleeve along the page's edge) is not filled: paper over the finger alone would leave the
+/// sleeve cut off beside a white patch. The page comes back as it was, found but not filled.
+#[test]
+fn a_finger_that_goes_on_into_a_sleeve_is_left_as_it_is() {
+    let mut page = printed();
+    finger_from_bottom(&mut page, 300, 110, 260);
+    for y in H - 220..H {
+        for x in 355..1000 {
+            set(&mut page, x, y, SHADE);
+        }
+    }
+    let before = page.clone();
+    let found = find(&page, None).unwrap();
+    assert_eq!(found.fingers.len(), 1, "{:?}", found.fingers.iter().map(|r| r.area).collect::<Vec<_>>());
+    assert!(!found.fingers[0].fills_clean(), "{}", found.fingers[0].ragged);
+    let mut blank = page.clone();
+    assert_eq!(fill_blank(&mut blank, &found), 0);
+    assert!(same(&blank, &before));
+    let report = remove_fingers(&mut page);
+    assert_eq!((report.found, report.filled), (1, 0), "{report:?}");
+    assert!(same(&page, &before));
+}
