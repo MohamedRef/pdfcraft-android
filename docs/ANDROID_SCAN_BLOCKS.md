@@ -34,7 +34,7 @@ phone**, and every threshold below is the issue's starting value or was set on d
 | Module | Called by | Merged in |
 |---|---|---|
 | `metrics_geometry`, `metrics_tone`, `metrics_compare` | `eval.rs`: the `scan-eval` runner and the CI gate on drawn photos. Not by the app | #394, #404 |
-| `metrics_marks` | `clean_eval.rs`: `scan-eval --clean` and its gate on drawn pages (#784). Not by the app | #784's pull request |
+| `metrics_marks` | `clean_eval.rs`: `scan-eval --clean` and its gate on drawn pages (#784). Not by the app | #801 |
 | `straightness` | `page.rs` (#302's automatic mode), `flatten_lines.rs` (text-line flattening), `eval.rs` | #385, #419 |
 | `flatten_guard` | `page.rs`: `compare_flattened` (the guard) and `trim_flattened` (border trim) | #385, #417 |
 | `preset`, `photo_mask` | `page_kind.rs`: the document types. The mask is also used inside sharpening (`enhance::auto_with_photos`) | #391, #421 |
