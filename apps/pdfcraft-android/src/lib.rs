@@ -43,6 +43,8 @@ mod progressive_tests;
 #[cfg(test)]
 mod scan_cer_tests;
 #[cfg(test)]
+mod scan_export_tests;
+#[cfg(test)]
 mod scan_size_tests;
 #[cfg(test)]
 mod tests;
