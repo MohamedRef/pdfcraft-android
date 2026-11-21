@@ -95,3 +95,65 @@ fn drawn_entries_take_the_kinds_in_turn_and_summaries_cover_them() {
     assert_eq!(summary[0].1.n, 2);
     assert_eq!(timing_summary(&refs)[0].0, "decode");
 }
+
+/// A photo with nothing on it, as the app's own second-look test draws it.
+fn blank_entry() -> Entry {
+    let mut png = Vec::new();
+    image::RgbImage::from_fn(640, 480, |x, y| image::Rgb([90 + (x % 3) as u8, 90 + (y % 3) as u8, 90]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    Entry { name: "blank".into(), kind: Kind::Desk, photo: png, corners: None, aspect: None, focal_35mm: None, page: None }
+}
+
+#[test]
+fn the_second_look_is_the_app_s_and_is_off_unless_asked_for() {
+    let second = Options { second_look: true, look_found_page: false, ..Options::default() };
+    let first = Options { second_look: false, ..second };
+    assert!(!Options::default().second_look, "the gate and older reports measure the path without it");
+
+    // a page the network is sure of: the line detector is not asked, and nothing changes
+    let scene = generate(SceneSpec::new(1, Kind::Light, 600, 800));
+    let entry = Entry::from_scene("light".into(), &scene);
+    let (without, with) = (measure(&entry, &first), measure(&entry, &second));
+    assert_eq!((without.second_look, with.second_look), ("not_asked", "not_asked"));
+    assert_eq!(without.found, with.found);
+    assert!(!with.timings.iter().any(|(s, _)| *s == "second_look"));
+
+    // nothing found: the line detector is asked, finds nothing either, and its time is counted
+    let blank = blank_entry();
+    let none = measure(&blank, &first);
+    assert!(!none.detected && none.second_look == "not_asked");
+    let looked = measure(&blank, &second);
+    assert!(!looked.detected && looked.second_look == "kept", "{}", looked.second_look);
+    assert!(looked.timings.iter().any(|(s, _)| *s == "second_look"));
+    assert_eq!(looked.found, none.found, "the whole photo either way");
+
+    // only with the detector on Auto and the closer look on, as in the app
+    for other in [Options { finder: Finder::Network, ..second }, Options { refine: false, ..second }] {
+        assert_eq!(measure(&blank, &other).second_look, "not_asked");
+    }
+}
+
+#[test]
+fn the_second_look_takes_the_line_detector_s_page_on_two_drawn_photos() {
+    // Two of `scan-eval --synthetic 200` (800 × 1066, seeds from 0) where the app's default path
+    // and the path without the second look part ways: measured for #779's baseline.
+    let second = Options { second_look: true, look_found_page: false, ..Options::default() };
+    let first = Options { second_look: false, ..second };
+    let drawn = |seed, kind| Entry { page: None, ..Entry::from_scene("drawn".into(), &generate(SceneSpec::new(seed, kind, 800, 1066))) };
+
+    // the network finds nothing on this receipt; the line detector's page has its sides on edges
+    let receipt = drawn(74, Kind::Receipt);
+    let (without, with) = (measure(&receipt, &first), measure(&receipt, &second));
+    assert!(!without.detected && without.get("iou") < 0.5, "iou {}", without.get("iou"));
+    assert!(with.detected && with.second_look == "taken" && with.get("iou") > 0.99, "{} iou {}", with.second_look, with.get("iou"));
+    assert_eq!(with.get("no_touch"), 1.0);
+    let stages: Vec<&str> = with.timings.iter().map(|(s, _)| *s).collect();
+    assert_eq!(&stages[..4], ["decode", "detect", "second_look", "refine"]);
+
+    // the network is unsure of this page and a corner is off; the line detector's page replaces it
+    let desk = drawn(6, Kind::Desk);
+    let (without, with) = (measure(&desk, &first), measure(&desk, &second));
+    assert!(without.detected && without.get("no_touch") == 0.0, "iou {}", without.get("iou"));
+    assert!(with.second_look == "taken" && with.get("no_touch") == 1.0 && with.get("iou") > without.get("iou"), "iou {}", with.get("iou"));
+}

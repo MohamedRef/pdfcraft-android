@@ -240,6 +240,12 @@ the photo with the corners, look and options its file records, and the size is c
 what the phone made. This is how a change to the detector or a filter is checked against every
 photo collected so far.
 
+`scan_replay` prints a line per page. For figures that can be quoted (counts, shares and the
+spread of every time in the page files and the log, and nothing of a page) run
+`python3 -I tools/scan-eval/kept_scan_summary.py <folder>`; the runs it is meant for are in
+[ANDROID_SCAN_BASELINE.md](ANDROID_SCAN_BASELINE.md). `scan_replay` does not make the second look
+(#290), so its "this build" column is the network's answer alone.
+
 ## In the diagnostics log
 
 Besides what `docs/ANDROID_DIAGNOSTICS_LOG.md` lists for `scan`: every `photo` line carries the

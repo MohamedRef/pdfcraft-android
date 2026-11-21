@@ -106,6 +106,15 @@ Not yet seen in any log of his: the in-app camera taking a photo (#294–#297), 
 DocRes timing (#304), and anything merged after 0.0.28-beta. Logs owed: #549 (page speed after
 its four parts), #560, #550. Ask for a log before saying a later change works on a phone.
 
+**The 0.0.46-beta baseline (#779).** [ANDROID_SCAN_BASELINE.md](ANDROID_SCAN_BASELINE.md) has the
+words (acceptance, readiness, miss, wrong accepted page, the no-manual-corner share and its
+denominator), the runs to make on the S24 Ultra and the Tab S11, and the figures so far. From a
+phone it has one row: a kept scan of 12 pages re-opened and saved again on 0.0.46-beta (46012) on
+21 November 2026, 7 of 12 pages right without a manual corner, with the times of making its
+pages again. Its photos were taken, and their pages searched for, by an earlier build on 19
+November (12 photos with the in-app camera in Many pages mode, none by auto-capture), so that row
+says nothing about 0.0.46's own finder or camera. Every protocol run on either device is pending.
+
 ### Blocks already written for the open issues
 
 Before starting an item in the table, look here: part of it may exist.
@@ -284,6 +293,11 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
   title". A pull request that changes only Kotlin/resources skips the Rust jobs; one that changes
   only docs or scripts skips the Rust and Android jobs (`scripts/ci_changed_paths.py`).
 - Measuring on drawn photos or a test set: `scan-eval` ([ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md)).
+  It asks the line detector too, as the app does by default (#290), only with `--second-look`;
+  the CI gate, `scan_replay` and `scan_reference detect` do not, so their border figures are the
+  network's alone ([ANDROID_SCAN_BASELINE.md](ANDROID_SCAN_BASELINE.md), section 7).
+- Figures from kept scans that can be quoted (counts, shares, the spread of every time in the page
+  files and the log; no page, no file name): `python3 -I tools/scan-eval/kept_scan_summary.py <folder>`.
 - Measuring against a reference scanner: `tools/scan-eval/README.md` (`reference_pairs.py`,
   with `scan_reference look`). Measuring orientation, flattening and detection on the same
   pairs: `scan_reference upright | flatten | detect`.
@@ -343,7 +357,8 @@ new data the route is his kept scans (section 3).
 
 Open until he has scanned for a while:
 
-- how often no corner needs moving (#286's gate is 85 %), with which detector;
+- how often no corner needs moving (#286's gate is 85 %), with which detector (the first count,
+  7 of 12 on one re-opened scan, and how it is counted: `ANDROID_SCAN_BASELINE.md`);
 - whether the orientation thresholds hold on Arabic, Latin and handwriting separately;
 - whether Flatten is worth an automatic mode, and what would trigger it;
 - whether sharper than the reference looks better to him, and at which setting;

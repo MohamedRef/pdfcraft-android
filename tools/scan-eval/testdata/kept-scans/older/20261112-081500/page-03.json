@@ -1,0 +1,42 @@
+{
+ "corners": [
+  0.0,
+  0.0,
+  1.0,
+  0.0,
+  1.0,
+  1.0,
+  0.0,
+  1.0
+ ],
+ "kind": "other",
+ "paper": "unknown",
+ "curved": false,
+ "notes": "",
+ "checked": false,
+ "app": "0.0.26-beta (26001)",
+ "outcome": "saved",
+ "found": null,
+ "finding": {
+  "source": "none",
+  "confidence": 0.1,
+  "angle": 0,
+  "passes": 1
+ },
+ "look": "auto",
+ "strength": 60,
+ "flatten": false,
+ "options": {
+  "finder": "auto",
+  "refine": true
+ },
+ "result": {
+  "file": "page.out.jpg",
+  "width": 1654,
+  "height": 2339,
+  "format": "jpeg",
+  "dpi": 200.0,
+  "paper": "a4",
+  "flattened": false
+ }
+}

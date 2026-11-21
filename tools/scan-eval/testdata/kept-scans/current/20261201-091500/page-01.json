@@ -1,0 +1,81 @@
+{
+ "corners": [
+  0.1,
+  0.1,
+  0.9,
+  0.1,
+  0.9,
+  0.9,
+  0.1,
+  0.9
+ ],
+ "kind": "other",
+ "paper": "unknown",
+ "curved": false,
+ "notes": "",
+ "checked": false,
+ "app": "0.0.46-beta (46012)",
+ "outcome": "discarded",
+ "found": [
+  0.1,
+  0.1,
+  0.9,
+  0.1,
+  0.9,
+  0.9,
+  0.1,
+  0.9
+ ],
+ "finding": {
+  "source": "model",
+  "confidence": 0.91,
+  "second_look": "not_asked"
+ },
+ "flatten": false,
+ "options": {
+  "finder": "auto",
+  "refine": true,
+  "second_look": true,
+  "flatten_auto": true,
+  "upright": true
+ },
+ "auto_decisions": {
+  "undone": "none",
+  "fingers_ms": 20
+ },
+ "document_type": {
+  "preset": "document"
+ },
+ "turns": {
+  "manual": null,
+  "auto": true,
+  "total": 0,
+  "followed": false,
+  "source": "classifier"
+ },
+ "preview": {
+  "shown": true,
+  "ms": 400
+ },
+ "crop": null,
+ "borders_checked": false,
+ "unsure": false,
+ "capture": {
+  "source": "in_app",
+  "mode": "batch",
+  "width": 4000,
+  "height": 3000,
+  "rotation": 90,
+  "capture_ms": 550,
+  "sharpness_ms": 80,
+  "auto_shot": false,
+  "merge": null
+ },
+ "page_look": {
+  "id": "clean"
+ },
+ "position": 1,
+ "made_full_before_save": true,
+ "from_recent": false,
+ "edited_from_viewer": false
+}
