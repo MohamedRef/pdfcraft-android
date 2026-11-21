@@ -93,6 +93,28 @@ internal object ScanCameraTiming {
 /** What the camera screen is doing. */
 internal enum class ScanCameraPhase { Idle, Focusing, Capturing, Finished }
 
+/**
+ * How a capture started (#781), for the log and a kept scan's page file: with the time waited for
+ * the focus, it says what [ScanCameraTiming.FOCUS_FRESH_MS] and [ScanCameraTiming.FOCUS_WAIT_MS]
+ * cost on a phone and how often the wait ran out.
+ */
+internal enum class ScanCaptureVia(val id: String) {
+    /** No capture yet. */
+    None("none"),
+
+    /** At once: the last focus was good and recent. */
+    Fresh("fresh"),
+
+    /** After the focus it waited for reported the page in focus. */
+    Focused("focused"),
+
+    /** After that focus ended without focusing. */
+    Unfocused("unfocused"),
+
+    /** The focus did not end within the wait. */
+    Timeout("timeout"),
+}
+
 /** What happened on the camera screen; every event carries its time, so the reducer needs no clock. */
 internal sealed interface ScanCameraEvent {
     val at: Long
@@ -103,8 +125,12 @@ internal sealed interface ScanCameraEvent {
     /** The person tapped the viewfinder to focus there (the screen starts that focus itself). */
     data class TapFocus(override val at: Long) : ScanCameraEvent
 
-    /** A focus (tapped or before a capture) ended, [ok] when the camera reported it focused. */
-    data class FocusEnded(val ok: Boolean, override val at: Long) : ScanCameraEvent
+    /**
+     * A focus (tapped or before a capture) ended, [ok] when the camera reported it focused. [seq]
+     * (#781) is [ScanCameraState.focusSeq] as it was when that focus started; null (the capture
+     * checks off) is acted on whatever focus it was, as before.
+     */
+    data class FocusEnded(val ok: Boolean, override val at: Long, val seq: Int? = null) : ScanCameraEvent
 
     /** Time passed: lets a capture stop waiting for focus. */
     data class Tick(override val at: Long) : ScanCameraEvent
@@ -148,7 +174,21 @@ internal data class ScanCameraState(
     /** When the last focus ended, and whether it focused; null before the first. */
     val lastFocusAt: Long? = null,
     val lastFocusOk: Boolean = false,
+    /**
+     * How many focuses were started (#781). CameraX ends a focus that another one replaces as not
+     * focused; a result that carries an older number is such a focus's, and must neither release a
+     * photo that waits for the new focus nor be remembered as the last focus.
+     */
+    val focusSeq: Int = 0,
+    /** How the capture in progress, or the last one, started (#781). */
+    val via: ScanCaptureVia = ScanCaptureVia.None,
+    /** When the shutter that led to it was pressed, and when the capture itself started (#781); 0 before the first. */
+    val shutterAt: Long = 0L,
+    val captureAt: Long = 0L,
 ) {
+    /** From the shutter to the capture starting, in milliseconds (#781): the wait for the focus, 0 when it was fresh. */
+    val focusWaitMs: Long get() = (captureAt - shutterAt).coerceAtLeast(0L)
+
     /** Whether the shutter can be pressed now (it is shown as busy otherwise). */
     val shutterReady: Boolean get() = phase == ScanCameraPhase.Idle || (phase == ScanCameraPhase.Focusing && !captureQueued)
 
@@ -163,31 +203,40 @@ internal data class ScanCameraState(
      * - a failed capture returns to Idle with an error shown, and the camera stays usable;
      * - Done during a capture waits for it, so a photo being written is not lost;
      * - Done from the separate Done button (#780) also waits for a photo still focusing, and when
-     *   the photo it waited for fails the camera stays open with the error, so it can be taken again.
+     *   the photo it waited for fails the camera stays open with the error, so it can be taken again;
+     * - the result of a focus that another one replaced (#781, [ScanCameraEvent.FocusEnded.seq]) is
+     *   not acted on: before, a tap on the viewfinder while a photo waited for its focus let the
+     *   photo go at once, as the old focus ended, while the lens was moving to the new place.
      */
     fun reduce(event: ScanCameraEvent): Pair<ScanCameraState, List<ScanCameraEffect>> = when (event) {
         is ScanCameraEvent.Shutter -> when {
             phase == ScanCameraPhase.Finished || phase == ScanCameraPhase.Capturing || captureQueued -> this to emptyList()
-            phase == ScanCameraPhase.Focusing -> copy(captureQueued = true) to emptyList()
-            focusFresh(event.at) -> copy(phase = ScanCameraPhase.Capturing) to listOf(ScanCameraEffect.Capture)
-            else -> copy(phase = ScanCameraPhase.Focusing, focusStarted = event.at, captureQueued = true) to listOf(ScanCameraEffect.FocusCentre)
+            phase == ScanCameraPhase.Focusing -> copy(captureQueued = true, shutterAt = event.at) to emptyList()
+            focusFresh(event.at) -> copy(phase = ScanCameraPhase.Capturing, via = ScanCaptureVia.Fresh, shutterAt = event.at, captureAt = event.at) to listOf(ScanCameraEffect.Capture)
+            else -> copy(phase = ScanCameraPhase.Focusing, focusStarted = event.at, captureQueued = true, focusSeq = focusSeq + 1, shutterAt = event.at) to listOf(ScanCameraEffect.FocusCentre)
         }
+        // the screen starts the tapped focus itself: it replaces a focus in progress, whose result is then an older one (#781)
         is ScanCameraEvent.TapFocus -> when (phase) {
-            ScanCameraPhase.Idle -> copy(phase = ScanCameraPhase.Focusing, focusStarted = event.at) to emptyList()
+            ScanCameraPhase.Idle -> copy(phase = ScanCameraPhase.Focusing, focusStarted = event.at, focusSeq = focusSeq + 1) to emptyList()
             // a new tap moves the focus; a capture already waiting keeps waiting, from the old start
-            else -> this to emptyList()
+            else -> copy(focusSeq = focusSeq + 1) to emptyList()
         }
         is ScanCameraEvent.FocusEnded -> {
             val focused = copy(lastFocusAt = event.at, lastFocusOk = event.ok)
             when {
+                // a focus that was replaced: the one that replaced it is still on its way (#781)
+                event.seq != null && event.seq != focusSeq -> this to emptyList()
                 phase != ScanCameraPhase.Focusing -> focused to emptyList()
-                captureQueued -> focused.copy(phase = ScanCameraPhase.Capturing, captureQueued = false) to listOf(ScanCameraEffect.Capture)
+                captureQueued -> focused.copy(
+                    phase = ScanCameraPhase.Capturing, captureQueued = false,
+                    via = if (event.ok) ScanCaptureVia.Focused else ScanCaptureVia.Unfocused, captureAt = event.at,
+                ) to listOf(ScanCameraEffect.Capture)
                 else -> focused.copy(phase = ScanCameraPhase.Idle) to emptyList()
             }
         }
         is ScanCameraEvent.Tick -> when {
             phase == ScanCameraPhase.Focusing && captureQueued && event.at - focusStarted >= ScanCameraTiming.FOCUS_WAIT_MS ->
-                copy(phase = ScanCameraPhase.Capturing, captureQueued = false) to listOf(ScanCameraEffect.Capture)
+                copy(phase = ScanCameraPhase.Capturing, captureQueued = false, via = ScanCaptureVia.Timeout, captureAt = event.at) to listOf(ScanCameraEffect.Capture)
             else -> this to emptyList()
         }
         is ScanCameraEvent.CaptureEnded -> when {

@@ -133,6 +133,8 @@ internal fun ScanCameraScreen(
     model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null, bar: Boolean = false, turnedLooks: Boolean = true, autoEased: Boolean = true, sheetCheck: Boolean = true,
     /** Review pages, Undo and Done each a button (#780, with [bar]); [pagePaths] are the pages' photo files, in the pages' order. */
     buttons: Boolean = false, pagePaths: List<String> = emptyList(),
+    /** The capture checks (#781): which page a photo is of, a replaced focus, a failed or repeated automatic photo. Off: as before. */
+    captureGuards: Boolean = true,
 ) {
     val file = model.target ?: return
     BackHandler { actions.onClose() }
@@ -145,7 +147,7 @@ internal fun ScanCameraScreen(
     }
     Box(Modifier.fillMaxSize().background(Color.Black).scanCameraKeepsTouches().windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (model.route) {
-            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar, turnedLooks, autoEased, sheetCheck, buttons && bar, pagePaths)
+            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar, turnedLooks, autoEased, sheetCheck, buttons && bar, pagePaths, captureGuards)
             else -> if (bar) ScanCameraPermissionView(model.route, actions) else NoCameraView(model.route, actions)
         }
     }
@@ -191,7 +193,7 @@ private fun NoCameraView(route: ScanCaptureRoute, actions: ScanCameraActions) {
 @Composable
 private fun CameraView(
     file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean, turnedLooks: Boolean, autoEased: Boolean, sheetCheck: Boolean,
-    controlsOn: Boolean, pagePaths: List<String>,
+    controlsOn: Boolean, pagePaths: List<String>, guards: Boolean,
 ) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -239,12 +241,35 @@ private fun CameraView(
     var lastCutOff by remember { mutableStateOf(false) }
     // auto-capture (#296): needs the live outline; the gyroscope says whether the phone is still
     val autoOn = live && model.autoCapture
-    var auto by remember { mutableStateOf(ScanAutoState()) }
+    var auto by remember { mutableStateOf(ScanAutoState(guards = guards)) }
     var lastSignature by remember { mutableStateOf<FloatArray?>(null) }
     var tick by remember { mutableStateOf(0L) }
     val stillness = remember { ScanStillness() }
+    // the advice loop below lives as long as the camera shows: it reads the switch as it is now, not as it was when the camera opened (#781)
+    val autoNow by androidx.compose.runtime.rememberUpdatedState(autoOn)
+    // what auto-capture did and why, for the log (#781), and what was so when the photo in progress was asked for
+    val recorder = remember { ScanAutoRecorder() }
+    var shotPhase by remember { mutableStateOf("off") }
+    var shotSignatureKnown by remember { mutableStateOf(false) }
+    val sceneHint = remember { arrayOfNulls<ScanLiveHint>(1) }
+    // the averaged signature, only measured (#781): of the page last found, and of the page in view when the photo was asked for
+    val meanSignature = remember { arrayOfNulls<FloatArray>(2) }
+    val lastEnded = remember { longArrayOf(0L) }
+
+    /** One step of auto-capture: the new state, its lines in the log, and whether to take the photo now. */
+    fun autoStep(event: ScanAutoEvent): Boolean {
+        val before = auto
+        val (next, shoot) = before.reduce(event)
+        auto = next
+        val lines = recorder.step(before, next, event)
+        if (autoNow) for ((name, fields) in lines) Diag.event(DiagArea.Scan, name, *fields)
+        return shoot
+    }
+
+    /** What the live outline says now. */
+    fun liveSnap(): ScanLiveSnap = ScanLiveSnap(outline?.points != null, outline?.stable == true, hint?.id ?: "none", sceneHint[0]?.id ?: "none", outline?.points)
     // turned off mid-countdown: no ring left behind (a photo in progress ends as usual)
-    LaunchedEffect(autoOn) { if (!autoOn && auto.phase != ScanAutoPhase.Capturing) auto = ScanAutoState() }
+    LaunchedEffect(autoOn) { if (!autoOn && auto.phase != ScanAutoPhase.Capturing) auto = ScanAutoState(guards = guards) }
     DisposableEffect(autoOn) {
         val sensors = context.getSystemService(android.hardware.SensorManager::class.java)
         val gyro = sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_GYROSCOPE)
@@ -270,6 +295,7 @@ private fun CameraView(
                 lumaSeen = true
                 lastCutOff = d.found && d.cutOff
                 if (d.found) lastSignature = d.signature
+                if (d.found) meanSignature[0] = d.signatureMean
             }
         }
     }
@@ -280,7 +306,9 @@ private fun CameraView(
             analysisExecutor.shutdown()
             analyzer.logSummary(SystemClock.elapsedRealtime() - openedAt)
             // what held auto-capture back (#296): how long each advice was called for, and what the steady test saw
-            if (live) Diag.event(DiagArea.Scan, "live_hints", *ease.diag(autoEased), *hintTimes.diag(), *tracker.diag())
+            if (live) Diag.event(DiagArea.Scan, "live_hints", *ease.diag(autoEased), *hintTimes.diag(), *tracker.diag(), *stillness.diag())
+            // what auto-capture did while the camera showed, and a wait for a new page still open (#781)
+            if (live) for ((name, fields) in recorder.close(auto, SystemClock.elapsedRealtime())) Diag.event(DiagArea.Scan, name, *fields)
         }
     }
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -384,6 +412,8 @@ private fun CameraView(
         // the focus and metering of the shutter's focus step hold for the whole burst (4 s auto-cancel)
         bursting = why.burst
         val saved = mutableListOf<File>()
+        // what the live outline says as the capture starts (#781): the photo is of this page, whatever lies there when its file is written
+        val liveAtShot = liveSnap()
 
         fun ended() {
             bursting = false
@@ -395,7 +425,7 @@ private fun CameraView(
             val ok = saved.isNotEmpty() && saved.first() == file && scanCaptureUsable(file.isFile, file.length())
             if (!ok) {
                 files.forEach { it.delete() }
-                auto = auto.reduce(ScanAutoEvent.CaptureEnded(false, null, SystemClock.elapsedRealtime())).first
+                autoStep(ScanAutoEvent.CaptureEnded(false, null, SystemClock.elapsedRealtime()))
                 dispatch(ScanCameraEvent.CaptureEnded(false, SystemClock.elapsedRealtime()))
                 return
             }
@@ -404,24 +434,28 @@ private fun CameraView(
             val w = size?.width ?: 0
             val h = size?.height ?: 0
             val now = SystemClock.elapsedRealtime()
+            val snap = scanLiveSnapKept(guards, liveAtShot, liveSnap())
             val facts = ScanCapture(
                 source = ScanCaptureRoute.InApp.id, megapixelsTenths = scanMegapixelsTenths(w, h), width = w, height = h,
                 exposureIndex = exposure.first, exposureStepMilli = exposure.second, torch = torch, focused = state.lastFocusOk,
                 rotation = turn, captureMs = now - (if (shutterAt > 0) shutterAt else started),
-                live = live, liveFound = outline?.points != null, liveStable = outline?.stable == true,
-                liveHint = hint?.id ?: "none", previewQuad = outline?.points,
+                live = live, liveFound = snap.found, liveStable = snap.stable,
+                liveHint = snap.hint, previewQuad = snap.quad,
                 autoOn = autoOn, autoShot = auto.phase == ScanAutoPhase.Capturing && auto.auto,
                 merge = if (why.burst) ScanMergeFacts(why.id, frames = saved.size, burstMs = now - started) else null,
                 mergeSetting = model.merge.id, mergeChosen = model.mergeChosen,
                 mode = scanCameraModeId(bar, mode), zoom = ScanZoom.rounded(zoom), grid = bar && model.grid,
+                liveWanted = snap.wanted,
+                shot = scanShotFacts(state, now, lastEnded[0].takeIf { it > 0L }, shotPhase, shotSignatureKnown, guards),
             )
+            lastEnded[0] = now
             if (!why.burst) {
                 Diag.event(
                     DiagArea.Scan, "camera_merge", "why" to why.id, "iso" to iso.get(), "luma" to (if (lumaSeen) lastLuma.toDouble() else -1.0),
                     "setting" to model.merge.id, "chosen" to model.mergeChosen,
                 )
             }
-            auto = auto.reduce(ScanAutoEvent.CaptureEnded(true, lastSignature, now)).first
+            autoStep(ScanAutoEvent.CaptureEnded(true, lastSignature, now))
             view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
             // the photo goes to the scan before Done (if pressed meanwhile) closes the screen
             actions.onCaptured(file, facts, scanCameraKeepsOpen(bar, mode, retaking, state.doneQueued), if (why.burst) saved.toList() else emptyList())
@@ -458,8 +492,12 @@ private fun CameraView(
         val (next, effects) = state.reduce(event)
         state = next
         for (effect in effects) when (effect) {
-            ScanCameraEffect.FocusCentre -> centre()?.let { p -> focus(p) { ok -> dispatch(ScanCameraEvent.FocusEnded(ok, SystemClock.elapsedRealtime())) } }
-                ?: dispatch(ScanCameraEvent.FocusEnded(false, SystemClock.elapsedRealtime()))
+            ScanCameraEffect.FocusCentre -> {
+                // this focus's number: its result is not acted on once another focus has replaced it (#781)
+                val seq = if (guards) next.focusSeq else null
+                centre()?.let { p -> focus(p) { ok -> dispatch(ScanCameraEvent.FocusEnded(ok, SystemClock.elapsedRealtime(), seq)) } }
+                    ?: dispatch(ScanCameraEvent.FocusEnded(false, SystemClock.elapsedRealtime(), seq))
+            }
             ScanCameraEffect.Capture -> takePicture()
             ScanCameraEffect.ShowError -> error = true
             ScanCameraEffect.Finish -> if (controlsOn) actions.onDone() else actions.onClose()
@@ -477,6 +515,11 @@ private fun CameraView(
             }
         }
     }
+    // The loop below is started once and lives as long as the camera shows, while the file the next
+    // photo goes into changes after every photo in Many pages and Book. It must reach the shutter's
+    // path of the screen as it is now: the one it was started with would write an automatic photo
+    // into the first photo's file, over a page already in the scan (#781).
+    val dispatchNow by androidx.compose.runtime.rememberUpdatedState<(ScanCameraEvent) -> Unit>({ event -> dispatch(event) })
     // the advice, re-chosen ten times a second (the outline itself follows the frames)
     LaunchedEffect(live) {
         if (!live) return@LaunchedEffect
@@ -487,17 +530,22 @@ private fun CameraView(
             val missing = if (shown.points != null) 0L else now - (tracker.lastFoundAt ?: openedAt)
             val wanted = scanLiveHintFor(ScanLiveScene(shown.points, outline?.stable == true, lastLuma, lastCutOff, missing), darkLuma = ease.darkLuma)
             hint = holder.update(wanted, now)
+            sceneHint[0] = wanted
             hintTimes.add(wanted, stillness.still(now), now)
-            if (autoOn) {
-                val before = auto.phase
-                val (next, shoot) = auto.reduce(ScanAutoEvent.Seen(ScanAutoInputs(now, hint == ScanLiveHint.Ready, stillness.still(now), shown.points != null, lastSignature)))
-                auto = next
-                if (next.phase != before) Diag.event(DiagArea.Scan, "camera_auto_phase", "phase" to next.phase.id)
+            if (autoNow) {
+                // how far the page in view is from the page shot, by the signature that is only measured
+                if (auto.phase == ScanAutoPhase.WaitingForNewPage && shown.points != null) recorder.meanLook(scanSignatureDiff(meanSignature[1], meanSignature[0]))
+                val shoot = autoStep(ScanAutoEvent.Seen(ScanAutoInputs(now, hint == ScanLiveHint.Ready, stillness.still(now), shown.points != null, lastSignature)))
                 if (shoot && state.shutterReady && camera != null && !model.merging && !finishing) {
                     shutterAt = now
-                    dispatch(ScanCameraEvent.Shutter(now))
+                    shotPhase = ScanAutoPhase.Arming.id
+                    shotSignatureKnown = lastSignature != null
+                    meanSignature[1] = meanSignature[0]
+                    dispatchNow(ScanCameraEvent.Shutter(now))
                 } else if (shoot) {
-                    auto = ScanAutoState()
+                    // the camera cannot take it now: nothing is taken, and the page is looked for again
+                    recorder.refused()
+                    auto = ScanAutoState(guards = guards)
                 }
             }
             delay(if (auto.phase == ScanAutoPhase.Arming) 33 else 100)
@@ -604,7 +652,9 @@ private fun CameraView(
                                 val p = SurfaceOrientedMeteringPointFactory(request.resolution.width.toFloat(), request.resolution.height.toFloat()).createPoint(point.x, point.y)
                                 ring = tap
                                 dispatch(ScanCameraEvent.TapFocus(SystemClock.elapsedRealtime()))
-                                focus(p) { ok -> dispatch(ScanCameraEvent.FocusEnded(ok, SystemClock.elapsedRealtime())) }
+                                // this focus's number: it replaces a focus in progress, whose result is then not acted on (#781)
+                                val seq = if (guards) state.focusSeq else null
+                                focus(p) { ok -> dispatch(ScanCameraEvent.FocusEnded(ok, SystemClock.elapsedRealtime(), seq)) }
                                 scope.launch {
                                     delay(900)
                                     ring = null
@@ -666,8 +716,8 @@ private fun CameraView(
                 Text(
                     stringResource(R.string.scan_auto_skip), color = Color.White, fontSize = 14.sp, textAlign = TextAlign.Center,
                     modifier = Modifier.clickable(role = Role.Button) {
-                        auto = auto.reduce(ScanAutoEvent.Cancel(lastSignature, SystemClock.elapsedRealtime())).first
-                        Diag.event(DiagArea.Scan, "camera_auto_phase", "phase" to auto.phase.id, "skipped" to true)
+                        // logged as `camera_auto_phase` with `skipped`
+                        autoStep(ScanAutoEvent.Cancel(lastSignature, SystemClock.elapsedRealtime()))
                     }.padding(vertical = 8.dp),
                 )
             } else if (autoOn && auto.phase == ScanAutoPhase.WaitingForNewPage) {
@@ -695,8 +745,13 @@ private fun CameraView(
                         .background(if (ready) Color.White else Color.Gray)
                         .clickable(enabled = ready, role = Role.Button) {
                             shutterAt = SystemClock.elapsedRealtime()
+                            // where auto-capture was, and the page in view, at the press (#781): no page shown, no page known
+                            val pageNow = lastSignature.takeIf { outline?.points != null }
+                            shotPhase = if (autoOn) auto.phase.id else "off"
+                            shotSignatureKnown = pageNow != null
+                            meanSignature[1] = meanSignature[0].takeIf { pageNow != null }
                             // by hand: one photo, and auto-capture waits for the next page afterwards
-                            auto = auto.reduce(ScanAutoEvent.Shutter(shutterAt)).first
+                            autoStep(ScanAutoEvent.Shutter(shutterAt, pageNow))
                             dispatch(ScanCameraEvent.Shutter(shutterAt))
                         }
                         .semantics { contentDescription = shutterLabel },
