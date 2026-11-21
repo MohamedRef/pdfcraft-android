@@ -12,7 +12,7 @@ phone's. **Never a real photo** in these tests: pages and frames are drawn in co
 
 `app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/home/SettingsScreenshotsTest.kt`:
 every Settings page (`SettingsPage`), light and dark, in English and Arabic (right to left) at
-360×640 dp and 384×832 dp, French (long words) at 360×640 dp, and each English page whole
+360×640 dp and 384×832 dp, and each English page whole
 (384 dp wide, 2400 dp tall) for the rows below the fold.
 
 Files: `app/build/screenshots/settings/<page>_<locale>_<size>_<theme>.png`.
@@ -26,34 +26,31 @@ pages: Adjust borders (#458) on page 2, Enhance (#459) after its Next, and the d
 (#460), light and dark. The engine does not run in a JVM test, so the testing option "Show pages as
 they will be saved" is off for these: the testing-option note shows at the top, Enhance shows the
 drawn page instead of the finished one, and the look tiles are empty. English and Arabic at
-360×640 dp and 384×832 dp, French and German (long words) at 360×640 dp.
+360×640 dp and 384×832 dp.
 
 Files: `app/build/screenshots/scan/camera_<mode>_<locale>_<size>.png`,
 `camera_permission_<locale>_<size>.png`, `crop_<locale>_<size>_<theme>.png`, and
 `borders_`, `enhance_` and `document_<locale>_<size>_<theme>.png`. `document_made_…` (first theme
 only) shows the document screen with pages 1 and 3 as made by the background queue (a straight
 drawn page stands in for the engine's result) and page 2 still waiting (#494).
-`enhance_notes_<locale>_320x640.png` (German and French) is Enhance's notes line in its worst
+`enhance_notes_<locale>_320x640.png` (English and Arabic) is Enhance's notes line in its worst
 case under a drawn page (#493).
 
 `app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/viewer/DrawToolbarScreenshotsTest.kt`: the
 viewer's Draw bar (#522) with 3 and 12 favourites, the Shapes and Guides sheets drawn above it, an
-arrow and the ruler switched on. English at 320, 360 and 384 dp wide, Arabic at 384 dp, French at
-360 dp; light and dark at 360 and 384 dp in English and Arabic.
+arrow and the ruler switched on. English at 320, 360 and 384 dp wide, Arabic at 384 dp; light and dark at 360 and 384 dp in English and Arabic.
 
 Files: `app/build/screenshots/viewer/draw_<n>fav_<locale>_<size>_<theme>.png`.
 
 `app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/viewer/ViewerTopBarScreenshotsTest.kt`:
 the viewer's top bar (#525) with a short name, a long name with "Unsaved changes", Saving…, a tool
-active, and reading aloud. All seven languages at 320 dp, English and
-Arabic at 360 dp, English also dark.
+active, and reading aloud. English and Arabic at 320 and 360 dp, English also dark.
 
 Files: `app/build/screenshots/viewer/top_bar_<locale>_<width>_<theme>.png`.
 
 `app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/viewer/ViewerScreenshotsTest.kt`: the
 viewer's rows of sub-tools with their captions (#526): Highlight's, Comment's (Stamp chosen) and
-Text's, at 320×640 dp in English (light and dark), Arabic, German, Spanish, French, Italian and
-Brazilian Portuguese. Unlike the others, its check runs in every test run: no row may scroll
+Text's, at 320×640 dp in English (light and dark) and Arabic. Unlike the others, its check runs in every test run: no row may scroll
 sideways at 320 dp, so no caption is cut or pushed off the screen. The ⋮ sheet needs an open
 document, which needs the engine, so it is not drawn.
 
@@ -61,8 +58,7 @@ Files: `app/build/screenshots/viewer/subtools_<locale>_320x640_<theme>.png`.
 
 `app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/home/ToolsTabScreenshotsTest.kt`: Home ▸
 Tools (#539), the one list of tools shared with the viewer, with its search box and categories.
-English at 360 dp (light) and 384 dp (dark), Arabic at 384 dp, German at 320 dp, French at 360 dp,
-and the whole list at once (360 × 1400 dp) to show it fits two phone screens.
+English at 360 dp (light) and 384 dp (dark), Arabic at 384 dp, and the whole list at once (360 × 1400 dp) to show it fits two phone screens.
 
 Files: `app/build/screenshots/tools/tools_<locale>_<size>_<theme>.png`.
 
