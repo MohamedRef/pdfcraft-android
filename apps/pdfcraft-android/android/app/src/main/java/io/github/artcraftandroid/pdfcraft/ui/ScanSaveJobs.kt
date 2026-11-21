@@ -12,6 +12,7 @@ import io.github.artcraftandroid.pdfcraft.engine.DocumentFiles
 import io.github.artcraftandroid.pdfcraft.engine.Diag
 import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.Engine
+import io.github.artcraftandroid.pdfcraft.engine.userMessage
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -472,66 +473,137 @@ private suspend fun AppViewModel.saveScanNow(eng: io.github.artcraftandroid.pdfc
             intents.trySend(android.content.Intent.createChooser(sharing.sendIntent(listOf(uri)).putExtra(android.content.Intent.EXTRA_SUBJECT, name.removeSuffix(".pdf")), null))
             return
         }
-        Diag.event(
-            DiagArea.Scan, "saved", "pages" to pages.size, "filter" to pages.first().look.filter, "bytes" to out.length(),
-            // how many pages have a look of their own, and how many went in as photographed (#301)
-            "looks_mixed" to io.github.artcraftandroid.pdfcraft.ui.scan.scanLooksMixed(pages.map { it.look }), "unenhanced" to unenhanced,
-            "untouched_pages" to pages.count { it.found != null && it.corners.contentEquals(it.found) },
-            "found_pages" to pages.count { it.found != null }, "ms" to android.os.SystemClock.elapsedRealtime() - scanStarted,
-            *waitDiag,
-            // the size chosen and what it came to (#505)
-            *io.github.artcraftandroid.pdfcraft.ui.scan.scanSavedSizeDiag(sizeChoice, out.length(), pages.size, pagesBytes),
-        )
+        // the scan stays as it is (pages, photos, steps, name) until the place the PDF goes to has it (#787)
         val target = insertScanAt
-        insertScanAt = null
         val chosen = scanName.trim()
-        // kept to be edited again (#461): a scan of its own (not pages going into an open
-        // document), with the switch in Settings and the testing option on; else the photos go
-        if (!share && editing == null) Diag.event(DiagArea.Scan, "scan_link", *io.github.artcraftandroid.pdfcraft.ui.scan.scanLinkDiag(linked, pages.size))
-        val recent = if (target == null && scanRecent.on()) {
-            ScanSession(null, null, false, chosen, pages.map { ScanSession.Page(it.file.absolutePath, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten, it.auto, it.marks) })
-        } else null
-        if (recent != null) {
-            // the first page as made, for the Recent scans list's picture (#494)
-            val cover = pages.firstOrNull()?.let { pageQueue.readyOf(it)?.file }
-            withContext(Dispatchers.IO) { scanRecent.keep(recent, cover, linkId ?: scanRecent.openedFrom) }
-        } else {
-            scanRecent.openedFrom = null
-            scanPages.forEach { it.file.delete() }
-        }
-        releaseScanPreviews()
-        scanPages.clear()
-        scanSteps.reset()
-        scanBatch.borders = null
-        scanBatch.look = null
-        scanBatch.offer = 0
-        scanBatch.asking = null
-        scanGallerySaved.clear()
-        scanName = ""
-        tools.toolScreen = null
         val unenhancedNote = if (unenhanced > 0) " " + text(R.string.msg_scan_unenhanced, unenhanced) else ""
-        if (target != null) {
-            if (unenhanced > 0) tell(unenhancedNote.trim())
-            runTool(target.first, "page_insert_file", mapOf("path" to out.absolutePath, "at" to target.second))
-        } else if (editing != null && editedPages != null && scanEdit.putBack(eng, editing, editedPages, out)) {
-            // the changed pages went back into the PDF they came from (#513)
-            out.delete()
-            if (unenhanced > 0) tell(unenhancedNote.trim())
-        } else {
-            val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm.ss", java.util.Locale.US).format(java.util.Date())
-            val name = DocumentFiles.safeName(chosen.ifEmpty { "Scan $stamp" })
-            val uri = withContext(Dispatchers.IO) { files.saveToDownloads(out, name).also { out.delete() } }
-            // the kept scan knows the file it became (#513)
-            if (recent != null && linkId != null) withContext(Dispatchers.IO) { scanRecent.link(linkId, uri.toString(), pages.size) }
-            tell(if (editing != null) text(R.string.scan_edit_closed) else text(R.string.msg_saved_downloads, name) + unenhancedNote)
-            // a scan starts with no category and is never offered for Study (#560)
-            study.markScanMade(uri.toString())
+        val bytes = out.length()
+        // where the pages are going, for the line of a save that fails
+        var going = when {
+            target != null -> io.github.artcraftandroid.pdfcraft.ui.scan.ScanDestination.Insert
+            editing != null && editedPages != null -> io.github.artcraftandroid.pdfcraft.ui.scan.ScanDestination.Replace
+            else -> io.github.artcraftandroid.pdfcraft.ui.scan.ScanDestination.Downloads
+        }
+        val done = io.github.artcraftandroid.pdfcraft.ui.scan.scanCommitSave(
+            write = {
+                if (target != null) {
+                    // the open document was closed meanwhile: the pages have nowhere to go
+                    if (document !== target.first && tabs.tabs.none { it.doc === target.first }) throw io.github.artcraftandroid.pdfcraft.ui.scan.ScanDestinationGone()
+                    toolNow(eng, target.first, "page_insert_file", mapOf("path" to out.absolutePath, "at" to target.second))
+                    ScanSaveDone(io.github.artcraftandroid.pdfcraft.ui.scan.ScanDestination.Insert)
+                } else {
+                    // the changed pages go back into the PDF they came from (#513)
+                    val put = if (editing != null && editedPages != null) scanEdit.putBack(eng, editing, editedPages, out) else null
+                    if (put != null && put != io.github.artcraftandroid.pdfcraft.ui.scan.ScanPutBack.Closed) {
+                        ScanSaveDone(io.github.artcraftandroid.pdfcraft.ui.scan.ScanDestination.Replace, put = put)
+                    } else {
+                        going = io.github.artcraftandroid.pdfcraft.ui.scan.ScanDestination.Downloads
+                        val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm.ss", java.util.Locale.US).format(java.util.Date())
+                        val name = DocumentFiles.safeName(chosen.ifEmpty { "Scan $stamp" })
+                        val uri = withContext(Dispatchers.IO) { files.saveToDownloads(out, name) }
+                        ScanSaveDone(io.github.artcraftandroid.pdfcraft.ui.scan.ScanDestination.Downloads, uri = uri, name = name)
+                    }
+                }
+            },
+            onFailed = { e ->
+                // nothing of the scan was touched: it can be saved again
+                val cause = (e as? io.github.artcraftandroid.pdfcraft.ui.scan.ScanReplaceFailed)?.error ?: e
+                Diag.failure(DiagArea.Scan, "save_destination", cause)
+                Diag.event(
+                    DiagArea.Scan, "save_failed",
+                    *io.github.artcraftandroid.pdfcraft.ui.scan.scanSaveFailedDiag(going, io.github.artcraftandroid.pdfcraft.ui.scan.scanSaveFailureReason(going, e), pages.size, draftKept = true, ms = android.os.SystemClock.elapsedRealtime() - scanStarted),
+                )
+                when {
+                    e is io.github.artcraftandroid.pdfcraft.ui.scan.ScanDestinationGone -> {
+                        // the next Save makes a PDF of its own
+                        insertScanAt = null
+                        fail(text(R.string.scan_insert_closed))
+                    }
+                    e is io.github.artcraftandroid.pdfcraft.ui.scan.ScanReplaceFailed && !e.rolledBack -> fail(text(R.string.scan_edit_partial))
+                    else -> fail(cause.userMessage + "\n" + text(R.string.scan_save_kept))
+                }
+            },
+            onWritten = { landed ->
+                val notWritten = landed.put == io.github.artcraftandroid.pdfcraft.ui.scan.ScanPutBack.NotWritten
+                if (notWritten) {
+                    // the pages are in the open PDF, whose file refused the write: not a saved scan, and the
+                    // scan ends as before, since the viewer keeps the change and offers Save a copy (#491)
+                    Diag.event(
+                        DiagArea.Scan, "save_failed",
+                        *io.github.artcraftandroid.pdfcraft.ui.scan.scanSaveFailedDiag(landed.destination, "not_written", pages.size, draftKept = false, ms = android.os.SystemClock.elapsedRealtime() - scanStarted),
+                    )
+                } else {
+                    Diag.event(
+                        DiagArea.Scan, "saved", "pages" to pages.size, "filter" to pages.first().look.filter, "bytes" to bytes,
+                        // how many pages have a look of their own, and how many went in as photographed (#301)
+                        "looks_mixed" to io.github.artcraftandroid.pdfcraft.ui.scan.scanLooksMixed(pages.map { it.look }), "unenhanced" to unenhanced,
+                        "untouched_pages" to pages.count { it.found != null && it.corners.contentEquals(it.found) },
+                        "found_pages" to pages.count { it.found != null }, "ms" to android.os.SystemClock.elapsedRealtime() - scanStarted,
+                        *waitDiag,
+                        // the size chosen and what it came to (#505)
+                        *io.github.artcraftandroid.pdfcraft.ui.scan.scanSavedSizeDiag(sizeChoice, bytes, pages.size, pagesBytes),
+                        // where the pages went, said once they were there (#787)
+                        "destination" to landed.destination.id,
+                    )
+                }
+                if (editing == null) Diag.event(DiagArea.Scan, "scan_link", *io.github.artcraftandroid.pdfcraft.ui.scan.scanLinkDiag(linked, pages.size))
+                // kept to be edited again (#461): a scan of its own (not pages going into an open
+                // document), with the switch in Settings and the testing option on; else the photos go
+                val recent = if (target == null && scanRecent.on()) {
+                    ScanSession(null, null, false, chosen, pages.map { ScanSession.Page(it.file.absolutePath, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten, it.auto, it.marks) })
+                } else null
+                if (recent != null) {
+                    // the first page as made, for the Recent scans list's picture (#494)
+                    val cover = pages.firstOrNull()?.let { pageQueue.readyOf(it)?.file }
+                    withContext(Dispatchers.IO) { scanRecent.keep(recent, cover, linkId ?: scanRecent.openedFrom) }
+                    // the kept scan knows the file it became (#513)
+                    val uri = landed.uri
+                    if (linkId != null && uri != null) withContext(Dispatchers.IO) { scanRecent.link(linkId, uri.toString(), pages.size) }
+                } else {
+                    scanRecent.openedFrom = null
+                    pages.forEach { it.file.delete() }
+                }
+                // a scan starts with no category and is never offered for Study (#560)
+                landed.uri?.let { study.markScanMade(it.toString()) }
+            },
+            onAuxFailed = { e -> Diag.failure(DiagArea.Scan, "save_after", e) },
+            clear = {
+                insertScanAt = null
+                scanRecent.openedFrom = null
+                releaseScanPreviews()
+                scanPages.clear()
+                scanSteps.reset()
+                scanBatch.borders = null
+                scanBatch.look = null
+                scanBatch.offer = 0
+                scanBatch.asking = null
+                scanGallerySaved.clear()
+                scanName = ""
+                tools.toolScreen = null
+            },
+        )
+        // the copy made for it is not needed either way: a scan saved again is made again
+        out.delete()
+        if (done == null) return
+        val uri = done.uri
+        if (uri != null) {
+            tell(if (editing != null) text(R.string.scan_edit_closed) else text(R.string.msg_saved_downloads, done.name) + unenhancedNote)
             open(uri)
+        } else if (unenhanced > 0) {
+            tell(unenhancedNote.trim())
         }
     } finally {
         runCatching { eng.tool("doc_close", mapOf("doc" to id, "discard_changes" to true)) }
     }
 }
+
+/** Where a saved scan went (#787): the new file's address and name in Downloads, or how the pages went back into their PDF. */
+private class ScanSaveDone(
+    val destination: io.github.artcraftandroid.pdfcraft.ui.scan.ScanDestination,
+    val uri: android.net.Uri? = null,
+    val name: String = "",
+    val put: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPutBack? = null,
+)
 
 /**
  * Extract text (#516): the words of scan document [id] ([pages] pages, read just now) handed to

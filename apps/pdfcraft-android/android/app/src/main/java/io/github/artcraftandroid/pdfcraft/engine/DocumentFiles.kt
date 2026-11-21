@@ -726,28 +726,34 @@ class DocumentFiles(private val context: Context) {
 
     /**
      * Save [file] into the phone's Downloads as [name] (made unique by the system if taken) and
-     * return its URI; no storage permission is needed for the app's own downloads.
+     * return its URI; no storage permission is needed for the app's own downloads. It throws when
+     * the entry can't be reserved, written or published (an update that changes no row is a
+     * failure too, #787); the pending entry is removed then, so nothing half-written is left.
      */
     fun saveToDownloads(file: File, name: String, mime: String = "application/pdf"): Uri {
-        val values = android.content.ContentValues().apply {
-            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
-            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
-            put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
-        }
         val collection = android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI
-        val uri = resolver.insert(collection, values) ?: error(context.getString(R.string.files_error_save_downloads))
-        try {
-            resolver.openOutputStream(uri).use { out ->
-                requireNotNull(out) { context.getString(R.string.files_error_save_downloads) }
-                file.inputStream().use { it.copyTo(out) }
-            }
-            resolver.update(uri, android.content.ContentValues().apply { put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
-        } catch (e: Exception) {
-            resolver.delete(uri, null, null)
-            throw e
-        }
-        return uri
+        return publishDownload(
+            reserve = {
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                    put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                resolver.insert(collection, values) ?: throw IOException(context.getString(R.string.files_error_save_downloads))
+            },
+            write = { uri ->
+                resolver.openOutputStream(uri).use { out ->
+                    if (out == null) throw IOException(context.getString(R.string.files_error_save_downloads))
+                    file.inputStream().use { it.copyTo(out) }
+                }
+            },
+            publish = { uri ->
+                resolver.update(uri, android.content.ContentValues().apply { put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+            },
+            remove = { uri -> resolver.delete(uri, null, null) },
+            notPublished = { IOException(context.getString(R.string.files_error_save_downloads)) },
+        )
     }
 
     /** A new app-owned pending row, with cooperative cancellation and no replacement path. */

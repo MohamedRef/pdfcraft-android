@@ -13,9 +13,12 @@ import io.github.artcraftandroid.pdfcraft.plural
 import io.github.artcraftandroid.pdfcraft.text
 import io.github.artcraftandroid.pdfcraft.ui.scan.ScanEditPage
 import io.github.artcraftandroid.pdfcraft.ui.scan.ScanEditRefusal
+import io.github.artcraftandroid.pdfcraft.ui.scan.ScanPutBack
+import io.github.artcraftandroid.pdfcraft.ui.scan.ScanReplaceFailed
 import io.github.artcraftandroid.pdfcraft.ui.scan.ScanReplacePlan
 import io.github.artcraftandroid.pdfcraft.ui.scan.ScanReplaceStep
 import io.github.artcraftandroid.pdfcraft.ui.scan.at
+import io.github.artcraftandroid.pdfcraft.ui.scan.scanApplyOrUndo
 import io.github.artcraftandroid.pdfcraft.ui.scan.scanPictureCovers
 import io.github.artcraftandroid.pdfcraft.ui.scan.scanCommentsOnMoved
 import io.github.artcraftandroid.pdfcraft.ui.scan.scanEditRefusal
@@ -217,14 +220,20 @@ internal class ScanViewerEditController(private val vm: AppViewModel) {
 
     /**
      * Put the scan's pages, written to [out], back into the PDF it was opened from, and save it.
-     * False when that PDF is no longer the one open: the caller then saves a new file.
+     * The answer says where the pages are (#787): [ScanPutBack.Closed] when that PDF is no longer
+     * the one open (the caller then saves a new file), [ScanPutBack.NotWritten] when the pages are
+     * in the open PDF but its file refused the write. An edit that fails is thrown as
+     * [ScanReplaceFailed] after the edits made before it were undone, so the PDF is as it was and
+     * [target] stays for Done to be pressed again. Once the pages are in the PDF [target] is
+     * cleared, so they never go in twice.
      */
-    suspend fun putBack(eng: Engine, t: Target, after: List<ScanEditPage>, out: File): Boolean {
-        target = null
+    suspend fun putBack(eng: Engine, t: Target, after: List<ScanEditPage>, out: File): ScanPutBack {
         val doc = t.doc
         if (vm.document !== doc) {
+            // from here it is a scan of its own
+            target = null
             Diag.event(DiagArea.Scan, "scan_replace_failed", "reason" to "closed")
-            return false
+            return ScanPutBack.Closed
         }
         val started = SystemClock.elapsedRealtime()
         val plan: ScanReplacePlan = scanReplacePlan(t.before, after).at(t.firstPage)
@@ -232,29 +241,56 @@ internal class ScanViewerEditController(private val vm: AppViewModel) {
         val commentsOnPages = scanCommentsOnMoved(doc.comments.map { it.page.toInt() + 1 }, plan.moved)
         val remove = t.removeComments == true
         if (plan.empty) {
+            target = null
             Diag.event(DiagArea.Scan, "scan_replace", *scanReplaceDiag(plan, bytesBefore, bytesBefore, commentsOnPages, false, SystemClock.elapsedRealtime() - started))
             vm.tell(text(R.string.scan_edit_nothing))
-            return true
+            return ScanPutBack.Unchanged
         }
-        try {
+        // every edit as one engine call, which is one step of the PDF's Undo
+        val calls = buildList<Pair<String, Map<String, Any?>>> {
             if (remove) {
                 // the last first, so the indexes still to delete stay right
                 val moved = plan.moved.toSet()
                 doc.comments.filter { it.page.toInt() + 1 in moved }.sortedWith(compareByDescending<io.github.artcraftandroid.pdfcraft.core.CommentInfo> { it.page }.thenByDescending { it.index })
-                    .forEach { c -> eng.tool("comment_delete", mapOf("doc" to doc.id, "page" to c.page.toInt() + 1, "index" to c.index.toInt() + 1)) }
+                    .forEach { c -> add("comment_delete" to mapOf("doc" to doc.id, "page" to c.page.toInt() + 1, "index" to c.index.toInt() + 1)) }
             }
-            for (step in plan.steps) when (step) {
-                is ScanReplaceStep.Replace -> eng.tool("page_replace", mapOf("doc" to doc.id, "pages" to step.pages, "path" to out.absolutePath, "from_pages" to step.from))
-                is ScanReplaceStep.Insert -> eng.tool("page_insert_file", mapOf("doc" to doc.id, "path" to out.absolutePath, "at" to step.at, "pages" to step.from))
-                is ScanReplaceStep.Delete -> eng.tool("page_delete", mapOf("doc" to doc.id, "pages" to step.pages))
+            for (step in plan.steps) {
+                when (step) {
+                    is ScanReplaceStep.Replace -> add("page_replace" to mapOf("doc" to doc.id, "pages" to step.pages, "path" to out.absolutePath, "from_pages" to step.from))
+                    is ScanReplaceStep.Insert -> add("page_insert_file" to mapOf("doc" to doc.id, "path" to out.absolutePath, "at" to step.at, "pages" to step.from))
+                    is ScanReplaceStep.Delete -> add("page_delete" to mapOf("doc" to doc.id, "pages" to step.pages))
+                }
             }
-            vm.refresh(doc)
-        } catch (e: Exception) {
-            Diag.failure(DiagArea.Scan, "scan_replace", e)
-            Diag.event(DiagArea.Scan, "scan_replace_failed", "reason" to "tool", "pages" to plan.changed.size)
-            vm.refresh(doc)
-            throw e
         }
+        val pagesBefore = doc.pageCount
+        val applied = scanApplyOrUndo(
+            calls.size,
+            apply = { i -> eng.tool(calls[i].first, calls[i].second) },
+            undo = {
+                // as Undo in the viewer does: the crash journal can't tell what a step changes (#703)
+                doc.inkJournal?.documentStepped()
+                eng.tool("edit_undo", mapOf("doc" to doc.id))
+            },
+        )
+        val refreshed = try {
+            vm.refresh(doc)
+            true
+        } catch (e: Exception) {
+            Diag.failure(DiagArea.Scan, "scan_replace_refresh", e)
+            false
+        }
+        val failure = applied.error
+        if (failure != null) {
+            // undone edit for edit, and the PDF has the pages it had: the same change can be made again
+            val rolledBack = applied.rolledBack && refreshed && doc.pageCount == pagesBefore
+            Diag.failure(DiagArea.Scan, "scan_replace", failure)
+            Diag.event(DiagArea.Scan, "scan_replace_failed", "reason" to "tool", "pages" to plan.changed.size, "applied" to applied.applied, "rolled_back" to rolledBack)
+            // part of the change is in the PDF: the same edits must not be made over it
+            if (!rolledBack) target = null
+            throw ScanReplaceFailed(rolledBack, failure)
+        }
+        // the pages are in the PDF: whatever the file says next, they are not put in again
+        target = null
         // into the file it came from; one that can't be written says so and offers Save a copy (#491)
         val written = vm.save(doc, trigger = "scan_replace")
         Diag.event(
@@ -267,7 +303,7 @@ internal class ScanViewerEditController(private val vm: AppViewModel) {
         val n = plan.changed.size + plan.steps.filterIsInstance<ScanReplaceStep.Insert>().sumOf { it.from.size }
         if (written) vm.tell(plural(R.plurals.scan_edit_replaced, n, n))
         plan.changed.firstOrNull()?.let { doc.viewer.goToPage(it - 1) }
-        return true
+        return if (written) ScanPutBack.Written else ScanPutBack.NotWritten
     }
 
     private fun editPage(p: ScanPage): ScanEditPage {
