@@ -376,6 +376,22 @@ internal data class ScanLab(
      */
     val reviewBorders: Boolean = true,
     /**
+     * Review pages on the camera opens the scan's pages one under the other on the newest page, with
+     * one Back to camera button (and Android's Back) that returns to the camera as it was left
+     * (#780). Needs the continuous pages. Off: the newest page in Enhance, where the way back is
+     * More, then Add page, as at first.
+     */
+    val reviewReturn: Boolean = true,
+    /**
+     * The camera's capture checks (#781), none of them a threshold: the page a photo is of is the
+     * one in view when it was asked for, not when its file is written (the outline kept with it and
+     * auto-capture's wait for a new page follow from that); a page not known then is learned from
+     * the first one seen after; an automatic photo that failed, or of a page that only looked
+     * different for a moment, is not taken again by itself; and a focus that another one replaced
+     * does not release the photo waiting for it. Off: all of these as before.
+     */
+    val captureGuards: Boolean = true,
+    /**
      * Clean scan gives the photographs found on a page of print the Photo document type's strength
      * inside them (#784), so their shadows and highlights are kept while the print around them is
      * cleaned as before. Needs the document types. On drawn pages, 21 November 2026: the fine
@@ -410,6 +426,8 @@ internal data class ScanLab(
         "continuous_pages" to continuousPages,
         "camera_buttons" to cameraButtons,
         "review_borders" to reviewBorders,
+        "review_return" to reviewReturn,
+        "capture_guards" to captureGuards,
         "photo_tone" to photoTone,
     )
 
@@ -425,6 +443,8 @@ internal data class ScanLab(
         .put("continuous_pages", continuousPages)
         .put("camera_buttons", cameraButtons)
         .put("review_borders", reviewBorders)
+        .put("review_return", reviewReturn)
+        .put("capture_guards", captureGuards)
         .put("photo_tone", photoTone)
 
     /** One line of text for the app's preferences. */
@@ -440,6 +460,8 @@ internal data class ScanLab(
         "continuous_pages" to flag(continuousPages),
         "camera_buttons" to flag(cameraButtons),
         "review_borders" to flag(reviewBorders),
+        "review_return" to flag(reviewReturn),
+        "capture_guards" to flag(captureGuards),
         "photo_tone" to flag(photoTone),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
@@ -550,6 +572,8 @@ internal data class ScanLab(
                 continuousPages = on("continuous_pages", default.continuousPages),
                 cameraButtons = on("camera_buttons", default.cameraButtons),
                 reviewBorders = on("review_borders", default.reviewBorders),
+                reviewReturn = on("review_return", default.reviewReturn),
+                captureGuards = on("capture_guards", default.captureGuards),
                 photoTone = on("photo_tone", default.photoTone),
             )
         }

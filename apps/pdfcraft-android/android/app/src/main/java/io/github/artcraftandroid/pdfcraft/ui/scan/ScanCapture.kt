@@ -57,6 +57,14 @@ internal data class ScanCapture(
     val grid: Boolean = false,
     /** How the scan began (#617): `camera`, `import`, `shared` or `shortcut` ([ScanStart]). */
     val started: String = ScanStart.Camera.id,
+    /**
+     * The advice the scene called for when the photo was asked for (#781); [liveHint] is the advice
+     * on the screen, which follows it 400 ms late. An automatic photo whose two differ was taken on
+     * advice that no longer held.
+     */
+    val liveWanted: String = "none",
+    /** How the photo came about (#781): the focus before it, the capture's own time, the time since the photo before, and where auto-capture was. */
+    val shot: ScanShotFacts = ScanShotFacts(),
 ) {
     /** The photo is a page the merge already straightened: its edges are not searched for again. */
     val straightened: Boolean get() = merge?.merged == true
@@ -70,6 +78,8 @@ internal data class ScanCapture(
         "auto_on" to autoOn, "auto_shot" to autoShot, "burst" to (merge != null), "merged" to straightened,
         "merge_setting" to (mergeSetting ?: "none"), "merge_chosen" to mergeChosen,
         "mode" to (mode ?: "none"), "zoom" to zoom, "grid" to grid, "started" to started,
+        "live_wanted" to liveWanted, "focus_via" to shot.via, "focus_wait_ms" to shot.focusWaitMs, "shot_ms" to shot.shotMs,
+        "since_shot_ms" to shot.sinceShotMs, "auto_phase" to shot.autoPhase, "signature_known" to shot.signatureKnown, "capture_guards" to shot.guards,
     )
 
     /** The facts as JSON, for a kept scan's page file. */
@@ -84,6 +94,8 @@ internal data class ScanCapture(
         .put("merge", merge?.json() ?: JSONObject.NULL)
         .put("merge_setting", mergeSetting ?: JSONObject.NULL).put("merge_chosen", mergeChosen)
         .put("mode", mode ?: JSONObject.NULL).put("zoom", zoom).put("grid", grid).put("started", started)
+        .put("live_wanted", liveWanted).put("focus_via", shot.via).put("focus_wait_ms", shot.focusWaitMs).put("shot_ms", shot.shotMs)
+        .put("since_shot_ms", shot.sinceShotMs).put("auto_phase", shot.autoPhase).put("signature_known", shot.signatureKnown).put("capture_guards", shot.guards)
         // a merged page is already cropped by the detector and its photos were deleted (#426): not raw ground truth
         .put("photos_kept", !straightened)
         .put(

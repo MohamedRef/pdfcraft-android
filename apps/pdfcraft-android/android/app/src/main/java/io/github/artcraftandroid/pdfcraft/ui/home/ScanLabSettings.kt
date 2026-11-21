@@ -200,6 +200,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_camera_buttons, o.cameraButtons) { lab.update(o.copy(cameraButtons = it)) }
     // pages whose borders need a check are marked, asked about before Save and kept with the draft (#783)
     Sw(R.string.scan_lab_review_borders, o.reviewBorders) { lab.update(o.copy(reviewBorders = it)) }
+    // Review pages opens the pages, with one tap back to the camera (#780)
+    Sw(R.string.scan_lab_review_return, o.reviewReturn) { lab.update(o.copy(reviewReturn = it)) }
+    // the camera knows which page a photo is of, and does not repeat an automatic photo (#781)
+    Sw(R.string.scan_lab_capture_guards, o.captureGuards) { lab.update(o.copy(captureGuards = it)) }
 
     SettingsHeader(stringResource(R.string.scan_lab_group_reports))
     // the research detectors (#305, #306): a report only, in kept scans, so it changes no page
