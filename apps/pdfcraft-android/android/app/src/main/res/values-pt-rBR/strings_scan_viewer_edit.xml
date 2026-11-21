@@ -17,6 +17,9 @@
     <string name="scan_edit_as_scan">Editar como digitalização</string>
     <string name="scan_edit_not_a_picture">Só uma página que é uma única imagem pode ser editada como digitalização.</string>
     <string name="scan_edit_from_picture">Começa da imagem salva no PDF, não da foto original.</string>
+    <string name="scan_save_kept">A digitalização não foi salva. Suas páginas continuam aqui, então você pode tentar de novo.</string>
+    <string name="scan_insert_closed">O documento foi fechado, então as páginas não foram adicionadas. Sua digitalização continua aqui: Salvar agora a coloca em Downloads.</string>
+    <string name="scan_edit_partial">Só parte da alteração chegou ao PDF. Desfazer a remove de lá. Sua digitalização continua aqui: Salvar agora cria um novo PDF.</string>
     <plurals name="scan_edit_replaced">
         <item quantity="one">%d página atualizada neste PDF</item>
         <item quantity="other">%d páginas atualizadas neste PDF</item>
