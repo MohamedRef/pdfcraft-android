@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -46,12 +47,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
@@ -198,6 +201,158 @@ internal fun ScanPagesButton(last: ImageBitmap, count: Int, showDone: Boolean, o
             }
         }
         if (showDone) Text(stringResource(R.string.scan_camera_done_short), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+/**
+ * The bottom bar with Review pages, Undo and Done each a button of its own (#780): Import and
+ * Review pages before the shutter, Undo and Done after it (mirrored in a right-to-left language).
+ * The four places are equal shares of the width beside the shutter and are kept when a control is
+ * not shown, so the shutter stays in the middle whatever the mode and before and after a photo.
+ * A control that cannot act now stays on the bar, drawn fainter and in another shape; pressing it
+ * says why ([onControl] is told either way), and TalkBack reads the reason with it.
+ */
+@Composable
+internal fun ScanCameraActionBar(
+    controls: ScanCameraControls,
+    last: ImageBitmap?,
+    finishing: Boolean,
+    onImport: () -> Unit,
+    onControl: (ScanCameraControl) -> Unit,
+    shutter: @Composable () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { ScanImportButton(onImport) }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                if (ScanCameraControl.Review in controls.shown) ScanReviewButton(last, controls.pages, controls.pending, controls.review) { onControl(ScanCameraControl.Review) }
+            }
+        }
+        shutter()
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                if (ScanCameraControl.Undo in controls.shown) {
+                    ScanCameraWordButton(
+                        LucideIcons.Undo2, stringResource(R.string.common_undo), stringResource(R.string.scan_camera_undo_photo),
+                        controls.undo, filled = false, working = false,
+                    ) { onControl(ScanCameraControl.Undo) }
+                }
+            }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                if (ScanCameraControl.Done in controls.shown) {
+                    ScanCameraWordButton(
+                        LucideIcons.Check, stringResource(R.string.scan_camera_done_short), stringResource(R.string.scan_camera_done_short),
+                        controls.done, filled = true, working = finishing,
+                    ) { onControl(ScanCameraControl.Done) }
+                }
+            }
+        }
+    }
+}
+
+/** What the screen says when a control that cannot act is pressed; null when it can. */
+internal fun scanCameraBlockText(block: ScanCameraBlock): Int? = when (block) {
+    ScanCameraBlock.None -> null
+    ScanCameraBlock.NoPages -> R.string.scan_camera_blocked_no_pages
+    ScanCameraBlock.Busy -> R.string.scan_camera_blocked_busy
+    ScanCameraBlock.NothingToUndo -> R.string.scan_camera_blocked_undo
+}
+
+/**
+ * Review pages: the last page taken with the page count on a badge, and its word under it. Before
+ * the first page an empty page outline holds the place. A ring turns on it while a photo is on its
+ * way into the scan; the count is of the pages that are in it.
+ */
+@Composable
+private fun ScanReviewButton(last: ImageBitmap?, count: Int, pending: Int, block: ScanCameraBlock, onClick: () -> Unit) {
+    val label = pluralStringResource(R.plurals.scan_camera_review_pages, count, count)
+    val reason = scanCameraBlockText(block)?.let { stringResource(it) }
+    val faint = if (block == ScanCameraBlock.None || pending > 0) 1f else 0.5f
+    Column(
+        Modifier.sizeIn(minWidth = 56.dp, minHeight = 56.dp).clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onClick).clearAndSetSemantics {
+            contentDescription = label
+            role = Role.Button
+            if (reason != null) stateDescription = reason
+        }.padding(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            val page = Modifier.padding(top = 6.dp, start = 6.dp, end = 6.dp).size(36.dp, 46.dp).clip(RoundedCornerShape(4.dp))
+            if (last != null) {
+                Image(last, null, page.border(1.dp, Color.White, RoundedCornerShape(4.dp)), contentScale = ContentScale.Crop)
+            } else {
+                Box(page.border(1.5.dp, Color.White.copy(alpha = faint * 0.7f), RoundedCornerShape(4.dp)))
+            }
+            if (pending > 0) {
+                // on a dark disc, so the ring shows on a white page too
+                Box(Modifier.padding(top = 6.dp).size(28.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.5.dp)
+                }
+            }
+            if (count > 0) {
+                Box(
+                    Modifier.align(Alignment.TopEnd).sizeIn(minWidth = 24.dp, minHeight = 24.dp).clip(CircleShape).background(Color.White).padding(horizontal = 5.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(scanCountBadge(count), color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+            }
+        }
+        Text(stringResource(R.string.scan_camera_review_short), color = Color.White.copy(alpha = faint), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * Undo or Done: an icon in a circle with its word under it, at least 56 dp each way. [filled] is
+ * the bar's main action (Done), a white disc; the other an outlined circle. One that cannot act
+ * loses the disc or the outline and is fainter, so the difference is not one of colour alone.
+ * [working] shows a ring in place of the icon while Done waits for a photo.
+ */
+@Composable
+private fun ScanCameraWordButton(icon: ImageVector, word: String, label: String, block: ScanCameraBlock, filled: Boolean, working: Boolean, onClick: () -> Unit) {
+    val can = block == ScanCameraBlock.None
+    val reason = scanCameraBlockText(block)?.let { stringResource(it) }
+    val faint = if (can) 1f else 0.5f
+    Column(
+        Modifier.sizeIn(minWidth = 56.dp, minHeight = 56.dp).clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onClick).clearAndSetSemantics {
+            contentDescription = label
+            role = Role.Button
+            if (reason != null) stateDescription = reason
+        }.padding(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        val disc = filled && can
+        Box(
+            Modifier.size(40.dp).clip(CircleShape).background(if (disc) Color.White else Color.Transparent)
+                .border(1.5.dp, if (can) Color.White else Color.Transparent, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (working) {
+                CircularProgressIndicator(Modifier.size(22.dp), color = if (disc) Color.Black else Color.White, strokeWidth = 2.5.dp)
+            } else {
+                Icon(icon, null, tint = if (disc) Color.Black else Color.White.copy(alpha = faint), modifier = Modifier.size(22.dp))
+            }
+        }
+        Text(word, color = Color.White.copy(alpha = faint), fontSize = 12.sp, fontWeight = if (filled) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** The line under the viewfinder after a photo or an Undo (#780): a tick and what happened, with the pages counted. */
+@Composable
+internal fun ScanCameraCueLine(cue: ScanCameraCue, pages: Int) {
+    val text = when (cue) {
+        ScanCameraCue.Taken -> stringResource(R.string.scan_camera_photo_taken)
+        ScanCameraCue.Count -> pluralStringResource(R.plurals.scan_camera_pages_now, pages, pages)
+        ScanCameraCue.Empty -> stringResource(R.string.scan_camera_pages_none)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (cue != ScanCameraCue.Empty) {
+            Icon(LucideIcons.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.size(6.dp))
+        }
+        Text(text, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
 }
 
