@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Testing option: a page not made yet is shown at once in a first picture (#785). -->
+<resources>
+    <string name="scan_lab_first_picture">Show each page at once in a quick version while it is made</string>
+</resources>

@@ -464,12 +464,14 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
 
 /**
  * A page's tile (#494): the page as made by the background queue, whole and as it was made (the
- * turn is in it), read at the tile's size; before it is made, the part of the photo inside its
- * corners, turned as it will be saved. While a page is made again, its last result stays.
+ * turn is in it), read at the tile's size; before it is made, its first picture (#785), or without
+ * one the part of the photo inside its corners, turned as it will be saved. While a page is made
+ * again, its first picture as it is now is shown, or without one its last result stays.
  */
 @Composable
 private fun ScanDocumentThumb(vm: AppViewModel, page: ScanPage, photoTurns: Int, modifier: Modifier) {
-    val m = vm.pageQueue.madeOf(page)
+    // its first picture while the page is not made as it is now (#785)
+    val m = vm.pageQueue.tileOf(page)
     val tile = scanDocTile(m != null, photoTurns)
     BoxWithConstraints(modifier) {
         if (m != null && tile.made) {
@@ -481,6 +483,20 @@ private fun ScanDocumentThumb(vm: AppViewModel, page: ScanPage, photoTurns: Int,
         } else {
             ScanPhotoTile(page, tile.turns, Modifier.fillMaxSize())
         }
+    }
+}
+
+/**
+ * A page's first picture on the scan screen (#785), fitted whole while the page itself is made: its
+ * small thumbnail at once, the picture when it is read. [label] says which page it is.
+ */
+@Composable
+internal fun ScanFirstPicture(vm: AppViewModel, first: io.github.artcraftandroid.pdfcraft.ui.ScanMadePage, label: String, modifier: Modifier) {
+    BoxWithConstraints(modifier) {
+        val w = constraints.maxWidth.coerceAtLeast(1)
+        val h = constraints.maxHeight.coerceAtLeast(1)
+        val image by produceState(first.thumb, first.file, w, h) { value = vm.pageQueue.tileImage(first, w, h) ?: first.thumb }
+        Image(image, label, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
     }
 }
 

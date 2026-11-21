@@ -669,6 +669,41 @@ pub fn kind_shape(p: &crate::preset::PresetParams) -> Shape {
     Shape { extra_gamma: p.extra_gamma, s_curve: p.s_curve, colour_factor: p.colour_factor }
 }
 
+/// The proportions of the page inside `quad` on a photo of `width` × `height` pixels taken with
+/// `lens`, as `request` asks them: what [`page_base`] and the first picture ([`crate::first`]) share,
+/// so both give a page the same shape.
+pub(crate) fn page_shape(request: &PageRequest<'_>, quad: &Quad, width: u32, height: u32, lens: crate::exif::Camera) -> crate::aspect::Proportions {
+    // the caller's focal length is the one in use (zoom included); the file's may or may not be
+    let camera = match request.focal_35mm {
+        Some(f) => Focal::from_35mm(Some(f), None, width, height),
+        None => Focal::from_35mm(lens.focal_35mm, lens.digital_zoom, width, height),
+    };
+    // the scan's own paper first, ID card only for a sure outline (#759)
+    let matched = PaperMatch { on: request.snap_paper, hint: request.paper_hint, card: request.card_paper };
+    match request.side_proportions {
+        true => proportions_by_sides_matched(quad, width, height, matched),
+        false => proportions_matched(quad, width, height, camera, matched),
+    }
+}
+
+/// How much a page of `shape` is enlarged or shrunk when it is made for `request`.
+pub(crate) fn page_scale(request: &PageRequest<'_>, shape: &crate::aspect::Proportions) -> Result<f64, ScanError> {
+    Ok(match (request.max_side, request.look) {
+        // a preview: shrunk to fit and never enlarged, whatever the look, so that one
+        // straightened page serves every look (#301)
+        (Some(side), _) => {
+            let (w, h, _) = shape.output(1.0)?;
+            (f64::from(side.max(16)) / f64::from(w.max(h))).min(1.0)
+        }
+        // Auto enlarges a small page in this same resampling pass, before its tone curve (#298, step 0)
+        (None, Look::Auto | Look::Whiteboard) => enlargement(shape.width, shape.height),
+        // two levels need more pixels than shades of grey to draw a thin stroke: a page under
+        // 200 dpi is made at twice the size (#300)
+        (None, Look::BlackWhite) if shape.output(1.0)?.2 < BW_MIN_DPI => 2.0,
+        _ => 1.0,
+    })
+}
+
 /// The page of `request` before its look: decoded, straightened to its proportions (or
 /// flattened), and turned upright.
 pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
@@ -684,31 +719,8 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
     lap(STAGE_DECODE, &mut timings);
 
     let quad = Quad::from_shares(&request.corners, photo.width, photo.height)?;
-    // the caller's focal length is the one in use (zoom included); the file's may or may not be
-    let camera = match request.focal_35mm {
-        Some(f) => Focal::from_35mm(Some(f), None, photo.width, photo.height),
-        None => Focal::from_35mm(lens.focal_35mm, lens.digital_zoom, photo.width, photo.height),
-    };
-    // the scan's own paper first, ID card only for a sure outline (#759)
-    let matched = PaperMatch { on: request.snap_paper, hint: request.paper_hint, card: request.card_paper };
-    let shape = match request.side_proportions {
-        true => proportions_by_sides_matched(&quad, photo.width, photo.height, matched),
-        false => proportions_matched(&quad, photo.width, photo.height, camera, matched),
-    };
-    let scale = match (request.max_side, request.look) {
-        // a preview: shrunk to fit and never enlarged, whatever the look, so that one
-        // straightened page serves every look (#301)
-        (Some(side), _) => {
-            let (w, h, _) = shape.output(1.0)?;
-            (f64::from(side.max(16)) / f64::from(w.max(h))).min(1.0)
-        }
-        // Auto enlarges a small page in this same resampling pass, before its tone curve (#298, step 0)
-        (None, Look::Auto | Look::Whiteboard) => enlargement(shape.width, shape.height),
-        // two levels need more pixels than shades of grey to draw a thin stroke: a page under
-        // 200 dpi is made at twice the size (#300)
-        (None, Look::BlackWhite) if shape.output(1.0)?.2 < BW_MIN_DPI => 2.0,
-        _ => 1.0,
-    };
+    let shape = page_shape(request, &quad, photo.width, photo.height, lens);
+    let scale = page_scale(request, &shape)?;
     let (w, h, dpi) = shape.output(scale)?;
     // A page whose outline was not found is the whole photo, table and all. The network is made
     // for a page with its own edges, and in the automatic mode (the check is asked for) nothing

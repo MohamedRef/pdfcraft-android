@@ -1240,7 +1240,10 @@ fun ScanScreen(vm: AppViewModel) {
                         )
                     }
                 } else {
-                    ScanPhoto(page.thumb, page.corners, Modifier.fillMaxSize())
+                    // while the page is made, its first picture stands in for it (#785); else the photo with its outline
+                    val first = if (shown.waiting && shown.view == ScanView.Photo && view == ScanView.Result) vm.pageQueue.firstOf(page) else null
+                    if (first != null) io.github.artcraftandroid.pdfcraft.ui.scan.ScanFirstPicture(vm, first, stringResource(R.string.tools_scan_result_description, shownAt + 1), Modifier.fillMaxSize().padding(16.dp))
+                    else ScanPhoto(page.thumb, page.corners, Modifier.fillMaxSize())
                 }
                 page.book?.let { io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookLabel(it, Modifier.align(Alignment.TopStart)) }
                 // the classifier turned this page and the person has not: say so, with a way back (#339)
