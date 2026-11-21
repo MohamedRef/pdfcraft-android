@@ -195,6 +195,12 @@ pub struct ScanPageRequest {
     /// corners without the network, its check or the text lines (#549). False flattens it as before.
     #[uniffi(default = false)]
     pub skip_flat: bool,
+    /// Clean scan gives the photographs found on a page of print the Photo document type's
+    /// strength inside them, so their shadows and highlights are kept while the print around them
+    /// is cleaned as before (#784). Needs a document type (`preset` not "off"). False: one curve
+    /// for the whole page, as before.
+    #[uniffi(default = false)]
+    pub photo_tone: bool,
     /// With `flatten_check` (the automatic mode): the page straightened by its corners is measured
     /// before the flattening network runs, and when that measure alone says the check could keep
     /// no flattened page (not measured, already straight, or too few lines of text), the network,
@@ -370,6 +376,23 @@ pub struct ScanFingers {
     /// Fingers papered over.
     pub filled: u32,
     pub ms: u32,
+}
+
+/// What giving a page's photographs their own tone curve did (#784).
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+pub struct ScanPhotoTone {
+    /// The share of the page that took any of the gentler curve, 0–1 (0: the page has no
+    /// photograph, or its own strength is no stronger than a photograph's).
+    pub share: f32,
+    /// Groups of blocks read as photographs and left out because the finger step had filled them.
+    pub fingers_left_out: u32,
+    pub ms: u32,
+}
+
+impl From<pdfcraft_scan::look::PhotoTone> for ScanPhotoTone {
+    fn from(t: pdfcraft_scan::look::PhotoTone) -> Self {
+        ScanPhotoTone { share: t.share, fingers_left_out: t.fingers_left_out, ms: t.ms }
+    }
 }
 
 impl From<pdfcraft_scan::defects::FingerFill> for ScanFingers {
@@ -553,6 +576,10 @@ pub struct ScanPageResult {
     #[uniffi(default = None)]
     pub encoding: Option<ScanEncoding>,
     pub timings: Vec<ScanTiming>,
+    /// What giving the page's photographs their own tone curve did (#784); `None` when it was not
+    /// asked for or the look is not Clean scan.
+    #[uniffi(default = None)]
+    pub photo_tone: Option<ScanPhotoTone>,
 }
 
 /// What the orientation classifier made of a page (#339).
@@ -1240,6 +1267,7 @@ pub(crate) fn page_request<'a>(
         size: pdfcraft_scan::size::SizeChoice::from_id(&request.size).unwrap_or_default(),
         auto_encode: request.auto_encode,
         skip_flat: request.skip_flat,
+        photo_tone: request.photo_tone,
         flatten_foresee: request.flatten_foresee,
         ..PageRequest::new(photo, corners)
     }
@@ -1385,6 +1413,10 @@ pub struct ScanPreview {
     /// `scan_preview_look` and, for Clean scan and Whiteboard, the parts of the look that ran
     /// (#446): `scan_preview_look_light`, `_noise`, `_denoise`, `_sharpen`, `_tone`.
     pub timings: Vec<ScanTiming>,
+    /// What giving the page's photographs their own tone curve did (#784); `None` when it was not
+    /// asked for or the look is not Clean scan.
+    #[uniffi(default = None)]
+    pub photo_tone: Option<ScanPhotoTone>,
 }
 
 /// What a straightened preview page depends on: the photo as it is on disk, the corners, and
@@ -1780,6 +1812,7 @@ pub(crate) fn preview_stoppable(
         reused,
         light_reused: applied.light_reused,
         timings,
+        photo_tone: applied.photo_tone.map(Into::into),
     })
 }
 
@@ -1938,6 +1971,7 @@ fn result_of(page: pdfcraft_scan::page::PageResult, path: String) -> ScanPageRes
         fingers: page.fingers.map(Into::into),
         markup: page.markup.map(Into::into),
         encoding: page.encoded.as_ref().map(Into::into),
+        photo_tone: page.photo_tone.map(Into::into),
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
         path,
     }
@@ -2180,6 +2214,7 @@ pub(crate) mod tests {
             flatten_reuse: false,
             flatten_keep_all: false,
             skip_flat: false,
+            photo_tone: false,
             flatten_foresee: false,
         }
     }

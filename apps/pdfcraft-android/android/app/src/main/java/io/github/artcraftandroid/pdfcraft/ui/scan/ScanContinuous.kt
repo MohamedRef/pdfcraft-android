@@ -182,6 +182,20 @@ internal class ScanDocViewState {
 
     private val records = HashMap<String, ScanDocPageRecord>()
 
+    /** Counts each Review pages on the camera (#780), so pages already on the screen go to the page asked for. */
+    var jumps by mutableStateOf(0)
+        private set
+
+    /**
+     * Review pages on the camera (#780): the continuous pages on [to], also when the grid was the
+     * view. Not one of the person's switches, so [toggles] stays.
+     */
+    fun review(to: ScanDocAnchor) {
+        chosen = ScanDocView.Pages
+        anchor = to
+        jumps++
+    }
+
     /** The person switched to [view]. */
     fun show(view: ScanDocView) {
         if (chosen == view) return
@@ -221,6 +235,7 @@ internal class ScanDocViewState {
         anchor = ScanDocAnchor(null, 0)
         route = "none"
         toggles = 0
+        jumps = 0
         records.clear()
     }
 }

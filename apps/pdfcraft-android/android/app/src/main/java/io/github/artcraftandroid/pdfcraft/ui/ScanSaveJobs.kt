@@ -329,6 +329,9 @@ private suspend fun AppViewModel.saveScanNow(eng: io.github.artcraftandroid.pdfc
             "kind_tone" to lab.kindTone, "kind_gamma" to (r?.kind?.extraGamma?.toDouble() ?: 0.0),
             "kind_s_curve" to (r?.kind?.sCurve ?: false), "kind_colour" to (r?.kind?.colourFactor?.toDouble() ?: 1.0),
             "photo_sharpen" to lab.photoSharpen, "suggestions" to lab.suggestions,
+            // the photographs' own tone curve (#784): the option, the share of the page that took it, fingers left out, the time
+            "photo_tone" to lab.photoTone, "photo_tone_share" to (r?.photoTone?.share?.toDouble() ?: -1.0),
+            "photo_tone_fingers" to (r?.photoTone?.fingersLeftOut?.toLong() ?: -1L), "photo_tone_ms" to (r?.photoTone?.ms?.toLong() ?: -1L),
             // the turn and document type the page showed, kept for the PDF (#465)
             "background_pages" to lab.backgroundPages, "shown_turn_kept" to (shown[i]?.turns != null), "shown_preset_kept" to (shown[i]?.preset != null),
             "made_before_shown" to (pageQueue.madeBeforeShown(page)?.toString() ?: "none"),
@@ -359,6 +362,8 @@ private suspend fun AppViewModel.saveScanNow(eng: io.github.artcraftandroid.pdfc
                     whitePoint = it.whitePoint?.toDouble(),
                     flattenReused = it.flattenReused,
                     flattenSkippedFlat = it.flattenSkippedFlat,
+                    photoToneShare = it.photoTone?.share?.toDouble(),
+                    photoToneFingers = it.photoTone?.fingersLeftOut?.toInt(),
                     flattenForeseen = it.flattenForeseen,
                 )
             }

@@ -376,6 +376,30 @@ internal data class ScanLab(
      */
     val reviewBorders: Boolean = true,
     /**
+     * Review pages on the camera opens the scan's pages one under the other on the newest page, with
+     * one Back to camera button (and Android's Back) that returns to the camera as it was left
+     * (#780). Needs the continuous pages. Off: the newest page in Enhance, where the way back is
+     * More, then Add page, as at first.
+     */
+    val reviewReturn: Boolean = true,
+    /**
+     * The camera's capture checks (#781), none of them a threshold: the page a photo is of is the
+     * one in view when it was asked for, not when its file is written (the outline kept with it and
+     * auto-capture's wait for a new page follow from that); a page not known then is learned from
+     * the first one seen after; an automatic photo that failed, or of a page that only looked
+     * different for a moment, is not taken again by itself; and a focus that another one replaced
+     * does not release the photo waiting for it. Off: all of these as before.
+     */
+    val captureGuards: Boolean = true,
+    /**
+     * Clean scan gives the photographs found on a page of print the Photo document type's strength
+     * inside them (#784), so their shadows and highlights are kept while the print around them is
+     * cleaned as before. Needs the document types. On drawn pages, 21 November 2026: the fine
+     * detail of a photograph's shadows kept 0.51 of its depth instead of 0.00, of its highlights
+     * 1.22 instead of 0.24. Off: one curve for the whole page, as before.
+     */
+    val photoTone: Boolean = true,
+    /**
      * In the automatic mode the page straightened by its corners is measured before the flattening
      * network runs, and when that measure alone says the check could keep no flattened page (not
      * measured, already straight, or too few lines of text), the network, its check and the lines
@@ -420,6 +444,9 @@ internal data class ScanLab(
         "continuous_pages" to continuousPages,
         "camera_buttons" to cameraButtons,
         "review_borders" to reviewBorders,
+        "review_return" to reviewReturn,
+        "capture_guards" to captureGuards,
+        "photo_tone" to photoTone,
         "flatten_foresee" to flattenForesee,
         "order_looks" to orderLooks,
     )
@@ -436,6 +463,9 @@ internal data class ScanLab(
         .put("continuous_pages", continuousPages)
         .put("camera_buttons", cameraButtons)
         .put("review_borders", reviewBorders)
+        .put("review_return", reviewReturn)
+        .put("capture_guards", captureGuards)
+        .put("photo_tone", photoTone)
         .put("flatten_foresee", flattenForesee)
         .put("order_looks", orderLooks)
 
@@ -452,6 +482,9 @@ internal data class ScanLab(
         "continuous_pages" to flag(continuousPages),
         "camera_buttons" to flag(cameraButtons),
         "review_borders" to flag(reviewBorders),
+        "review_return" to flag(reviewReturn),
+        "capture_guards" to flag(captureGuards),
+        "photo_tone" to flag(photoTone),
         "flatten_foresee" to flag(flattenForesee),
         "order_looks" to flag(orderLooks),
     ).joinToString(";") { (k, v) -> "$k=$v" }
@@ -563,6 +596,9 @@ internal data class ScanLab(
                 continuousPages = on("continuous_pages", default.continuousPages),
                 cameraButtons = on("camera_buttons", default.cameraButtons),
                 reviewBorders = on("review_borders", default.reviewBorders),
+                reviewReturn = on("review_return", default.reviewReturn),
+                captureGuards = on("capture_guards", default.captureGuards),
+                photoTone = on("photo_tone", default.photoTone),
                 flattenForesee = on("flatten_foresee", default.flattenForesee),
                 orderLooks = on("order_looks", default.orderLooks),
             )
@@ -632,6 +668,10 @@ internal data class ScanTestResult(
     val flattenReused: Boolean = false,
     /** The page was found flat already and not flattened (#549). */
     val flattenSkippedFlat: Boolean = false,
+    /** The share of the page whose photographs took their own tone curve (#784); null when that was not asked for or the filter is not Clean scan. */
+    val photoToneShare: Double? = null,
+    /** Groups of blocks read as photographs and left out of it because the finger step had filled them (#784); null as above. */
+    val photoToneFingers: Int? = null,
     /** No flattened page could have been kept, known before the network ran, so it did not (#785). */
     val flattenForeseen: Boolean = false,
 )
@@ -893,6 +933,8 @@ internal fun scanTestPageJson(
                 .put("noise", it.noise?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 100.0) / 100.0 } ?: JSONObject.NULL)
                 .put("paper_spread", it.paperSpread?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 10000.0) / 10000.0 } ?: JSONObject.NULL)
                 .put("white_point", it.whitePoint?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 1000.0) / 1000.0 } ?: JSONObject.NULL)
+                .put("photo_tone_share", it.photoToneShare?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 10000.0) / 10000.0 } ?: JSONObject.NULL)
+                .put("photo_tone_fingers", it.photoToneFingers ?: JSONObject.NULL)
                 .put("flatten_check", it.flattenCheck?.let(::scanFlattenCheckJson) ?: JSONObject.NULL)
                 .put("flatten_trim", it.trim?.let(::scanTrimJson) ?: JSONObject.NULL)
                 .put("line_flatten", it.lineFlatten?.let(::scanLineFlattenJson) ?: JSONObject.NULL)

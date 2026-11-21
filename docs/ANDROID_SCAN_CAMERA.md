@@ -130,10 +130,12 @@ least 56 dp, and a place stays empty rather than close up, so the shutter is alw
 One page shows Import and, once the scan has pages, Review pages; a retake shows Import only.
 
 - **Review pages**: the last page with the page count on a badge, an empty page outline before the
-  first. It closes the camera without ending anything and shows the newest page in Enhance
-  (Retake, Borders, Rotate and the rest of its bar; a swipe or Back for the other pages). **Add page** (Enhance's
-  More menu, or the pages screen) brings the camera back, and Undo still knows the photos taken
-  before. With "Scan screens in steps" off it shows the scan screen as it was.
+  first. It closes the camera without ending anything and shows the scan's pages one under the
+  other (#786) on the newest page, with **Back to camera** as the one filled button above the bar:
+  one tap, and the camera is back as it was left, with its count and what Undo knows. Android's
+  Back and the arrow do the same there. A tap on a page opens it in Enhance (Retake, Borders,
+  Rotate and the rest of its bar). See "Review pages and the way back" below. With "Scan screens in
+  steps" off it shows the scan screen as it was.
 - **Undo**: the last photo this camera took since it opened comes out of the scan, by the path
   Delete on a page uses, so its file goes too; again, and the one before goes. A book photo's two
   pages go together, wherever they were moved. Never an imported photo or a page that was in the
@@ -154,9 +156,10 @@ One page shows Import and, once the scan has pages, Review pages; a retake shows
   and in that line is of pages in the scan, never of photos still on their way; a ring turns on
   the Review pages button while one is.
 
-Taps, counted in the code and not on a phone: a page, 1 (the shutter); review the newest page, 1;
-back to the camera from there, 2 (More, Add page); retake a page under review, 1 (Retake) plus the
-shutter, after which the camera closes as a retake does; undo, 1; finish, 1.
+Taps, counted in the code and not on a phone: a page, 1 (the shutter); review the pages, 1;
+back to the camera from there, 1 (Back to camera; it was 2: More, Add page); retake a page under
+review, 2 (the page, Retake) plus the shutter, after which the camera closes as a retake does, then
+1 back to the pages (Done or Back in Enhance) and 1 back to the camera; undo, 1; finish, 1.
 
 Testing option "Review pages, Undo and Done as separate camera buttons" (`camera_buttons`, on;
 it needs the camera's modes and icon bar). Off is the bar as it was, the old Done rules included.
@@ -172,10 +175,58 @@ the Compose code of the bar (not compiled here; CI is its first compile); the lo
 with large text (the screenshot test draws `camera_buttons_*` when asked, and was not run here);
 TalkBack; the time from the shutter to the count (`camera_page wait_ms` will say).
 
-Not done here, and why: a one-tap way back to the camera from Enhance (it needs the Enhance
-screen's file); Import during a scan still closes the camera for the imported pages (a cancelled
+Not done here, and why: Import during a scan still closes the camera for the imported pages (a cancelled
 picker leaves the camera as it was); the page joins the scan only after its thumbnail is read, so
 the count follows the photo by that long (`ui/ScanPhotoJobs.kt`); landscape and tablet proportions.
+
+## Review pages and the way back (#780, follow-up)
+
+Review pages first opened the newest page in Enhance, and the way back to the camera was More,
+then Add page: two taps, and nothing on the screen said the camera was waiting. It now opens the
+document screen's continuous pages (#786) on the newest page, the same screen Done leads to, with
+one thing added while the camera waits: **Back to camera**, a filled button as wide as the screen
+(640 dp at most) above the bottom bar, at least 48 dp high, with the camera icon and words that
+wrap at large text sizes.
+
+- **Back to camera**, Android's Back and the arrow in the top bar all return to the camera that
+  was left: the same scan, the page count on the Review pages badge, and Undo for the photos taken
+  before. Nothing is asked and nothing ends. (With pages chosen in the grid, Back first clears the
+  choice, as always.)
+- **Add page** on the bar does the same as it always did, and also ends the review.
+- **A page retaken under review** (tap the page, Retake, the shutter): the camera of the retake
+  closes after its photo as before, and the camera that waits keeps what Undo knows. Undo never
+  reaches the page that was retaken or deleted meanwhile (`ScanCameraSession.seen`). A retake
+  closed without a photo changes nothing.
+- **Import** from the pages under review adds the photos and ends the review: the camera that
+  waited is let go of, as Import on the camera itself does.
+- **Done on the camera afterwards** leads to these same pages, without the button.
+- When the pages were already on screen under the camera (it was opened with Add page), Review
+  pages scrolls them to the newest page; the grid, if it was the view, gives way to the pages
+  without counting as one of the person's switches.
+
+Rules: `scanReviewTarget` and `scanReviewKeepsSession` in `ScanCameraControls.kt`;
+`ScanStepsController.reviewing`, `showReview` and `endReview` in `ScanSteps.kt`;
+`ScanDocViewState.review` in `ScanContinuous.kt`; the button is `ScanReviewReturn` in
+`ScanContinuousUi.kt`, shown by `ScanDocumentScreen`.
+
+Testing option "Review pages opens the pages, with Back to camera" (`review_return`, on; it needs
+"Scan screens in steps" and "Open a finished scan as continuous pages"). Off: the newest page in
+Enhance and More, Add page, as it was. Log: the `screen` line of a review has `review=true` and
+`doc_shown` has `route=review` (when the pages were not already there); `camera_review_end` says how it ended (`by`: `button`, `back`,
+`add`, `import`), how long the pages were shown (`ms`) and the scan's `pages`. Page file:
+`options.review_return`; nothing per page, since a review changes no page.
+
+Verified: `ScanReviewReturnTest` (where Review pages leads with each option, the page it opens on
+from either view, which camera keeps its photos, Undo after the way back and after a retake, the
+log line); the pure code and that test were compiled and run on a desktop with a stand-alone Kotlin
+compiler, without the testing option's own test. Not verified: anything on a phone or tablet; the
+Compose code (the button, the scroll to the newest page, Back) was not compiled here, CI is its
+first compile; Arabic, large text and TalkBack on the button (its label is its words; it is a
+Material button, so its role is said); no screenshot is drawn of it yet.
+
+Taps to try: three photos in Many pages, Review pages (the pages open on page 3, "Page 3 of 3"),
+Back to camera (the badge says 3), Undo (2), Review pages, tap page 1, Retake, the shutter, Done in
+Enhance, Back to camera, Undo (1: the retaken page stays), Done (the pages, no button).
 
 ## Where the code is
 

@@ -147,12 +147,19 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
     val selecting = choosing || picked.isNotEmpty()
     // a scan opened from its PDF keeps that file's name (#513)
     val renamable = vm.insertScanAt == null && vm.scanEdit.target == null
+    // Review pages on the camera (#780): back to the camera that is waiting, by the button ([by] `button`) or Back (`back`)
+    fun backToCamera(by: String) {
+        vm.scanSteps.endReview(by, pages.size)
+        vm.takeScanPhoto()
+    }
     val back = {
         when {
             selecting -> {
                 picked = emptySet()
                 choosing = false
             }
+            // the pages are under review from the camera (#780): Back goes back to it, and ends nothing
+            vm.scanSteps.reviewing -> backToCamera("back")
             // with pages, Back asks first (#456)
             scanBackAsks(pages.size, vm.scanLab.options) -> askingDiscard = true
             else -> vm.discardScan()
@@ -469,6 +476,8 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
                 }
             }
         }
+        // Review pages on the camera (#780): one tap back to the camera that is waiting
+        if (vm.scanSteps.reviewing && !selecting) ScanReviewReturn { backToCamera("button") }
         val chosen = scanSelectedIndexes(picked, keys)
         ScanDocumentBar(
             selecting, chosen.size, vm.insertScanAt == null, pages.isNotEmpty(),

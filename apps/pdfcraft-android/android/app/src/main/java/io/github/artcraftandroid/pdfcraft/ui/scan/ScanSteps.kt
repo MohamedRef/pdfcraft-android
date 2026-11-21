@@ -164,6 +164,32 @@ internal class ScanStepsController {
         Diag.event(DiagArea.Scan, "screen", "from" to from, "to" to "document", "pages" to pages)
     }
 
+    /**
+     * Review pages on the camera (#780): the document screen shows the scan for a check while the
+     * camera waits, with Back to camera. True until the camera is asked for again or the scan ends.
+     */
+    var reviewing by mutableStateOf(false)
+        private set
+    private var reviewAt = 0L
+
+    /** Review pages was pressed: the continuous pages on the page at [anchor], of [pages]. */
+    fun showReview(anchor: ScanDocAnchor, pages: Int) {
+        docView.review(anchor)
+        docView.route = "review"
+        reviewing = true
+        reviewAt = SystemClock.elapsedRealtime()
+        val from = if (document) "document" else "camera"
+        document = true
+        Diag.event(DiagArea.Scan, "screen", "from" to from, "to" to "document", "pages" to pages, "review" to true)
+    }
+
+    /** The review ended: [by] is `button` or `back` (Back to camera), `add` (Add page) or `import`. Nothing when none was open. */
+    fun endReview(by: String, pages: Int) {
+        if (!reviewing) return
+        reviewing = false
+        Diag.event(DiagArea.Scan, "camera_review_end", *scanReviewEndDiag(by, SystemClock.elapsedRealtime() - reviewAt, pages))
+    }
+
     /** A page was opened from the document screen in Enhance; [page] counted from 1. */
     fun openEnhance(page: Int, pages: Int) {
         if (!document) return
@@ -175,6 +201,7 @@ internal class ScanStepsController {
     fun reset() {
         borders = null
         document = false
+        reviewing = false
         docView.reset()
         searched.clear()
         pending = null

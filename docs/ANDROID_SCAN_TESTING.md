@@ -64,6 +64,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
 | Document types shape Clean scan's tone (#299) | On | Off: a type sets only strength, sharpening and paper color (no receipt gamma, no whiteboard S-curve) |
 | Sharpen photos on the page gently (#299) | On | Off: only the objects the look finds itself are sharpened gently, as before |
+| Keep the shadows and highlights of photographs on a page, in Clean scan (#784) | On | Off: one tone curve for the whole page, as before, so a photograph among print comes out with black shadows and white highlights |
 | Suggest Flatten page or Grayscale for a document type (#299) | On | Off: no suggestion chips |
 | Barcodes, stamps and soft print are not photographs (#427) | On | Off: the first photograph rule, which also reads those as photographs, so a label with a large barcode becomes a document with photographs |
 | A page whose edges were not found is a Document until it is cropped (#444) | On | Off: the kind of such a page is worked out from the whole photo, table and surroundings included, as before #444 |
@@ -75,6 +76,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Show each page at once in a quick version while it is made (#785) | On | Off: a page shows its photo until it is made, and the camera's pages button shows the photo as taken, as before. On: a page not made yet is shown in a first picture (straightened by its corners in its look, from the photo's thumbnail; no flattening, automatic turn, document type or finger removal), which the page replaces when it is made. Saved pages are the same either way. `page_first` lines, and `first_ms` on `page_ready` and `scan_ready` |
 | Open a finished scan as continuous pages (#786) | On | Off: the document screen is the grid alone, as before, with no Organize pages / View pages button and no Edit on the bar. On: it opens on the pages one under the other with "Page n of m"; Organize pages shows the grid and View pages comes back to the same page. Saved pages are the same either way. `doc_shown` says `view`, `route` and `anchor`; `doc_view`, `doc_page_ready` and `doc_pages_ready` are logged |
 | Review pages, Undo and Done as separate camera buttons (#780) | On | Off: the camera's bottom bar as before, one thumbnail with the count that is also Done. On: Import, Review pages, the shutter, Undo and Done each in a place of its own; a line under the viewfinder confirms each photo and counts the pages; a button that cannot act says why. Needs "Camera modes, icon bar and zoom" on. Log: `camera_action`, `camera_page` |
+| Review pages opens the pages, with Back to camera (#780) | On | Off: Review pages shows the newest page in Enhance, and the camera comes back with More, then Add page. On: it shows the scan's pages one under the other on the newest page, with one Back to camera button above the bar (Android's Back does the same); the camera comes back with its count and Undo as they were. Needs "Scan screens in steps" and "Open a finished scan as continuous pages" |
 | Make two pages at once at Save (#549) | On | Off: Save PDF and Share make the pages not ready yet one after another, as before. On: two at once, each taking the next page in the scan's order (the `saved` and `share` lines say `save_lanes` and `save_most_at_once`) |
 | Make full-size pages before Save (#504) | On | Off: Save PDF, Share and Save to gallery make every page at full size when pressed ("Cleaning up page n of m"), as before #504. On: each page is made at full size in the background once its preview is ready (not while the camera is open or a preview is being made) and Save takes it, finishing only the pages not ready ("Finishing page n of m"). Needs "Make every page in the background" |
 | Pages ready at every size before Save (#528) | On | Off: a page made ahead is stored at the remembered size only, and picking another size on the sheet makes every page again, as with #505. On: each page made ahead is stored at all four sizes from one making, so any size is ready; the sheet's estimate adds the pages' own sizes. Needs "Make full-size pages before Save" and the automatic encoding |
@@ -90,6 +92,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Camera modes (One page, Many pages, Book), icon bar and zoom (#457) | On | Off: the camera's bars before #457: words in the top bar, no modes (every photo is added until Done), Import only before the first page, no grid and no zoom, and the permission page's four text buttons |
 | Live outline tries turned looks (#295) | On | Off: every frame is looked at as it is, as before. On: while nothing is found, each frame's one look takes the next of the still search's turns (90, −90, −30, 30, −60, 60); the turn that finds the page is kept, and held two frames once the page is lost. Each frame still costs one look. Log: `angle` on `live_frame`, `found_turned` on `live_summary` |
 | Auto-capture eased (#296) | On | Off: as before: the steady test counts a confidence of 0.6 as sure, and More light starts under a mean luma of 55. On: 0.5 and 40. On the owner's phone on 2026-11-20 auto-capture took none of 11 photos; at the shutter the advice was Hold still 5 times and More light twice, never Ready. Log: `live_hints` when the camera closes |
+| Capture checks (#781) | On | Off: as before. On: the page a photo is of is the one in view when it was asked for, not when its file is written (so a page laid down during the capture is still taken by itself, and the outline kept with the photo is the photo's); a page not known at the shutter is learned from the first one seen after; an automatic photo that failed, or of a page a hand passed over, is not taken again by itself; a tap on the viewfinder no longer lets a photo that waits for its focus go early. No limit or timing differs. Log: `camera_auto_phase` with `why`, `camera_auto_rearm`, `camera_auto_summary` |
 | Scan screens in steps (#455, #458) | On | Off: today's single scan screen. On: in One page mode, and after importing one photo, Adjust borders opens straight after the photo (Retake, Rotate left, Rotate right, Whole photo ⇄ Auto, Next); Crop on the scan screen opens the same screen with Done. Next goes to Enhance (#459): the page fills the screen above a strip of looks (56×72 tiles) and a bar of Retake, Borders, Rotate, Delete and More; ‹ › and a sideways swipe go between pages; the sliders button opens Strength, Paper color, Document type and Flatten page in a sheet; what was turned or done automatically (each with Undo), a document type's suggestion (one chip that can be dismissed; none for what the automatic look decides) and the compare hint sit in one line between the page and the looks, which scrolls sideways; nothing stays over the page (#493). Done on Enhance (and Back) goes to the document screen (#460): the pages in a grid, a tap opens one in Enhance, holding one and dragging moves it, holding without moving selects it (Rotate and Delete then work on the selected pages, Delete asks first); the name at the top renames the scan; Add page, Import, Share (the PDF to Android's share sheet, nothing saved) and Save PDF. Save to gallery (#470) is in ⋮ for every page and in the selection's bar for the selected ones: the pages as in the PDF go into Pictures/PdfCraft. Camera Done in Many pages or Book, and importing several photos, go straight to it |
 | Recent scans to edit again (#461) | On | Off: the photos are deleted once the PDF is written, as before. On (with Settings ▸ Scanner ▸ "Keep recent scans to edit again" also on): a scan saved as a new PDF keeps its photos and each page's corners, look, strength, turn and flattening in the app's own storage, for the last 10 scans. Tools ▸ Recent scans lists them; a tap copies the photos back and opens the document screen, and Save PDF writes a new PDF and replaces that entry. Pages going into an open document are not kept. Settings ▸ Scanner ▸ Delete recent scans removes them all. |
 | Edit a saved scan from its PDF (#513) | On | Off: the viewer offers nothing for a scan's PDF, as before. On: Save PDF writes the kept scan's id into the PDF (custom document property `PdfCraftScan`). In the viewer, a tap on a page of such a PDF with no tool out shows the page alone with **Edit**; Edit opens the kept scan on that page in Enhance, with every screen a new scan has; the document screen's main button reads "Save to this PDF", and it replaces only the pages that changed in the same file and saves it. Pages added go at the end, pages deleted go from the end; when borders, turn or the order changed on pages that carry comments, the app asks whether to keep them. When the kept scan is gone or pages were added or removed in the PDF since, Edit falls back to "Edit as scan". "Edit as scan" (a selected image ▸ More, in Edit PDF) works on any page that is one image covering it: the image becomes the photo of a one-page scan, and Done replaces that page. |
@@ -137,8 +140,9 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
              "sharpen": 30, "denoise": true, "grain_white": true, "preview": true, "crop_tools": true, "flatten_auto": true, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "strict_book": true, "book_gutter": true, "line_flatten": true, "flatten_reuse": true, "skip_flat": true, "parallel_pages": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
-             "preview_zoom": true, "look_reuse": true, "first_picture": true, "continuous_pages": true, "flatten_foresee": true, "order_looks": true,
-             "camera_buttons": true},
+             "preview_zoom": true, "look_reuse": true, "first_picture": true, "continuous_pages": true,
+             "camera_buttons": true, "review_return": true, "capture_guards": true,
+             "photo_tone": true, "flatten_foresee": true, "order_looks": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "bright_share": 0.0, "gutter_band": false, "gutter_loose": false, "gutter_cover": 0.0,
@@ -148,7 +152,9 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
              "torch": false, "focused": true, "rotation": 0, "capture_ms": 640, "live": true, "live_found": true,
              "live_stable": true, "live_hint": "ready", "preview_quad": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
              "auto_on": true, "auto_shot": true, "sharpness": 1.235, "sharpness_blurred_unverified": false, "sharpness_ms": 85,
-             "merge": null, "mode": "batch", "zoom": 1.0, "grid": false},
+             "merge": null, "mode": "batch", "zoom": 1.0, "grid": false,
+             "live_wanted": "ready", "focus_via": "focused", "focus_wait_ms": 310, "shot_ms": 330, "since_shot_ms": 5200,
+             "auto_phase": "arming", "signature_known": true, "capture_guards": true},
  "preview": {"shown": true, "reused": true, "ms": 31, "width": 905, "height": 1280, "look": "auto",
              "light_reused": true, "look_parts_ms": {"look_tone": 21}},
  "models": {"edges": "ready", "flatten": "ready", "upright": "ready"},
@@ -164,7 +170,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
             "orientation": {"quarter_turns": 3, "confidence": 0.81, "agreement": 1.0, "tiles": 4, "sure": true},
-            "noise": 0.33, "flatten_check": null, "flatten_trim": null, "line_flatten": null, "flatten_reused": false, "flatten_skipped_flat": false, "flatten_foreseen": false}
+            "noise": 0.33, "flatten_check": null, "flatten_trim": null, "line_flatten": null, "flatten_reused": false, "flatten_skipped_flat": false,
+            "photo_tone_share": 0.0, "photo_tone_fingers": 0, "flatten_foreseen": false}
 }
 ```
 
@@ -179,8 +186,8 @@ or `null`. `outcome` is `saved` or `discarded`; a discarded page has no `look`, 
 `reused` whether its straightened page was kept from an earlier preview, `ms` the time from the
 request to the result, `light_reused` whether Clean scan or Whiteboard found the page's light
 estimate kept from an earlier look (#446) and `look_parts_ms` the parts of that look that ran
-(`look_light`, `look_noise`, `look_denoise`, `look_sharpen`, `look_tone`; only the tone when the
-estimate was kept), and `look` the filter it showed, which can differ from the one saved when
+(`look_light`, `look_noise`, `look_denoise`, `look_sharpen`, `look_tone`, and `look_photo_tone`
+when photographs got their own curve, #784; only the tone when the estimate was kept), and `look` the filter it showed, which can differ from the one saved when
 the filter was changed and saved before the new preview came. `page_look` is the page's own look
 as the scan screen left it (#301): `id` (`original`, `clean`, `colour`, `greyscale`, `whiteboard`
 or `bw`; Auto color and Whiteboard share the native `colour` look, so `look` alone can't tell
@@ -264,7 +271,11 @@ Besides what `docs/ANDROID_DIAGNOSTICS_LOG.md` lists for `scan`: every `photo` l
 `book_order`, `book_gutter_search`, `book_split`, `gutter_found`, `gutter_top`, `gutter_bottom`,
 `gutter_confidence`, `book_ms`), every `page` line which `book_half` it is (`left`, `right` or
 `none`), every `page` line the `strength` used, `side_proportions`,
-`snap_paper`, `upright`, `sharpen` and `denoise`, `grain_white` with what Clean scan measured for
+`snap_paper`, `upright`, `sharpen` and `denoise`, `photo_tone` with what it did (#784:
+`photo_tone_share`, the share of the photo mask's blocks given the photographs' own curve, and
+`photo_tone_fingers`, how many groups of them were left out because the finger step filled
+something there; -1 for the other filters; the page file's `result` has the same two, null when
+it did not run), `grain_white` with what Clean scan measured for
 it (#466: `paper_spread`, how much the paper varies after its light is divided out, and
 `white_point`, the level from which paper was drawn white; -1 for the other filters; the page
 file's `result` has the same two, null for the other filters), and how its turn was decided (#339:

@@ -5,4 +5,6 @@
     <string name="scan_auto_tip">Auto-capture is on: hold the device still over the page and it takes the photo.</string>
     <string name="scan_auto_setting">Auto-capture</string>
     <string name="scan_auto_skip">Taking the photo. Tap here to skip this page.</string>
+    <!-- The capture checks (#781) -->
+    <string name="scan_lab_capture_guards">Capture checks: the page in view at the shutter, a replaced focus, no repeated automatic photo</string>
 </resources>

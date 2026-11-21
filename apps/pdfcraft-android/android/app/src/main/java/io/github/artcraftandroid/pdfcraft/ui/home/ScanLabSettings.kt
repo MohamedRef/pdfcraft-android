@@ -152,6 +152,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_presets, o.presets) { lab.update(o.copy(presets = it)) }
     Sw(R.string.scan_lab_kind_tone, o.kindTone) { lab.update(o.copy(kindTone = it)) }
     Sw(R.string.scan_lab_photo_sharpen, o.photoSharpen) { lab.update(o.copy(photoSharpen = it)) }
+    // photographs on a page of print keep their shadows and highlights (#784)
+    Sw(R.string.scan_lab_photo_tone, o.photoTone) { lab.update(o.copy(photoTone = it)) }
     Sw(R.string.scan_lab_suggestions, o.suggestions) { lab.update(o.copy(suggestions = it)) }
     // the slider's strength counts as set by hand, and sharpening scales the type's (#424)
     Sw(R.string.scan_lab_page_strength, o.pageStrength) { lab.update(o.copy(pageStrength = it)) }
@@ -198,6 +200,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_camera_buttons, o.cameraButtons) { lab.update(o.copy(cameraButtons = it)) }
     // pages whose borders need a check are marked, asked about before Save and kept with the draft (#783)
     Sw(R.string.scan_lab_review_borders, o.reviewBorders) { lab.update(o.copy(reviewBorders = it)) }
+    // Review pages opens the pages, with one tap back to the camera (#780)
+    Sw(R.string.scan_lab_review_return, o.reviewReturn) { lab.update(o.copy(reviewReturn = it)) }
+    // the camera knows which page a photo is of, and does not repeat an automatic photo (#781)
+    Sw(R.string.scan_lab_capture_guards, o.captureGuards) { lab.update(o.copy(captureGuards = it)) }
     // flattening that the check could not keep is not run (#785)
     Sw(R.string.scan_lab_flatten_foresee, o.flattenForesee) { lab.update(o.copy(flattenForesee = it)) }
     // the page search's turned looks ordered by how the page lies (#785)

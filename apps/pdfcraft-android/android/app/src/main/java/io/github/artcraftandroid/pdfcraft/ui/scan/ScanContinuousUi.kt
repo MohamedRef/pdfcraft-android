@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -41,6 +43,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
@@ -76,6 +79,9 @@ internal fun ScanContinuousPages(vm: AppViewModel, pages: List<ScanPage>, modifi
             )
         }
     }
+    // Review pages on the camera (#780) while these pages are already here: go to the page it asks for
+    val jumps = docView.jumps
+    LaunchedEffect(jumps) { if (jumps > 0) list.scrollToItem(scanAnchorIndex(docView.anchor, keys)) }
     val total = pages.size
     val shownAt = (current ?: start).coerceIn(0, (total - 1).coerceAtLeast(0))
     LaunchedEffect(shownAt, keys) { onCurrent(shownAt) }
@@ -194,5 +200,29 @@ private fun ScanPageStatusRow(working: Boolean, warning: Boolean, text: String, 
         Spacer(Modifier.width(8.dp))
         Text(text, color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
         if (action != null) TextButton(onClick = onAction) { Text(action, color = c.accent) }
+    }
+}
+
+/**
+ * Back to camera (#780), above the document screen's bar while the pages are under review from the
+ * camera: the one filled button of that width, so the way back is one tap and cannot be missed.
+ * The camera comes back as it was left, with its page count and what Undo knows. As wide as the
+ * screen up to a comfortable width, at least 48 dp high, and its words wrap at large text sizes.
+ */
+@Composable
+internal fun ScanReviewReturn(onBack: () -> Unit) {
+    val c = pdfColors
+    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+        Button(
+            onClick = onBack,
+            colors = ButtonDefaults.buttonColors(containerColor = c.button, contentColor = Color.White),
+            shape = RoundedCornerShape(24.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.widthIn(max = SCAN_DOC_PAGE_MAX_DP.dp).fillMaxWidth().heightIn(min = 48.dp),
+        ) {
+            Icon(LucideIcons.Camera, null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.scan_review_back_camera), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, textAlign = TextAlign.Center)
+        }
     }
 }

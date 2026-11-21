@@ -156,6 +156,8 @@ internal fun scanPageRequest(
     // a document type's own tone, and photographs sharpened gently (#299)
     kindTone = lab.kindTone,
     photoSharpen = lab.photoSharpen,
+    // the photographs on a page of print keep their shadows and highlights (#784)
+    photoTone = lab.photoTone,
     // the light estimate kept with the straightened page between looks (#446)
     reuseLook = lab.lookReuse,
     // fingers at the page's edge papered over after Clean scan (#466)

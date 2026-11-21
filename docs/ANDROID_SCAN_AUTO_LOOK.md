@@ -155,6 +155,38 @@ paper colour. This wires in two blocks from #382 rather than writing them again:
   and soft print are not photographs" off) is joined to #298's object mask,
   and inside either sharpening is 30 % of what print gets (`enhance::with_photos`). A block counts
   when its weight is at least one half. A page the mask finds to be a picture is all gentle.
+- **Photographs keep their shadows and highlights** (#784; `photo_tone`; testing option "Keep the
+  shadows and highlights of photographs on a page (Clean scan)", on). Clean scan's curve takes
+  everything under its black point to black and everything near the paper's level to white. That
+  is what print needs, and on the drawn pages of `scan-eval --clean` it took a photograph's dark
+  part to one flat black and a tenth of the photograph to white. Now, on a page of print that the
+  block photo mask finds photographs on (not a page that is all picture, which is the Photo type
+  already), the page is drawn a second time at the Photo type's strength (25, against a
+  Document's 60), without a kind's shape and without the grainy page's lift, and mixed in by the
+  mask's weight, so the print around a photograph is as before. The light under a photograph is
+  carried in from the paper around it (`background::carried_in`): the look's own estimate takes a
+  photograph's bright parts for paper, which is what drew them white. It runs after the finger
+  step, and a group of mask blocks in which that step filled anything is left out
+  (`page::photo_weights`): a finger is skin, which the mask reads as a photograph, and the gentler
+  curve would grey the paper put in its place. On 4 drawn pages (app defaults, before → after):
+  detail kept in the dark part 0.001 → 0.51 of the drawn (the photo as taken has 0.78), in the
+  light part 0.24 → 1.22, the photograph at white 8.6 % → 0.0 %, at black 14.5 % → 9.0 %, SSIM of
+  the photograph 0.763 → 0.873; print on the same page `ink_contrast` 242.5 → 242.2,
+  `thin_contrast` 183.0 → 181.5, paper 100 % white both ways. A page with no photograph is byte
+  for byte as before. The strength is the Photo type's existing one and was not searched for: at
+  0 the drawn photograph is nearer still to its truth (dark detail 0.91, SSIM 0.932), but a drawn
+  page cannot say how black a printed photograph's black should be, so nothing new was tuned.
+  Cost: the tone curve a second time, about 0.2 s on a desktop for an A4 page at 200 dpi with a
+  photograph on a quarter of it (not a baseline; the phone's own figure is `look_photo_tone_ms`);
+  nothing on a page without one. The `page` and `preview` log
+  lines have `photo_tone`, `photo_tone_share` (share of the mask's blocks toned; -1 when the look
+  is not Clean scan) and `photo_tone_fingers` (groups left out for a finger), the `page` line
+  `photo_tone_ms` too, and the look's parts gain `look_photo_tone_ms`; a kept scan's page file has
+  `photo_tone_share` and `photo_tone_fingers` in `result` and `photo_tone` in `options`.
+  Not run on a phone, and checked on no real photograph: of the 12 pages of the owner's kept scan
+  of 21 Nov, 9 have nothing the mask reads as a photograph, on 2 the only such region is a thumb
+  (2–3 % of the page; filled, left out, the page identical with the option on and off), and one
+  card-shaped page has a region of 0.6 % of the page.
 - **Suggestions** (testing option "Suggest Flatten page or Grayscale for a document type", on): a
   Book page shows a chip "Flatten this page?" beside the type while the person has not chosen
   either way for the page and the flattening model is there; a Receipt shows "Try grayscale" while

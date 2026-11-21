@@ -17,6 +17,10 @@
 pub mod aspect;
 pub mod book;
 pub mod capture;
+#[cfg(any(test, feature = "synth"))]
+pub mod clean_eval;
+#[cfg(any(test, feature = "synth"))]
+pub mod clean_pages;
 pub mod defects;
 pub mod detect;
 pub mod encode;
@@ -39,6 +43,7 @@ pub mod markup;
 pub mod merge;
 pub mod metrics_compare;
 pub mod metrics_geometry;
+pub mod metrics_marks;
 pub mod metrics_tone;
 pub mod models;
 pub mod model_timing;
@@ -88,6 +93,10 @@ mod tests_book_photo;
 #[cfg(test)]
 mod tests_capture;
 #[cfg(test)]
+mod tests_clean_eval;
+#[cfg(test)]
+mod tests_clean_pages;
+#[cfg(test)]
 mod tests_defects;
 #[cfg(test)]
 mod tests_inspect;
@@ -115,6 +124,8 @@ mod tests_model_timing;
 mod tests_metrics_compare;
 #[cfg(test)]
 mod tests_metrics_geometry;
+#[cfg(test)]
+mod tests_metrics_marks;
 #[cfg(test)]
 mod tests_metrics_tone;
 #[cfg(test)]
