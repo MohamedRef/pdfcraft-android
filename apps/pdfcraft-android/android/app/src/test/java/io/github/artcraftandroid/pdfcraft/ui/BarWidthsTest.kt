@@ -144,6 +144,10 @@ class BarWidthsTest {
             add(Bar("scan document bar without Share", { listOf(text(R.string.tools_add_page), text(R.string.scan_camera_import_short)) }) {
                 ScanDocumentBar(false, 0, false, true, {}, {}, {}, {}, {}, {}, {})
             })
+            // #786: Edit for the page in sight joins the bar in the continuous view
+            add(Bar("scan document bar with Edit", { listOf(text(R.string.tools_add_page), text(R.string.scan_camera_import_short), text(R.string.scan_edit_page_edit), text(R.string.common_share)) }) {
+                ScanDocumentBar(false, 0, true, true, {}, {}, {}, {}, {}, {}, {}, onEdit = {})
+            })
             for (batch in listOf(false, true)) {
                 val labels = (if (batch) listOf(text(R.string.scan_enhance_borders), text(R.string.scan_batch_look)) else emptyList()) +
                     listOf(text(R.string.scan_rotate), text(R.string.scan_gallery_save), text(R.string.common_delete))

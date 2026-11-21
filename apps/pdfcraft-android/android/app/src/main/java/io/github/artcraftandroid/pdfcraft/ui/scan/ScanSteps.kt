@@ -153,10 +153,14 @@ internal class ScanStepsController {
     var document by mutableStateOf(false)
         private set
 
+    /** The document screen's view and the page it comes back to (#786). */
+    val docView = ScanDocViewState()
+
     /** The document screen opens, from [from] (`camera`, `import`, `enhance`, `borders`). */
     fun showDocument(from: String, pages: Int) {
         if (document) return
         document = true
+        docView.route = from
         Diag.event(DiagArea.Scan, "screen", "from" to from, "to" to "document", "pages" to pages)
     }
 
@@ -171,6 +175,7 @@ internal class ScanStepsController {
     fun reset() {
         borders = null
         document = false
+        docView.reset()
         searched.clear()
         pending = null
         retakeFromBorders = false

@@ -469,10 +469,22 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
         vm.scanApplyAutoLook(page.key, p.kind?.suggestGreyscale == true)
     }
 
-    /** Pages that could not be made, by key: not asked again until they change. */
-    private val failed = HashMap<String, ScanPreviewKey>()
+    /** Pages that could not be made, by key: not asked again until they change. Read by the document screen (#786), so it is watched. */
+    private val failed = mutableStateMapOf<String, ScanPreviewKey>()
 
     private fun markFailed(pageKey: String, key: ScanPreviewKey) { failed[pageKey] = key }
+
+    /** Whether [page] could not be made as it is now (#786): the document screen says so on the page and offers Try again. */
+    fun failedOf(page: ScanPage): Boolean = on() && failed[page.key] == keyOf(page)
+
+    /** Try again on page [index] (#786): a page that could not be made is asked once more, its first picture too. Main thread. */
+    fun retry(index: Int, page: ScanPage) {
+        if (!on()) return
+        val was = failed.remove(page.key) != null
+        firstFailed.remove(page.key)
+        Diag.event(DiagArea.Scan, "page_retry", "index" to index + 1, "failed" to was)
+        kick()
+    }
 
     /** The screen's preview of [page] from [key] failed: the queue does not try it again until it changes. */
     fun failedOnScreen(page: ScanPage, key: ScanPreviewKey) {
