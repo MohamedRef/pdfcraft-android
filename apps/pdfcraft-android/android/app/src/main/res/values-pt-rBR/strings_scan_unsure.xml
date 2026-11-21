@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- The pages whose page was not found or is unsure, offered for a check (#758) -->
-<resources>
-    <string name="scan_lab_check_unsure">Oferecer conferir as páginas incertas</string>
-    <plurals name="scan_unsure_offer">
-        <item quantity="one">%1$d página pode estar com as bordas erradas</item>
-        <item quantity="other">%1$d páginas podem estar com as bordas erradas</item>
-    </plurals>
-</resources>

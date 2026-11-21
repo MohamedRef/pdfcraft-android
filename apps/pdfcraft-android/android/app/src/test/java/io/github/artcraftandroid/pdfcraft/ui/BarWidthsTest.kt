@@ -61,7 +61,7 @@ import org.robolectric.annotation.Config
 
 /**
  * Every bottom bar of the viewer and the scanner (#538), laid out at 320, 360, 384 and 600 dp in
- * each of the app's seven languages, with its optional buttons shown (Edit PDF's Paste, Draw's
+ * each of the app's two languages, with its optional buttons shown (Edit PDF's Paste, Draw's
  * favourites): every button is at least 48 dp wide and lies on the screen, or is brought onto it
  * by scrolling its bar. A button added to a bar then fails here instead of pushing another off the
  * screen, as Paste did to Link on Edit PDF's bar.
@@ -211,9 +211,4 @@ class BarWidthsTest {
 
     @Test @Config(sdk = [35], qualifiers = "en-w640dp-h900dp-mdpi") fun english() = check("en")
     @Test @Config(sdk = [35], qualifiers = "ar-w640dp-h900dp-mdpi") fun arabic() = check("ar")
-    @Test @Config(sdk = [35], qualifiers = "de-w640dp-h900dp-mdpi") fun german() = check("de")
-    @Test @Config(sdk = [35], qualifiers = "fr-w640dp-h900dp-mdpi") fun french() = check("fr")
-    @Test @Config(sdk = [35], qualifiers = "es-w640dp-h900dp-mdpi") fun spanish() = check("es")
-    @Test @Config(sdk = [35], qualifiers = "it-w640dp-h900dp-mdpi") fun italian() = check("it")
-    @Test @Config(sdk = [35], qualifiers = "pt-rBR-w640dp-h900dp-mdpi") fun portuguese() = check("pt")
 }

@@ -6,9 +6,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Every language the app ships has every English string (#616). A string added in English only
- * shows in English to Arabic, German, Spanish, French, Italian and Portuguese readers, so this
- * fails until the same key is in each values-xx folder. Strings marked translatable="false" are
+ * Every language the app ships has every English string (#616). The app's interface is English and
+ * Arabic only: no other values-xx folder may come back. A string added in English only shows in
+ * English to Arabic readers, so this fails until the same key is in values-ar. Strings marked translatable="false" are
  * left out. Placeholders must match too, or the text crashes or shows the wrong number.
  */
 class TranslationCompletenessTest {
@@ -40,7 +40,7 @@ class TranslationCompletenessTest {
 
     @Test
     fun theLanguagesAreFound() {
-        assertTrue("expected the shipped languages, found ${languages.map { it.name }}", languages.size >= 6)
+        assertEquals("the interface is English and Arabic only", listOf("values-ar"), languages.map { it.name })
         assertTrue(english.size > 1000)
     }
 
