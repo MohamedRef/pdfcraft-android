@@ -29,8 +29,11 @@ drawn page instead of the finished one, and the look tiles are empty. English an
 360×640 dp and 384×832 dp.
 
 Files: `app/build/screenshots/scan/camera_<mode>_<locale>_<size>.png`,
-`camera_permission_<locale>_<size>.png`, `crop_<locale>_<size>_<theme>.png`, and
-`borders_`, `enhance_` and `document_<locale>_<size>_<theme>.png`. `document_made_…` (first theme
+`camera_permission_<locale>_<size>.png`, `camera_buttons_<empty|pages|adding>_<locale>_<size>.png`
+(#780: Review pages, Undo and Done before the first photo, with three pages, and while a photo is
+on its way), `crop_<locale>_<size>_<theme>.png`, and
+`borders_`, `enhance_` and `document_<locale>_<size>_<theme>.png` (the continuous pages, #786),
+`document_grid_…` (the grid behind Organize pages). `document_made_…` (first theme
 only) shows the document screen with pages 1 and 3 as made by the background queue (a straight
 drawn page stands in for the engine's result) and page 2 still waiting (#494).
 `enhance_notes_<locale>_320x640.png` (English and Arabic) is Enhance's notes line in its worst

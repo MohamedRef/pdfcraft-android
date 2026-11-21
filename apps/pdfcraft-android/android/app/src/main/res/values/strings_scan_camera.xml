@@ -21,4 +21,22 @@
     <string name="scan_camera_setting_in_app">PdfCraft camera</string>
     <string name="scan_camera_setting_phone">Camera app</string>
     <string name="scan_camera_setting_body">The camera app works only while PdfCraft is allowed to use the camera.</string>
+    <!-- Review pages, Undo and Done as separate buttons (#780) -->
+    <string name="scan_lab_camera_buttons">Review pages, Undo and Done as separate camera buttons</string>
+    <string name="scan_camera_review_short">Review</string>
+    <plurals name="scan_camera_review_pages">
+        <item quantity="one">Review pages. %1$d page</item>
+        <item quantity="other">Review pages. %1$d pages</item>
+    </plurals>
+    <string name="scan_camera_undo_photo">Undo the last photo</string>
+    <string name="scan_camera_photo_taken">Photo taken. Adding the page.</string>
+    <plurals name="scan_camera_pages_now">
+        <item quantity="one">%1$d page in this scan</item>
+        <item quantity="other">%1$d pages in this scan</item>
+    </plurals>
+    <string name="scan_camera_pages_none">No pages in this scan</string>
+    <string name="scan_camera_finishing">Finishing after this photo</string>
+    <string name="scan_camera_blocked_no_pages">No pages yet. Take a photo first.</string>
+    <string name="scan_camera_blocked_busy">Wait until the photo is added.</string>
+    <string name="scan_camera_blocked_undo">Nothing to undo. Undo takes back photos taken with this camera since it opened.</string>
 </resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The document screen's continuous pages, with the grid one tap away (#786); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_continuous_pages">Open a finished scan as continuous pages</string>
+    <string name="scan_doc_view_grid">Organize pages</string>
+    <string name="scan_doc_view_pages">View pages</string>
+    <string name="scan_page_state_working">Preparing this page…</string>
+    <string name="scan_page_state_waiting">Waiting to be prepared</string>
+    <string name="scan_page_state_failed">This page could not be prepared</string>
+    <string name="scan_page_state_photo">Photo as taken, not the finished page</string>
+    <string name="scan_page_retry">Try again</string>
+    <string name="scan_page_unsure">The borders may be wrong</string>
+</resources>

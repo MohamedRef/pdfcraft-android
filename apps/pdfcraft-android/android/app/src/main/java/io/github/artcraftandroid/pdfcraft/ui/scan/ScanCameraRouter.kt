@@ -19,6 +19,8 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.github.artcraftandroid.pdfcraft.ui.deleteScanPage
+import io.github.artcraftandroid.pdfcraft.ui.discardScan
 import io.github.artcraftandroid.pdfcraft.ui.onScanPhoto
 import io.github.artcraftandroid.pdfcraft.ui.takeScanPhoto
 
@@ -99,16 +101,7 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
                 toScan(more)
             }
         },
-        onClose = {
-            val m = model()
-            val merging = m.merging
-            m.hide()
-            // closed with pages taken: the document screen shows them (#460)
-            val v = vm()
-            if (!merging && v.scanPages.isNotEmpty() && scanDocumentAfterCamera(v.scanLab.options.steps, v.scanRetaking, null)) v.scanSteps.showDocument("camera", v.scanPages.size)
-            // the photo not taken: with no page yet, the scan ends (a burst being merged still goes to the scan)
-            if (!merging) vm().onScanPhoto(false)
-        },
+        onClose = { close("close") },
         onPhoneApp = {
             val f = model().target
             model().hide()
@@ -120,7 +113,75 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         onOpenSettings = {
             launch { activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", activity.packageName, null))) }
         },
+        onReview = { review() },
+        onUndo = { undo() },
+        onDone = { close("done") },
     )
+
+    /**
+     * Done, or Close (the ✕ and Android's Back): the camera closes. With pages, both lead to the
+     * document screen (#460); Done is the button that says so, Close the way out that loses
+     * nothing. [action] is `done` or `close`, for the log (#780).
+     */
+    private fun close(action: String) {
+        val m = model()
+        val merging = m.merging
+        val pending = m.session.pending
+        val undone = m.session.undone
+        m.hide()
+        val v = vm()
+        val lab = v.scanLab.options
+        if (lab.cameraButtons) Diag.event(DiagArea.Scan, "camera_action", *scanCameraActionDiag(action, "ok", ScanCameraBlock.None, v.scanPages.size, pending))
+        // closed with pages taken: the document screen shows them (#460)
+        if (!merging && v.scanPages.isNotEmpty() && scanDocumentAfterCamera(lab.steps, v.scanRetaking, null)) v.scanSteps.showDocument("camera", v.scanPages.size)
+        // the photo not taken: with no page yet, the scan ends (a burst being merged still goes to the scan)
+        if (!merging) v.onScanPhoto(false)
+        // every photo was undone (#780): the scan's name and steps do not stay for the next scan
+        if (!merging && scanCameraEndsEmpty(lab.cameraButtons && lab.cameraBar, v.scanPages.size, pending, undone)) v.discardScan()
+    }
+
+    /**
+     * Review pages (#780): the camera steps aside without ending anything, and the scan shows its
+     * newest page in Enhance, where a page is checked, retaken, turned or deleted and the others
+     * are a swipe or one step back. Add page, there or on the pages, brings this camera back; the
+     * photos Undo knows are kept for that.
+     */
+    private fun review() {
+        val m = model()
+        val v = vm()
+        val pages = v.scanPages.size
+        if (m.merging || pages == 0) {
+            Diag.event(DiagArea.Scan, "camera_action", *scanCameraActionDiag("review", "blocked", if (pages == 0) ScanCameraBlock.NoPages else ScanCameraBlock.Busy, pages, m.session.pending))
+            return
+        }
+        Diag.event(DiagArea.Scan, "camera_action", *scanCameraActionDiag("review", "ok", ScanCameraBlock.None, pages, m.session.pending))
+        m.hide(keepSession = true)
+        // the camera opened from the pages (Add page): the newest page, not the grid again
+        if (v.scanLab.options.steps && v.scanSteps.document) v.scanSteps.openEnhance(pages, pages)
+        // the photo not taken is let go of; the pages stay
+        v.onScanPhoto(false)
+    }
+
+    /**
+     * Undo (#780): the last photo this camera took comes out of the scan, by the same path as
+     * Delete on a page, so its file goes too. A book photo's two pages go together. The camera
+     * stays open, also when that was the only page: the scan is then empty until the next photo.
+     */
+    private fun undo() {
+        val m = model()
+        val v = vm()
+        val paths = v.scanPages.map { it.file.path }
+        val target = if (m.merging) null else m.session.undoTarget(paths)
+        if (target == null) {
+            val why = if (m.merging || m.session.pending > 0) ScanCameraBlock.Busy else if (paths.isEmpty()) ScanCameraBlock.NoPages else ScanCameraBlock.NothingToUndo
+            Diag.event(DiagArea.Scan, "camera_action", *scanCameraActionDiag("undo", "blocked", why, paths.size, m.session.pending))
+            return
+        }
+        val gone = scanUndoIndexes(paths, target)
+        for (i in gone) v.deleteScanPage(i)
+        m.sessionUndone(target)
+        Diag.event(DiagArea.Scan, "camera_action", *scanCameraActionDiag("undo", "ok", ScanCameraBlock.None, v.scanPages.size, m.session.pending, removed = gone.size))
+    }
 
     /** The camera screen, over the app while a photo is wanted. */
     @Composable
@@ -129,7 +190,14 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         // pages made at full size for Save wait while the camera is open (#504)
         val open = m.target != null
         androidx.compose.runtime.LaunchedEffect(open) { vm().fullPages.camera(open) }
-        if (m.target != null) ScanCameraScreen(m, vm().scanPages.map { scanCameraPageThumb(vm().scanLab.options.firstPicture, vm().pageQueue.thumbOf(it), it.thumb) }, actions, vm().scanBook, vm().scanLab.options.cameraBar, vm().scanLab.options.liveTurned, vm().scanLab.options.autoEased, vm().scanLab.options.sheetCheck)
+        if (m.target != null) {
+            ScanCameraScreen(
+                m, vm().scanPages.map { scanCameraPageThumb(vm().scanLab.options.firstPicture, vm().pageQueue.thumbOf(it), it.thumb) }, actions, vm().scanBook,
+                vm().scanLab.options.cameraBar, vm().scanLab.options.liveTurned, vm().scanLab.options.autoEased, vm().scanLab.options.sheetCheck,
+                // Review pages, Undo and Done each a button (#780); the pages' photos tell which are this camera's
+                buttons = vm().scanLab.options.cameraButtons, pagePaths = vm().scanPages.map { it.file.path },
+            )
+        }
     }
 
     /** Import on the document screen (#460): the photo picker straight away, the camera not opened. */
@@ -145,6 +213,8 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
     /** The photo (at the target file the scan asked for) goes to the scan, then the next photo or the camera closes. */
     private fun toScan(more: Boolean) {
         val v = vm()
+        // the photo's file, for Undo and for what Done waits for (#780): a retake or the last photo before the camera closes is neither
+        val handed = v.shotFile?.takeIf { more && !v.scanRetaking && v.scanLab.options.cameraButtons && v.scanLab.options.cameraBar }
         // One page mode: Adjust borders opens on the page once it is in the scan (#458)
         if (!more) {
             val lab = v.scanLab.options
@@ -155,6 +225,7 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
             if (scanDocumentAfterCamera(lab.steps, v.scanRetaking, v.scanSteps.pending)) v.scanSteps.showDocument("camera", v.scanPages.size + 1)
         }
         v.onScanPhoto(true)
+        if (handed != null) model().sessionHanded(handed.path, android.os.SystemClock.elapsedRealtime())
         // the camera stays open for the next page, in a file of its own
         if (more) v.takeScanPhoto() else model().hide()
     }

@@ -110,7 +110,12 @@ internal fun scanTileSampleSize(srcW: Int, srcH: Int, wantW: Int, wantH: Int): I
 
 /**
  * The document screen's log line (#494): `pages`, `made` (tiles showing the made page when the screen
- * opened), `waiting` (the others) and whether pages are made in the background at all.
+ * opened), `waiting` (the others) and whether pages are made in the background at all; then
+ * (#786) the `view` it opened in (`pages` or `grid`), the `route` to it (`camera`, `import`,
+ * `enhance`, `borders`, `recent`) and the page it opened on (`anchor`, from 1).
  */
-internal fun scanDocShownDiag(pages: Int, made: Int, background: Boolean): Array<Pair<String, Any?>> =
-    arrayOf("pages" to pages, "made" to made, "waiting" to (pages - made).coerceAtLeast(0), "background_pages" to background)
+internal fun scanDocShownDiag(pages: Int, made: Int, background: Boolean, view: String = "grid", route: String = "none", anchor: Int = 0): Array<Pair<String, Any?>> =
+    arrayOf(
+        "pages" to pages, "made" to made, "waiting" to (pages - made).coerceAtLeast(0), "background_pages" to background,
+        "view" to view, "route" to route, "anchor" to anchor + 1,
+    )

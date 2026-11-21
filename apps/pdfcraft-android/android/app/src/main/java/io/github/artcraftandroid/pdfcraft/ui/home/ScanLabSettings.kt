@@ -192,6 +192,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SettingsChoice(stringResource(R.string.scan_lab_size), listOf<Pair<String?, String>>(null to ask) + ScanLab.SIZES.map { it to stringResource(io.github.artcraftandroid.pdfcraft.ui.scan.scanSizeName(it)) }, o.size, { lab.update(o.copy(size = it)) })
     // Back and Delete ask before a scan or a page is thrown away (#456)
     Sw(R.string.scan_lab_ask_discard, o.askDiscard) { lab.update(o.copy(askDiscard = it)) }
+    // the document screen opens on continuous pages, with the grid one tap away (#786)
+    Sw(R.string.scan_lab_continuous_pages, o.continuousPages) { lab.update(o.copy(continuousPages = it)) }
+    // the camera's Review pages, Undo and Done as separate buttons (#780)
+    Sw(R.string.scan_lab_camera_buttons, o.cameraButtons) { lab.update(o.copy(cameraButtons = it)) }
     // pages whose borders need a check are marked, asked about before Save and kept with the draft (#783)
     Sw(R.string.scan_lab_review_borders, o.reviewBorders) { lab.update(o.copy(reviewBorders = it)) }
 

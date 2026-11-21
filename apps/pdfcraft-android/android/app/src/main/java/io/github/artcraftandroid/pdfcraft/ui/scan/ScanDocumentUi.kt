@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +65,7 @@ import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -80,6 +83,7 @@ import io.github.artcraftandroid.pdfcraft.ui.ScanPage
 import io.github.artcraftandroid.pdfcraft.ui.ScanPageMark
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import io.github.artcraftandroid.pdfcraft.ui.safeTopPadding
+import kotlinx.coroutines.flow.first
 import kotlin.math.min
 import kotlin.math.roundToInt
 import io.github.artcraftandroid.pdfcraft.ui.saveScan
@@ -97,6 +101,10 @@ import io.github.artcraftandroid.pdfcraft.ui.takeScanPhoto
  * page in Enhance; holding a page and dragging moves it, holding it without moving selects it.
  * With pages picked the bar turns them or deletes them. Add page, Import, Share and Save PDF
  * are always in the same places. [onOpen] gets the page tapped, counted from 0.
+ *
+ * It opens on the pages one under the other (#786, [ScanContinuousPages]), with Edit for the page
+ * in sight; Organize pages in the top bar shows the grid, and View pages comes back to the same
+ * page. Testing option "Open a finished scan as continuous pages": off is the grid alone.
  */
 @Composable
 internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
@@ -112,6 +120,28 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
     var askingDelete by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    // the continuous pages or the grid (#786): kept with the steps' state, so it is the same after Enhance
+    val docView = vm.scanSteps.docView
+    val continuous = vm.scanLab.options.continuousPages
+    val view = scanDocViewShown(docView.chosen, continuous)
+    val grid = rememberLazyGridState()
+    // the page the continuous view has in sight: Edit opens it
+    var currentPage by remember { mutableStateOf(scanAnchorIndex(docView.anchor, keys)) }
+    fun showView(to: ScanDocView, by: String) {
+        if (to == view) return
+        // leaving the grid: the page it comes back to when that one is in sight, else the first one in sight
+        if (view == ScanDocView.Grid) {
+            val at = scanAnchorFromGrid(scanAnchorIndex(docView.anchor, keys), grid.layoutInfo.visibleItemsInfo.map { it.index })
+            docView.anchor = ScanDocAnchor(keys.getOrNull(at), at)
+        }
+        docView.show(to)
+        Diag.event(DiagArea.Scan, "doc_view", *scanDocViewDiag(to, view, scanAnchorIndex(docView.anchor, keys), pages.size, by))
+    }
+    // a page opened in Enhance is the one both views come back to (#786)
+    fun openPage(index: Int) {
+        docView.anchor = ScanDocAnchor(keys.getOrNull(index), index)
+        onOpen(index)
+    }
     // a page deleted or retaken meanwhile is no longer chosen
     LaunchedEffect(keys) { picked = scanSelectionKept(picked, keys) }
     val selecting = choosing || picked.isNotEmpty()
@@ -134,6 +164,8 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
     }
     // the selection opened by Select: with passes over several pages (#515) every page starts ticked, ready for Borders
     fun startSelecting() {
+        // pages are chosen in the grid (#786)
+        showView(ScanDocView.Grid, "select")
         choosing = true
         if (vm.scanLab.options.batchBorders) picked = keys.toSet()
     }
@@ -176,6 +208,15 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
                         vm.scanToolOpened(ScanReachTool.SelectPages, "bar")
                         startSelecting()
                     }) { Text(stringResource(R.string.scan_doc_select_short), color = c.accent, fontSize = 15.sp, maxLines = 1) }
+                }
+                // the grid for putting pages in order, or back to the pages one under the other (#786)
+                if (continuous) {
+                    val toGrid = view == ScanDocView.Pages
+                    BarIcon(
+                        if (toGrid) LucideIcons.LayoutGrid else LucideIcons.GalleryVerticalEnd,
+                        stringResource(if (toGrid) R.string.scan_doc_view_grid else R.string.scan_doc_view_pages),
+                        { showView(if (toGrid) ScanDocView.Grid else ScanDocView.Pages, "button") }, size = 48.dp,
+                    )
                 }
                 Box {
                     BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.scan_enhance_more), { menu = true })
@@ -230,7 +271,10 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
         if (!vm.scanLab.options.asDesigned) {
             Text(stringResource(R.string.scan_lab_active), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
-        Text(stringResource(R.string.scan_doc_hint), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        // the grid's own hint: the continuous pages say what a tap does to TalkBack, and have Edit
+        if (view == ScanDocView.Grid) {
+            Text(stringResource(R.string.scan_doc_hint), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        }
         // after an import of several photos (#515): their borders checked in one pass
         val offer = vm.scanBatch.offer
         if (offer > 0 && !selecting && vm.scanLab.options.batchBorders && !vm.scanReviewOfferShown()) {
@@ -272,13 +316,38 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
         LaunchedEffect(pages.toList(), lab, autoUpright, vm.scanCanFlatten) { vm.pageQueue.kick() }
         // what the tiles showed when the screen opened, once per opening (#494)
         LaunchedEffect(Unit) {
-            Diag.event(DiagArea.Scan, "doc_shown", *scanDocShownDiag(pages.size, pages.count { vm.pageQueue.madeOf(it) != null }, lab.backgroundPages && lab.preview))
+            val opened = android.os.SystemClock.elapsedRealtime()
+            val background = lab.backgroundPages && lab.preview
+            val at = scanAnchorIndex(docView.anchor, keys)
+            Diag.event(DiagArea.Scan, "doc_shown", *scanDocShownDiag(pages.size, pages.count { vm.pageQueue.madeOf(it) != null }, background, view.id, docView.route, at))
+            // how long until the page the screen opened on was the page as made, then every page (#786)
+            val openedOn = pages.getOrNull(at)
+            if (continuous && background && openedOn != null) {
+                val openedAs = scanDocPageState(true, vm.pageQueue.readyOf(openedOn) != null, vm.pageQueue.mark(openedOn) == ScanPageMark.Working, vm.pageQueue.failedOf(openedOn))
+                // null: the page went (deleted or retaken) before it was made
+                val ready: Boolean? = snapshotFlow { vm.scanPages.firstOrNull { it.key == openedOn.key }?.let { p -> vm.pageQueue.readyOf(p) != null } }.first { it != false }
+                if (ready == true) {
+                    Diag.event(DiagArea.Scan, "doc_page_ready", *scanDocPageReadyDiag(at, vm.scanPages.size, android.os.SystemClock.elapsedRealtime() - opened, view, openedAs))
+                }
+                snapshotFlow { vm.scanPages.all { vm.pageQueue.readyOf(it) != null || vm.pageQueue.failedOf(it) } }.first { it }
+                Diag.event(DiagArea.Scan, "doc_pages_ready", *scanDocAllReadyDiag(vm.scanPages.size, vm.scanPages.count { vm.pageQueue.failedOf(it) }, android.os.SystemClock.elapsedRealtime() - opened, view))
+            }
         }
         // how many pages are ready while some are still being made (#465, #494)
         vm.pageQueue.preparing(pages)?.let { (ready, total) ->
             Text(stringResource(R.string.scan_pages_preparing, ready, total), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
-        val grid = rememberLazyGridState()
+        // the grid opens on the page the continuous view was on, or the page last opened (#786)
+        LaunchedEffect(view, continuous) {
+            if (continuous && view == ScanDocView.Grid) {
+                val at = scanAnchorIndex(docView.anchor, keys)
+                // once the grid is laid out, so a page already in sight moves nothing
+                if (at > 0) {
+                    snapshotFlow { grid.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
+                    if (grid.layoutInfo.visibleItemsInfo.none { it.index == at }) grid.scrollToItem(at)
+                }
+            }
+        }
         var dragFrom by remember { mutableStateOf<Int?>(null) }
         var dragTo by remember { mutableStateOf<Int?>(null) }
         var dragged by remember { mutableStateOf(false) }
@@ -288,7 +357,16 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
         val later = stringResource(R.string.scan_doc_move_later)
         val openLabel = stringResource(R.string.scan_doc_open)
         val selectLabel = stringResource(R.string.scan_doc_choose)
-        LazyVerticalGrid(
+        if (view == ScanDocView.Pages) {
+            ScanContinuousPages(
+                vm, pages, Modifier.weight(1f).fillMaxWidth(),
+                onCurrent = { at ->
+                    currentPage = at
+                    docView.anchor = ScanDocAnchor(keys.getOrNull(at), at)
+                },
+                onOpen = { openPage(it) },
+            )
+        } else LazyVerticalGrid(
             // two across on a phone, more on a wide screen
             columns = GridCells.Adaptive(148.dp),
             state = grid,
@@ -341,7 +419,7 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
                                 scanDropIndex(cells, me.offset.x + change.position.x, me.offset.y + change.position.y)?.let { dragTo = it }
                             }
                         }
-                        .clickable(onClickLabel = if (selecting) selectLabel else openLabel) { if (selecting) toggle(p.key) else onOpen(i) }
+                        .clickable(onClickLabel = if (selecting) selectLabel else openLabel) { if (selecting) toggle(p.key) else openPage(i) }
                         .semantics(mergeDescendants = true) {
                             contentDescription = label
                             if (selecting) selected = isSel
@@ -409,7 +487,7 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
                 vm.startScanBatch(ScanBatchWhat.Look, picked, "selection")?.let { first ->
                     picked = emptySet()
                     choosing = false
-                    onOpen(first)
+                    openPage(first)
                 }
             },
             onDelete = {
@@ -427,6 +505,12 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
             onSave = { if (vm.scanLab.options.size != null) vm.saveScan() else sizing = false },
             // a scan opened from its PDF goes back into it (#513)
             saveLabel = if (vm.scanEdit.target != null) R.string.scan_edit_save else R.string.tools_save_pdf,
+            // Edit for the page in sight in the continuous view (#786); in the grid a tap on a page opens it
+            onEdit = if (view == ScanDocView.Pages) {
+                { if (pages.isNotEmpty()) openPage(currentPage.coerceIn(0, pages.lastIndex)) }
+            } else {
+                null
+            },
         )
     }
     sizing?.let { share -> ScanSizeSheet(vm, share) { sizing = null } }
@@ -472,7 +556,7 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
  * again, its first picture as it is now is shown, or without one its last result stays.
  */
 @Composable
-private fun ScanDocumentThumb(vm: AppViewModel, page: ScanPage, photoTurns: Int, modifier: Modifier) {
+internal fun ScanDocumentThumb(vm: AppViewModel, page: ScanPage, photoTurns: Int, modifier: Modifier) {
     // its first picture while the page is not made as it is now (#785)
     val m = vm.pageQueue.tileOf(page)
     val tile = scanDocTile(m != null, photoTurns)
@@ -548,6 +632,8 @@ internal fun ScanDocumentBar(
     batch: Boolean = false,
     onBorders: () -> Unit = {},
     onLook: () -> Unit = {},
+    /** Edit for the page in sight in the continuous view (#786); null leaves the button out. */
+    onEdit: (() -> Unit)? = null,
 ) {
     val c = pdfColors
     Row(
@@ -567,6 +653,7 @@ internal fun ScanDocumentBar(
         } else {
             ScanBarButton(LucideIcons.Camera, stringResource(R.string.tools_add_page), true, share, onAdd)
             ScanBarButton(LucideIcons.Images, stringResource(R.string.scan_camera_import_short), true, share, onImport)
+            if (onEdit != null) ScanBarButton(LucideIcons.Pencil, stringResource(R.string.scan_edit_page_edit), hasPages, share, onEdit)
             if (canShare) ScanBarButton(LucideIcons.Share2, stringResource(R.string.common_share), hasPages, share, onShare)
             Button(
                 onClick = onSave,
@@ -574,9 +661,20 @@ internal fun ScanDocumentBar(
                 colors = ButtonDefaults.buttonColors(containerColor = c.button, contentColor = Color.White, disabledContainerColor = c.pressed),
                 shape = RoundedCornerShape(24.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp),
-                // as wide as its words, so "PDF speichern" or "Enregistrer le PDF" is never cut; the icons share the rest
-                modifier = Modifier.padding(horizontal = 4.dp).widthIn(max = 176.dp).height(48.dp),
-            ) { Text(stringResource(saveLabel), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                // as wide as its words, so "PDF speichern" or "Enregistrer le PDF" is never cut; the icons share the rest.
+                // With Edit on the bar (#786) there are four icons: Save takes two of six shares at most and its
+                // words wrap, so each icon keeps 48 dp on a 320 dp screen ("Save to this PDF" is the long one)
+                modifier = if (onEdit != null) {
+                    Modifier.padding(horizontal = 4.dp).weight(2f, fill = false).heightIn(min = 48.dp)
+                } else {
+                    Modifier.padding(horizontal = 4.dp).widthIn(max = 176.dp).height(48.dp)
+                },
+            ) {
+                Text(
+                    stringResource(saveLabel), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = if (onEdit != null) 2 else 1,
+                    overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }
