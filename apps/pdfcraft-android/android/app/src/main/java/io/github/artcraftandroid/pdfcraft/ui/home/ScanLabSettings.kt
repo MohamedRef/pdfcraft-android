@@ -196,6 +196,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_continuous_pages, o.continuousPages) { lab.update(o.copy(continuousPages = it)) }
     // the camera's Review pages, Undo and Done as separate buttons (#780)
     Sw(R.string.scan_lab_camera_buttons, o.cameraButtons) { lab.update(o.copy(cameraButtons = it)) }
+    // Review pages opens the pages, with one tap back to the camera (#780)
+    Sw(R.string.scan_lab_review_return, o.reviewReturn) { lab.update(o.copy(reviewReturn = it)) }
 
     SettingsHeader(stringResource(R.string.scan_lab_group_reports))
     // the research detectors (#305, #306): a report only, in kept scans, so it changes no page

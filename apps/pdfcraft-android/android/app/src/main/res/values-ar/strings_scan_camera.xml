@@ -47,4 +47,7 @@
     <string name="scan_camera_blocked_no_pages">لا توجد صفحات بعد. التقط صورة أولًا.</string>
     <string name="scan_camera_blocked_busy">انتظر حتى تُضاف الصورة.</string>
     <string name="scan_camera_blocked_undo">لا شيء للتراجع عنه. التراجع يزيل الصور التي التُقطت بهذه الكاميرا منذ فتحها.</string>
+    <!-- Review pages opens the pages, with one tap back to the camera (#780) -->
+    <string name="scan_lab_review_return">«مراجعة الصفحات» تفتح الصفحات مع زر العودة إلى الكاميرا</string>
+    <string name="scan_review_back_camera">العودة إلى الكاميرا</string>
 </resources>
