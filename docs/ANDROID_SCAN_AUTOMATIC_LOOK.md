@@ -65,7 +65,9 @@ have been checked on the owner's photos, they become part of this look, not new 
   (`greyscale`, `flatten`, `fingers`, joined by `+`, or `none`), `undone`, `auto_look`,
   `flatten_auto`, `remove_fingers`, `fingers` (found), `fingers_over_print`, `fingers_filled`,
   `fingers_ms` (each -1 when the finger step did not run: another look, strength under 40, the
-  option off or the page's Undo).
+  option off or the page's Undo). `fingers_filled` smaller than `fingers`: a finger was found
+  but goes on past what was found (a sleeve, the rest of the hand), so it was left whole rather
+  than half filled (#784, `ANDROID_SCAN_DEFECTS.md`).
 - `auto_applied` (`index`, `suggestion`) when a page is made Grayscale; `auto_undone` (`index`,
   `what`, `by`: `chip` or `switch`) for each Undo; `auto_redone` (`index`, `what=fingers`,
   `by=switch`) when Remove fingers is turned back on (#492).

@@ -334,6 +334,12 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
   checkpoint and checked against a NumPy forward pass (`tools/scan-models/export_uvdoc.py`).
 - **`rten` 0.26** ran all three models as exported: depthwise convolutions, hard-swish,
   reflected padding, PReLU, a batch dimension left open, weights stored as 16-bit floats.
+- **A finger is more than its skin** (#784, 21 Nov). On two pages of a kept scan the fill left a
+  dark streak and the thumb's shadowed flank beside a white patch: only skin-coloured pixels were
+  the finger. The region now takes the finger's sides in shadow and the line it casts, and a
+  finger that still goes on past it is left alone (`fingers_filled` under `fingers`). Figures in
+  `ANDROID_SCAN_DEFECTS.md`. `scan_replay` now runs the finger step when the page file says it
+  was on, and prints its counts beside the phone's.
 - Thresholds that came from ten photos and are waiting for more data: the detector's
   acceptance (0.5), the orientation vote (0.5 of the vote, half of the tiles), the grain floor
   (2 grey levels), the sharpening default (30 of 100).
