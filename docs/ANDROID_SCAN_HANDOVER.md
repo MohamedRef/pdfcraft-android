@@ -334,6 +334,13 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
   checkpoint and checked against a NumPy forward pass (`tools/scan-models/export_uvdoc.py`).
 - **`rten` 0.26** ran all three models as exported: depthwise convolutions, hard-swish,
   reflected padding, PReLU, a batch dimension left open, weights stored as 16-bit floats.
+- **A screen drawn over another must take every touch** (#782, 21 Nov). The camera screen let a
+  touch on its empty parts, and on the shutter while it was grey, through to Enhance underneath,
+  where Rotate lies under the shutter: two pages of a kept scan were turned a quarter "by hand"
+  that way, and one was saved sideways. It looked like a fault of the proportions or the
+  orientation step until the log's `turn action=rotate` lines were found with the camera open.
+  Before looking for a wrong decision in the native code, look in the page file for
+  `turns.source`: `manual` means a press of Rotate. `ANDROID_SCAN_CAMERA.md` has the account.
 - **A finger is more than its skin** (#784, 21 Nov). On two pages of a kept scan the fill left a
   dark streak and the thumb's shadowed flank beside a white patch: only skin-coloured pixels were
   the finger. The region now takes the finger's sides in shadow and the line it casts, and a

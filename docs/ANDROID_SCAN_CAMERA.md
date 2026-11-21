@@ -86,6 +86,36 @@ Left out, as the issue allows: the focal length from the camera's calibration (s
 path. The page outline and hints (#295), auto-capture (#296) and the low-light merge (#297) build
 on this screen; the line under the viewfinder is kept for #295's hint.
 
+## Touches stay on the camera screen (#782, 21 Nov)
+
+The camera screen is drawn over the app while a photo is wanted, and in Batch and Book mode the
+scan's own screen is underneath it with the page just taken. Until this change a touch that
+nothing on the camera screen took went through to that screen: the black around the buttons, the
+line under the viewfinder, and the shutter while it is grey (a control that is switched off takes
+no touch). Enhance's bar lies at the bottom there, and with five tools on it Rotate is the
+middle one, under the shutter. So a press there that the camera screen did not take turned the
+page just taken by a quarter, by hand as far as the app knew: the orientation check
+is then not asked about that page again, and the turn is kept with the scan.
+
+That is what a kept scan of twelve pages showed. Its log has `tool_open tool=rotate from=bar` and
+`turn action=rotate` twice, 9 s and 7 s after a photo was taken in Batch mode, with `live_frame`
+lines before and after and no `screen` line between: the camera never left the screen. One of
+the two pages, an upright sheet, was saved a quarter turn off, 2339 × 1653 with `turns.manual` 1
+and `orientation: null` in its page file; the other was turned back by hand the next day. Made
+again on a desktop from its photo without that turn, the first comes out upright, 1951 × 2760.
+The proportions and the orientation steps had done nothing wrong: among the twelve pages those
+two are the only ones whose turn is not the orientation check's own.
+
+`Modifier.scanCameraKeepsTouches()` on the screen's outer layer (`ScanCameraScreen.kt`) asks for
+every pointer event and consumes none, so the buttons and the viewfinder's gestures are as they
+were and nothing reaches the screens below. `ScanCameraTouchesTest` shows the screen over a
+clickable layer and taps a corner and the bottom's middle. This is a plain fault put right, so it
+has no testing option; nothing is added to the log, where `tool_open` with no `screen` line
+after `camera_open` was the sign. Not verified: on a phone; with the camera itself on screen (a
+JVM test cannot run it, so the test uses the screen as it is on a phone without a camera, which
+has the same outer layer). A scan kept before this change keeps such a turn: Rotate on the page,
+three times, puts it right.
+
 ## Where the code is
 
 `ui/scan/ScanCameraLogic.kt` (decisions, reducer), `ScanCameraScreen.kt` (CameraX and the
