@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Every page's flattening decision kept for the whole scan (#549) -->
-<resources>
-    <string name="scan_lab_flatten_keep_all">Conservar el aplanado de cada página durante todo el escaneo</string>
-</resources>

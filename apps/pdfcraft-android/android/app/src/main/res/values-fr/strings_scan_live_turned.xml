@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- The live outline tries turned looks while it finds nothing (#295) -->
-<resources>
-    <string name="scan_lab_live_turned">Le contour en direct essaie des rotations</string>
-</resources>

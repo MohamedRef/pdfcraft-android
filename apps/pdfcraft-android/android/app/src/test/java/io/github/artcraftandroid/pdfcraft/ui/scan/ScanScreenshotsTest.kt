@@ -51,8 +51,7 @@ import org.robolectric.annotation.GraphicsMode
  * Pictures of the scanner's screens for UI review (#462): the camera's bars in each mode over a
  * drawn frame, the camera permission page, the crop screen on a drawn page, and the screens after
  * the camera with "Scan screens in steps" on: Adjust borders (#458), Enhance (#459) and the
- * document screen (#460), on a scan of three drawn pages. English, Arabic (right to left), French
- * and German (long words), at 360×640 dp and 384×832 dp; the crop screen and the steps light and dark. Off unless Gradle gets -Ppdfcraft.screenshots=true (docs/ANDROID_SCREENSHOTS.md).
+ * document screen (#460), on a scan of three drawn pages. English and Arabic (right to left), at 360×640 dp and 384×832 dp; the crop screen and the steps light and dark. Off unless Gradle gets -Ppdfcraft.screenshots=true (docs/ANDROID_SCREENSHOTS.md).
  *
  * **Never a real photo**: every page and frame here is drawn in code. The camera preview itself
  * (CameraX) does not run in a JVM test, so the bars are laid out as ScanCameraScreen lays them,
@@ -214,15 +213,11 @@ class ScanScreenshotsTest {
     @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi") fun cameraEnglish384() = camera("en_384x832")
     @Test @Config(qualifiers = "ar-w360dp-h640dp-xhdpi") fun cameraArabic360() = camera("ar_360x640")
     @Test @Config(qualifiers = "ar-w384dp-h832dp-xhdpi") fun cameraArabic384() = camera("ar_384x832")
-    @Test @Config(qualifiers = "fr-w360dp-h640dp-xhdpi") fun cameraFrench360() = camera("fr_360x640")
-    @Test @Config(qualifiers = "de-w360dp-h640dp-xhdpi") fun cameraGerman360() = camera("de_360x640")
 
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun cropEnglish360() = crop("en_360x640")
     @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi") fun cropEnglish384() = crop("en_384x832")
     @Test @Config(qualifiers = "ar-w360dp-h640dp-xhdpi") fun cropArabic360() = crop("ar_360x640")
     @Test @Config(qualifiers = "ar-w384dp-h832dp-xhdpi") fun cropArabic384() = crop("ar_384x832", listOf(ThemeChoice.Light))
-    @Test @Config(qualifiers = "fr-w360dp-h640dp-xhdpi") fun cropFrench360() = crop("fr_360x640", listOf(ThemeChoice.Light))
-    @Test @Config(qualifiers = "de-w360dp-h640dp-xhdpi") fun cropGerman360() = crop("de_360x640", listOf(ThemeChoice.Light))
 
     /**
      * Enhance's notes line in its worst case (#493): a page turned, flattened and with a finger
@@ -246,8 +241,8 @@ class ScanScreenshotsTest {
         shoot("enhance_notes_$config")
     }
 
-    @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi") fun notesGerman320() = notes("de_320x640")
-    @Test @Config(qualifiers = "fr-w320dp-h640dp-xhdpi") fun notesFrench320() = notes("fr_320x640")
+    @Test @Config(qualifiers = "en-w320dp-h640dp-xhdpi") fun notesEnglish320() = notes("en_320x640")
+    @Test @Config(qualifiers = "ar-w320dp-h640dp-xhdpi") fun notesArabic320() = notes("ar_320x640")
 
     /**
      * Markup's colours (#503) under a drawn page: Erase with its three fills and the Color fill on a
@@ -290,23 +285,14 @@ class ScanScreenshotsTest {
 
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun markupEnglish360() = markup("en_360x640")
     @Test @Config(qualifiers = "ar-w360dp-h640dp-xhdpi") fun markupArabic360() = markup("ar_360x640")
-    @Test @Config(qualifiers = "de-w360dp-h640dp-xhdpi") fun markupGerman360() = markup("de_360x640")
-    @Test @Config(qualifiers = "fr-w320dp-h640dp-xhdpi") fun markupFrench320() = markup("fr_320x640")
 
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun stepsEnglish360() = steps("en_360x640")
     @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi") fun stepsEnglish384() = steps("en_384x832")
     @Test @Config(qualifiers = "ar-w360dp-h640dp-xhdpi") fun stepsArabic360() = steps("ar_360x640")
     @Test @Config(qualifiers = "ar-w384dp-h832dp-xhdpi") fun stepsArabic384() = steps("ar_384x832", listOf(ThemeChoice.Light))
-    @Test @Config(qualifiers = "fr-w360dp-h640dp-xhdpi") fun stepsFrench360() = steps("fr_360x640", listOf(ThemeChoice.Light))
-    @Test @Config(qualifiers = "de-w360dp-h640dp-xhdpi") fun stepsGerman360() = steps("de_360x640", listOf(ThemeChoice.Light))
-    // Enhance's bar with Markup, Delete on the top bar and the document screen's Select (#516), at 320 dp in the seven languages
+    // Enhance's bar with Markup, Delete on the top bar and the document screen's Select (#516), at 320 dp in English and Arabic
     @Test @Config(qualifiers = "en-w320dp-h640dp-xhdpi") fun stepsEnglish320() = steps("en_320x640", listOf(ThemeChoice.Light))
     @Test @Config(qualifiers = "ar-w320dp-h640dp-xhdpi") fun stepsArabic320() = steps("ar_320x640", listOf(ThemeChoice.Light))
-    @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi") fun stepsGerman320() = steps("de_320x640", listOf(ThemeChoice.Light))
-    @Test @Config(qualifiers = "fr-w320dp-h640dp-xhdpi") fun stepsFrench320() = steps("fr_320x640", listOf(ThemeChoice.Light))
-    @Test @Config(qualifiers = "es-w320dp-h640dp-xhdpi") fun stepsSpanish320() = steps("es_320x640", listOf(ThemeChoice.Light))
-    @Test @Config(qualifiers = "it-w320dp-h640dp-xhdpi") fun stepsItalian320() = steps("it_320x640", listOf(ThemeChoice.Light))
-    @Test @Config(qualifiers = "pt-rBR-w320dp-h640dp-xhdpi") fun stepsPortuguese320() = steps("pt_br_320x640", listOf(ThemeChoice.Light))
 
     companion object {
         /** A page drawn in code: white paper with grey text lines, on [background], optionally tilted. */

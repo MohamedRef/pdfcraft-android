@@ -135,9 +135,4 @@ class DrawCaptionsFitTest {
 
     @Test @Config(qualifiers = "en-w800dp-h1280dp-xhdpi") fun english() = everyCaptionIsWhole()
     @Test @Config(qualifiers = "ar-w800dp-h1280dp-xhdpi") fun arabic() = everyCaptionIsWhole()
-    @Test @Config(qualifiers = "de-w800dp-h1280dp-xhdpi") fun german() = everyCaptionIsWhole()
-    @Test @Config(qualifiers = "es-w800dp-h1280dp-xhdpi") fun spanish() = everyCaptionIsWhole()
-    @Test @Config(qualifiers = "fr-w800dp-h1280dp-xhdpi") fun french() = everyCaptionIsWhole()
-    @Test @Config(qualifiers = "it-w800dp-h1280dp-xhdpi") fun italian() = everyCaptionIsWhole()
-    @Test @Config(qualifiers = "pt-rBR-w800dp-h1280dp-xhdpi") fun brazilianPortuguese() = everyCaptionIsWhole()
 }

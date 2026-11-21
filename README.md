@@ -241,7 +241,7 @@ PdfCraft for Android is in beta.
 | About-screen GitHub Releases update checker | ✅ source implemented; device installation/upgrade test not yet verified |
 | A mouse and a keyboard: the wheel scrolls and zooms, a drag selects text, shortcuts; zoom buttons on DeX and Chromebooks | ✅ · a tablet layout ⬜ |
 | Extra Features in Preferences, off until you turn them on: the status bar in documents, the number of search results | ✅ |
-| Translations: all of the app's text is ready to translate ([how](#translating)) | ✅ · Spanish, German, French, Italian, Brazilian Portuguese and Arabic: every string translated, newest strings machine-assisted and awaiting native review · other languages ⬜ |
+| Translations: all of the app's text is ready to translate ([how](#translating)) | ✅ · English and Arabic only: every string translated into Arabic. Other interface languages are not planned for now |
 | AI assistant, cloud storage, sharing for review | 🚫 PdfCraft is a local app |
 
 <sub>✅ works today · 🚧 in progress · ⬜ not started · 🚫 not planned</sub>
@@ -275,17 +275,17 @@ Build time dependencies:
 
 ## Translating
 
-All of PdfCraft's text is in one file:
-[`apps/pdfcraft-android/android/app/src/main/res/values/strings.xml`](apps/pdfcraft-android/android/app/src/main/res/values/strings.xml).
-To add a language:
+PdfCraft's interface is in English and Arabic only. Other interface languages are not accepted for now, and
+`TranslationCompletenessTest` fails if a `values-<language>` folder other than `values-ar` comes back.
 
-* copy it to a `values-<language>` folder beside it: `values-es/strings.xml` for Spanish, `values-pt-rBR/strings.xml` for Brazilian Portuguese
-* translate the text between the tags; keep each `name`, the placeholders (`%1$s`, `%2$d`, which you may move) and escapes such as `\'`
-* leave out anything you haven't translated yet: it shows in English
-* open a pull request
+The English text is in
+[`apps/pdfcraft-android/android/app/src/main/res/values/`](apps/pdfcraft-android/android/app/src/main/res/values/)
+(`strings*.xml`) and the Arabic in `values-ar/` beside it. When you add or change an English string:
 
-The store listing is in `fastlane/metadata/android/en-US/`; a copy in a folder for your language (`es-ES`, `pt-BR`)
-translates it too. On Android 13 and newer, PdfCraft's language can be set on its own under Settings ▸ Apps ▸
+* add the same key to the matching file in `values-ar/`
+* keep each `name`, the placeholders (`%1$s`, `%2$d`, which you may move) and escapes such as `\'`
+
+The store listing is in `fastlane/metadata/android/en-US/` (English only). On Android 13 and newer, PdfCraft's language can be set on its own under Settings ▸ Apps ▸
 PdfCraft ▸ Language. A few messages from the PDF engine, such as some errors and the names in Undo, are English
 for now.
 

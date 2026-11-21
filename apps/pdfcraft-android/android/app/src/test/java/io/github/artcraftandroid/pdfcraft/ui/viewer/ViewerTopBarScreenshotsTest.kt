@@ -32,7 +32,7 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * The viewer's top bar for UI review (#525, #462): a short name, a long name with "Unsaved
  * changes", Saving…, a tool active, and reading aloud (the only time the Read aloud switch shows).
- * In the seven languages at 320 dp and 360 dp. Nothing is compared; the files are for a person
+ * In English and Arabic at 320 dp and 360 dp. Nothing is compared; the files are for a person
  * to look at (docs/ANDROID_SCREENSHOTS.md). Off unless Gradle gets -Ppdfcraft.screenshots=true.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -92,9 +92,4 @@ class ViewerTopBarScreenshotsTest {
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun english360Dark() = draw("en_360", ThemeChoice.Dark)
     @Test @Config(qualifiers = "ar-w320dp-h640dp-xhdpi") fun arabic320() = draw("ar_320")
     @Test @Config(qualifiers = "ar-w360dp-h640dp-xhdpi") fun arabic360() = draw("ar_360")
-    @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi") fun german320() = draw("de_320")
-    @Test @Config(qualifiers = "fr-w320dp-h640dp-xhdpi") fun french320() = draw("fr_320")
-    @Test @Config(qualifiers = "es-w320dp-h640dp-xhdpi") fun spanish320() = draw("es_320")
-    @Test @Config(qualifiers = "it-w320dp-h640dp-xhdpi") fun italian320() = draw("it_320")
-    @Test @Config(qualifiers = "pt-rBR-w320dp-h640dp-xhdpi") fun portuguese320() = draw("pt_320")
 }

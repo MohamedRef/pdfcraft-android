@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Home's cards fold to their title line (#615); %1$s is the card's title -->
-    <string name="home_card_fold">Comprimi %1$s</string>
-    <string name="home_card_unfold">Espandi %1$s</string>
-    <!-- The Continue card shows one document, then More (#615); %1$d is how many more -->
-    <string name="study_card_more">Altro (%1$d)</string>
-    <string name="study_card_fewer">Mostra meno</string>
-</resources>
