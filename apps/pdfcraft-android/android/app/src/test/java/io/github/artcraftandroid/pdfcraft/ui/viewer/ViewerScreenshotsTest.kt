@@ -29,7 +29,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * The rows of sub-tools with their captions (#526): Highlight's, Comment's (Stamp chosen, so its
- * choice shows too) and Text's, at 320 dp wide in the app's seven languages. Each row has to fit
+ * choice shows too) and Text's, at 320 dp wide in the app's two languages. Each row has to fit
  * without scrolling, so no caption is cut or pushed off the screen; that check always runs. With
  * -Ppdfcraft.screenshots=true the rows are also written as pictures for UI review
  * (docs/ANDROID_SCREENSHOTS.md). Robolectric's fonts are not a phone's.
@@ -70,9 +70,4 @@ class ViewerScreenshotsTest {
     @Test @Config(qualifiers = "en-w320dp-h640dp-xhdpi") fun english() = rows("en")
     @Test @Config(qualifiers = "en-w320dp-h640dp-xhdpi") fun englishDark() = rows("en", ThemeChoice.Dark)
     @Test @Config(qualifiers = "ar-w320dp-h640dp-xhdpi") fun arabic() = rows("ar")
-    @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi") fun german() = rows("de")
-    @Test @Config(qualifiers = "es-w320dp-h640dp-xhdpi") fun spanish() = rows("es")
-    @Test @Config(qualifiers = "fr-w320dp-h640dp-xhdpi") fun french() = rows("fr")
-    @Test @Config(qualifiers = "it-w320dp-h640dp-xhdpi") fun italian() = rows("it")
-    @Test @Config(qualifiers = "pt-rBR-w320dp-h640dp-xhdpi") fun portuguese() = rows("pt-BR")
 }

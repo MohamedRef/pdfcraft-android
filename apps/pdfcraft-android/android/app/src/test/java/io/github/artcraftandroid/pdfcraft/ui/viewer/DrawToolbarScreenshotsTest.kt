@@ -38,7 +38,7 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * Pictures of the viewer's Draw bar for UI review (#462, #522): the bar with 3 and 12 favourites,
  * with the Shapes and Guides sheets drawn above it, light and dark, in English and Arabic (right to
- * left) at 320, 360 and 384 dp wide, French (long words) at 360 dp. Nothing is compared. Off unless
+ * left) at 320, 360 and 384 dp wide. Nothing is compared. Off unless
  * Gradle gets -Ppdfcraft.screenshots=true (docs/ANDROID_SCREENSHOTS.md).
  */
 @RunWith(RobolectricTestRunner::class)
@@ -90,5 +90,4 @@ class DrawToolbarScreenshotsTest {
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun english360() = drawAll("en_360x640")
     @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi") fun english384() = drawAll("en_384x832")
     @Test @Config(qualifiers = "ar-w384dp-h832dp-xhdpi") fun arabic384() = drawAll("ar_384x832")
-    @Test @Config(qualifiers = "fr-w360dp-h640dp-xhdpi") fun french360() = drawAll("fr_360x640", listOf(ThemeChoice.Light))
 }

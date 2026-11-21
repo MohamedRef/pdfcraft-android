@@ -155,13 +155,6 @@ class HomeLayoutTest {
         rule.onNodeWithText("Back to documents").assertDoesNotExist()
     }
 
-    @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi")
-    fun theBarStaysOneLineInGermanAt320() {
-        show()
-        rule.onNodeWithText("3 geöffnete Dokumente", substring = true, useUnmergedTree = true).assertExists()
-        capture("home_de_320x640_light")
-    }
-
     @Test @Config(qualifiers = "ar-w384dp-h832dp-xhdpi")
     fun arabicDark() {
         show(ThemeChoice.Dark)
