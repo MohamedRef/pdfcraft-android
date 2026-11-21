@@ -607,7 +607,7 @@ numbers:
   automatic flattening on, upright on; Clean scan, document type "document", size Balanced.
 - **Adjudication**: one of the pages saved as found and untouched is a wrong crop. That is
   page 8, judged on 21 November 2026 in the analysis of this export by the assistant that wrote
-  this baseline, from the page file's corners (opposite sides 1.79 to 1 against 1.28 at most
+  this baseline, from the page file's corners (opposite sides about 1.8 to 1 against 1.28 at most
   on the pages found right), not by the owner. Nobody has checked the other pages' corners
   against the photos (`checked` is false on all 12), so `scan-eval`'s geometry measures cannot be
   taken on this export.
