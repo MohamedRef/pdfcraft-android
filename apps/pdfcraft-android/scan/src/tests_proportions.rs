@@ -327,7 +327,7 @@ fn a_digital_zoom_is_applied_unless_the_corners_show_it_already_is() {
 }
 
 /// A TIFF block with an EXIF directory holding the two tags, in either byte order.
-fn exif_block(little: bool, focal: u16, zoom: (u32, u32)) -> Vec<u8> {
+pub(crate) fn exif_block(little: bool, focal: u16, zoom: (u32, u32)) -> Vec<u8> {
     let u16b = |v: u16| if little { v.to_le_bytes() } else { v.to_be_bytes() };
     let u32b = |v: u32| if little { v.to_le_bytes() } else { v.to_be_bytes() };
     let mut b = if little { b"II\x2a\0".to_vec() } else { b"MM\0\x2a".to_vec() };
@@ -398,7 +398,7 @@ fn jpeg_of(photo: &crate::Photo) -> Vec<u8> {
 }
 
 /// `jpeg` with an EXIF block after the start marker, as a camera writes it.
-fn with_exif(jpeg: &[u8], tiff: &[u8]) -> Vec<u8> {
+pub(crate) fn with_exif(jpeg: &[u8], tiff: &[u8]) -> Vec<u8> {
     let mut out = jpeg[..2].to_vec();
     out.extend([0xff, 0xe1]);
     out.extend(u16::try_from(tiff.len() + 8).unwrap().to_be_bytes());

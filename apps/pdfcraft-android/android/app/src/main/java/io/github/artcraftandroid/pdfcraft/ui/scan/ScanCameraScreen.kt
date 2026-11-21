@@ -132,11 +132,25 @@ internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, 
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
-    Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
+    Box(Modifier.fillMaxSize().background(Color.Black).scanCameraKeepsTouches().windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (model.route) {
             ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar, turnedLooks, autoEased)
             else -> if (bar) ScanCameraPermissionView(model.route, actions) else NoCameraView(model.route, actions)
         }
+    }
+}
+
+/**
+ * Every touch on the camera screen stays on it. The screen lies over the scan's own screens, and a
+ * touch that nothing here takes (the black around the buttons, the shutter while it is grey)
+ * would otherwise go to the screen underneath, which nobody can see: with the camera open for the
+ * next page, Enhance's bar is there, Rotate in its middle under the shutter. Two pages of a scan
+ * of twelve were turned a quarter that way. Nothing is consumed, so the viewfinder's own gestures
+ * are as they were: being asked is what keeps the touch from the screens below.
+ */
+internal fun Modifier.scanCameraKeepsTouches(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent()
     }
 }
 
