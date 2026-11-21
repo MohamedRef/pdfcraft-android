@@ -215,6 +215,9 @@ fn the_line_detector_is_asked_only_when_the_network_is_not_convinced() {
         source: if found { QuadSource::Model } else { QuadSource::None },
         angle: 0,
         passes: 7,
+        pick: if found { crate::detect::CornerPick::First } else { crate::detect::CornerPick::None },
+        refused: 0,
+        skew: 0.0,
     };
     // nothing found (the owner's photos of 2026-11-19 and -20: 0.22 to 0.39)
     assert!(second_look_wanted(&network(0.39, false), 0));
@@ -226,9 +229,200 @@ fn the_line_detector_is_asked_only_when_the_network_is_not_convinced() {
     // sure: never
     assert!(!second_look_wanted(&network(0.88, true), 0));
     // no model file: the line detector already answered
-    let lines = Detection { quad: Some(quad), confidence: 0.5, source: QuadSource::Lines, angle: 0, passes: 0 };
+    let lines = Detection { quad: Some(quad), source: QuadSource::Lines, passes: 0, ..network(0.5, false) };
     assert!(!second_look_wanted(&lines, 0));
     // over nothing, three sides on edges are enough; over a page, all four
     assert!(second_look_takes(false, 3) && second_look_takes(false, 4) && !second_look_takes(false, 2));
     assert!(second_look_takes(true, 4) && !second_look_takes(true, 3));
+}
+
+/// Corner maps with a peak of `logit` at each `(x, y, logit)` cell, map by map.
+fn heat_of(peaks: [&[(usize, usize, f32)]; 4]) -> Vec<f32> {
+    let cells = 64usize;
+    let mut heat = vec![-12.0f32; 4 * cells * cells];
+    for (k, map) in peaks.iter().enumerate() {
+        for &(x, y, logit) in *map {
+            heat[k * cells * cells + y * cells + x] = logit;
+        }
+    }
+    heat
+}
+
+/// A page map that says paper in each of the `rects` (`x0, y0, x1, y1` in cells, the ends not in).
+fn page_of(rects: &[[usize; 4]]) -> Vec<f32> {
+    (0..64 * 64)
+        .map(|i| if rects.iter().any(|r| (r[0]..r[2]).contains(&(i % 64)) && (r[1]..r[3]).contains(&(i / 64))) { 5.0 } else { -5.0 })
+        .collect()
+}
+
+/// The square taken for the photo itself: how [`read_sheet`] is told a quad looks.
+fn judge(corners: &[Point; 4]) -> crate::detect::Judged {
+    Quad::new(*corners).ok().map(|quad| crate::detect::sheet_of(&quad, SIDE as u32, SIDE as u32))
+}
+
+/// The centre of a cell, in pixels of the square.
+fn cell(x: usize, y: usize) -> Point {
+    [(x as f64 + 0.5) * 4.0, (y as f64 + 0.5) * 4.0]
+}
+
+fn near(found: &[Point; 4], cells: [(usize, usize); 4]) -> bool {
+    found.iter().zip(cells).all(|(p, (x, y))| (p[0] - cell(x, y)[0]).abs() < 0.01 && (p[1] - cell(x, y)[1]).abs() < 0.01)
+}
+
+/// A rectangular sheet seen by a camera, however obliquely, fits; four corners of two sheets do
+/// not, though they make a convex quad.
+#[test]
+fn a_sheet_seen_at_a_slant_fits_and_corners_of_two_sheets_do_not() {
+    use crate::aspect::sheet_fit;
+    let (w, h) = (3000u32, 4000u32);
+    // an A4 sheet 210 × 297 turned by `roll` in its plane, tilted away by `tilt` about the
+    // photo's horizontal axis, seen by a camera of focal length `focal` × the longer side
+    let seen = |tilt: f64, roll: f64, focal: f64, shift: [f64; 2]| -> [Point; 4] {
+        let (f, distance) = (focal * 4000.0, 700.0);
+        [[-105.0, -148.5], [105.0, -148.5], [105.0, 148.5], [-105.0, 148.5]].map(|[x, y]: [f64; 2]| {
+            let (x, y) = (x * roll.to_radians().cos() - y * roll.to_radians().sin(), x * roll.to_radians().sin() + y * roll.to_radians().cos());
+            let (y, z) = (y * tilt.to_radians().cos(), distance - y * tilt.to_radians().sin());
+            [1500.0 + shift[0] + f * x / z, 2000.0 + shift[1] + f * y / z]
+        })
+    };
+    let mut steepest: f64 = 0.0;
+    for (tilt, roll, focal) in [(0.0, 0.0, 0.75), (30.0, 20.0, 0.75), (45.0, -35.0, 0.6), (60.0, 10.0, 0.75), (60.0, 50.0, 1.2), (50.0, 90.0, 2.0)] {
+        let quad = Quad::new(seen(tilt, roll, focal, [40.0, -60.0])).unwrap();
+        let [top, right, bottom, left] = quad.side_lengths();
+        steepest = steepest.max((top / bottom).max(bottom / top)).max((left / right).max(right / left));
+        let fit = sheet_fit(&quad, w, h).unwrap();
+        assert!(fit.skew < 0.5, "tilt {tilt} roll {roll} focal {focal}: {fit:?}");
+        // the lean is about the sheet's own, where the corners fix the focal length (leaning
+        // about one of its own axes they do not, and the lean is then a guess)
+        assert!(roll == 90.0 || (fit.tilt - tilt).abs() < 7.0, "tilt {tilt} roll {roll} focal {focal}: {fit:?}");
+    }
+    // these were no near-rectangles in the photo: one side 1.4 times its opposite
+    assert!(steepest > 1.4, "{steepest}");
+    // a long receipt (80 × 400) is a sheet like any other: the fit says nothing about how
+    // narrow a page may be
+    let receipt = |tilt: f64, roll: f64| -> [Point; 4] {
+        [[-40.0, -200.0], [40.0, -200.0], [40.0, 200.0], [-40.0, 200.0]].map(|[x, y]: [f64; 2]| {
+            let (x, y) = (x * roll.to_radians().cos() - y * roll.to_radians().sin(), x * roll.to_radians().sin() + y * roll.to_radians().cos());
+            let (y, z) = (y * tilt.to_radians().cos(), 700.0 - y * tilt.to_radians().sin());
+            [1500.0 + 3000.0 * x / z, 2000.0 + 3000.0 * y / z]
+        })
+    };
+    for (tilt, roll) in [(0.0, 0.0), (40.0, 15.0), (50.0, -70.0)] {
+        let fit = sheet_fit(&Quad::new(receipt(tilt, roll)).unwrap(), w, h).unwrap();
+        assert!(fit.skew < 0.5, "receipt tilt {tilt} roll {roll}: {fit:?}");
+    }
+    // an ultra-wide camera and a 3× one are among the focal lengths tried (with 0.5 to 2.5 only,
+    // the first of these measured 7.7 degrees and would have been refused)
+    for focal in [0.38, 2.2, 3.6] {
+        let fit = sheet_fit(&Quad::new(seen(45.0, 30.0, focal, [0.0, 0.0])).unwrap(), w, h).unwrap();
+        assert!(fit.skew < 0.5, "focal {focal}: {fit:?}");
+    }
+    // a pile: three corners of the top sheet and the far corner of a sheet lying under it
+    let top = seen(20.0, 30.0, 0.75, [-150.0, -300.0]);
+    let under = seen(20.0, 10.0, 0.75, [400.0, 900.0]);
+    let mixed = Quad::new([top[0], top[1], under[2], top[3]]).unwrap();
+    let fit = sheet_fit(&mixed, w, h).unwrap();
+    assert!(fit.skew > 3.0 * crate::detect::SKEW_MOST, "{fit:?}");
+    // not every such mix is told apart: this one passes for a sheet leaning 70 degrees away from
+    // an ultra-wide camera (the check refuses what cannot be a sheet, not all that is none)
+    let (top2, under2) = (seen(20.0, -40.0, 0.75, [-150.0, -300.0]), seen(20.0, 5.0, 0.75, [250.0, 500.0]));
+    let passes = sheet_fit(&Quad::new([top2[0], top2[1], under2[2], top2[3]]).unwrap(), w, h).unwrap();
+    assert!(passes.skew < crate::detect::SKEW_MOST && passes.tilt > 60.0, "{passes:?}");
+    // while each sheet by itself fits
+    assert!(sheet_fit(&Quad::new(top).unwrap(), w, h).unwrap().skew < 0.5 && sheet_fit(&Quad::new(under).unwrap(), w, h).unwrap().skew < 0.5);
+}
+
+/// A pile: the corner maps' surest places are three corners of the top sheet and one of a sheet
+/// under it. Read as before that is the answer; the check refuses it and takes the top sheet's
+/// own fourth corner, a less sure place of its map.
+#[test]
+fn corners_of_different_sheets_are_refused_for_the_sheets_own() {
+    use crate::detect::{CornerPick, read_sheet};
+    // the top sheet, and the bottom-right corner of the sheet fanned out under it
+    let sheet = [(20usize, 10usize), (44, 10), (44, 42), (20, 42)];
+    let under = (56usize, 58usize);
+    let heat = heat_of([&[(20, 10, 6.0)], &[(44, 10, 6.0)], &[(under.0, under.1, 6.0), (44, 42, 2.0)], &[(20, 42, 6.0)]]);
+    let page = page_of(&[[20, 10, 44, 42], [30, 30, 56, 58]]);
+    // as before: the quad across both sheets, and sure of it
+    let before = read(&heat, &page);
+    assert!(near(&before.corners, [sheet[0], sheet[1], under, sheet[3]]), "{:?}", before.corners);
+    assert!(before.surest_less * before.agreement > 0.6, "{} {}", before.surest_less, before.agreement);
+    // checked: refused, and the sheet's own corner taken
+    let checked = read_sheet(&heat, &page, judge);
+    assert!(checked.refused && checked.pick == CornerPick::Other, "{:?} {}", checked.pick, checked.refused);
+    assert!(near(&checked.reading.corners, sheet), "{:?}", checked.reading.corners);
+    assert!(checked.skew < 0.5 && (checked.reading.surest_less - 0.8808).abs() < 1e-3, "{} {}", checked.skew, checked.reading.surest_less);
+    assert!(checked.reading.agreement > 0.5 && checked.reading.agreement < before.agreement + 0.2, "{}", checked.reading.agreement);
+
+    // of two sheets that both fit, the one the page map agrees with more: the whole lower sheet
+    // marked too, less surely, and the page map saying the top sheet alone
+    let lower = [(32usize, 26usize), (56, 26), under, (32, 58)];
+    let both = heat_of([
+        &[(20, 10, 6.0), (lower[0].0, lower[0].1, 1.0)],
+        &[(44, 10, 6.0), (lower[1].0, lower[1].1, 1.0)],
+        &[(under.0, under.1, 6.0), (44, 42, 2.0)],
+        &[(20, 42, 6.0), (lower[3].0, lower[3].1, 1.0)],
+    ]);
+    let top_only = page_of(&[[20, 10, 44, 42]]);
+    let checked = read_sheet(&both, &top_only, judge);
+    assert!(checked.refused && checked.pick == CornerPick::Other && near(&checked.reading.corners, sheet), "{:?}", checked.reading.corners);
+    // ...and the lower sheet when the page map says that one
+    let checked = read_sheet(&both, &page_of(&[[32, 26, 56, 58]]), judge);
+    assert!(checked.refused && checked.pick == CornerPick::Other && near(&checked.reading.corners, lower), "{:?}", checked.reading.corners);
+
+    // no other place marked: nothing is found in this look, rather than a quad that is no sheet
+    let alone = heat_of([&[(20, 10, 6.0)], &[(44, 10, 6.0)], &[(under.0, under.1, 6.0)], &[(20, 42, 6.0)]]);
+    let checked = read_sheet(&alone, &page, judge);
+    assert!(checked.refused && checked.pick == CornerPick::None && checked.reading.agreement == 0.0, "{:?}", checked.pick);
+    // a place too faint to count (under 0.1), or beside the surest one, is no other place
+    let faint = heat_of([&[(20, 10, 6.0)], &[(44, 10, 6.0)], &[(under.0, under.1, 6.0), (44, 42, -2.5), (54, 56, 5.0)], &[(20, 42, 6.0)]]);
+    assert_eq!(read_sheet(&faint, &page, judge).pick, CornerPick::None);
+}
+
+/// What was found right stays exactly as it was: a sheet seen square on or at a slant is each
+/// map's surest place, with the numbers [`read`] gives, whatever else the maps mark.
+#[test]
+fn a_page_that_can_be_a_sheet_is_read_as_before() {
+    use crate::detect::{CornerPick, read_sheet};
+    let same = |heat: &[f32], page: &[f32]| {
+        let (before, checked) = (read(heat, page), read_sheet(heat, page, judge));
+        assert_eq!((checked.pick, checked.refused), (CornerPick::First, false));
+        assert_eq!(
+            (checked.reading.corners, checked.reading.surest_less, checked.reading.agreement),
+            (before.corners, before.surest_less, before.agreement)
+        );
+        checked.skew
+    };
+    // square on, with a second sheet's corners marked almost as surely
+    let heat =
+        heat_of([&[(20, 10, 6.0), (30, 20, 5.0)], &[(44, 10, 6.0), (54, 20, 5.0)], &[(44, 42, 6.0), (54, 52, 5.0)], &[(20, 42, 6.0), (30, 52, 5.0)]]);
+    assert!(same(&heat, &page_of(&[[20, 10, 44, 42]])) < 0.5);
+    // leaning far back: the far side half as long as the near one, corners of 75 and 105 degrees
+    let slant = heat_of([&[(22, 12, 6.0)], &[(41, 12, 6.0)], &[(51, 50, 6.0)], &[(12, 50, 6.0)]]);
+    assert!(same(&slant, &page_of(&[[14, 12, 50, 50]])) < 2.0);
+    // a rectangle inside the page (a table printed on it): a sheet by its shape, and as before
+    // too unsure to be taken, because the page map says the whole page (under the 0.45 needed)
+    let table = heat_of([&[(26, 20, 6.0)], &[(40, 20, 6.0)], &[(40, 34, 6.0)], &[(26, 34, 6.0)]]);
+    let whole = page_of(&[[14, 8, 50, 56]]);
+    assert!(same(&table, &whole) < 0.5);
+    let nested = read_sheet(&table, &whole, judge).reading;
+    assert!(nested.surest_less * nested.agreement < 0.2, "{} {}", nested.surest_less, nested.agreement);
+    // a corner on the photo's border (the frame cut the sheet off): its shape is not judged
+    let cut = heat_of([&[(20, 10, 6.0)], &[(44, 10, 6.0)], &[(63, 58, 6.0), (44, 42, 2.0)], &[(20, 42, 6.0)]]);
+    assert_eq!(same(&cut, &page_of(&[[20, 10, 44, 42], [30, 30, 63, 58]])), 0.0);
+}
+
+/// With the real network: the check changes nothing for a single sheet, and the testing choice
+/// reads the maps as before.
+#[test]
+fn the_check_leaves_a_single_sheet_as_it_was() {
+    use crate::detect::{CornerPick, CornerRule, detect_by};
+    let (w, h) = (1200u32, 1600u32);
+    let sheet = photo(w, h, [[230.0, 260.0], [960.0, 300.0], [1010.0, 1330.0], [190.0, 1290.0]]);
+    let (checked, before) = (detect(&sheet), detect_by(&sheet, Finder::Auto, CornerRule::Surest));
+    assert_eq!((checked.quad, checked.confidence, checked.angle, checked.passes), (before.quad, before.confidence, before.angle, before.passes));
+    assert_eq!((checked.pick, checked.refused, before.pick, before.refused), (CornerPick::First, 0, CornerPick::First, 0));
+    // (the quad was set by hand, not by a camera: its skew is 3.6 degrees, a real sheet's about 1)
+    assert!(checked.skew < crate::detect::SKEW_MOST as f32 && before.skew == 0.0, "{} {}", checked.skew, before.skew);
+    assert_eq!(CornerRule::default(), CornerRule::Sheet);
 }

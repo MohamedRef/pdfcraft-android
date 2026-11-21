@@ -163,12 +163,16 @@ internal fun AppViewModel.onScanPhoto(ok: Boolean) {
             // the second look (#290): whether the line detector was asked, and the sides on edges it weighed
             "second_look" to (doc?.secondLook?.let(::scanSecondLookId) ?: "not_asked"), "network_sides" to (doc?.networkSides?.toInt() ?: 0),
             "lines_sides" to (doc?.linesSides?.toInt() ?: 0),
+            // the sheet check: which corners were taken, the looks refused for their shape, and the page's skew in degrees
+            "corner_pick" to (doc?.cornerPick?.let(::scanCornerPickId) ?: "none"), "shapes_refused" to (doc?.shapesRefused?.toInt() ?: 0),
+            "skew" to (doc?.skew?.toDouble() ?: 0.0), "sheet_check" to lab.sheetCheck,
             *io.github.artcraftandroid.pdfcraft.ui.scan.scanBookDiag(book, lab.bookGutter, bookOrder, cut, bookMs),
         )
         val finding = doc?.let { d ->
             ScanFinding(
                 d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it }, scanCurvedOpposite(d.curved), lab.findOptions(),
                 secondLook = scanSecondLookId(d.secondLook), networkSides = d.networkSides.toInt(), linesSides = d.linesSides.toInt(),
+                cornerPick = scanCornerPickId(d.cornerPick), shapesRefused = d.shapesRefused.toInt(), skew = d.skew.toDouble(),
             )
         }
         // Adjust borders waits for this answer before Next (#458)
@@ -295,4 +299,12 @@ internal fun scanSecondLookId(look: io.github.artcraftandroid.pdfcraft.core.Scan
     io.github.artcraftandroid.pdfcraft.core.ScanSecondLook.NOT_ASKED -> "not_asked"
     io.github.artcraftandroid.pdfcraft.core.ScanSecondLook.KEPT -> "kept"
     io.github.artcraftandroid.pdfcraft.core.ScanSecondLook.TAKEN -> "taken"
+    io.github.artcraftandroid.pdfcraft.core.ScanSecondLook.REFUSED -> "refused"
+}
+
+/** The sheet check's choice of corners as the log and a kept page's file name it. */
+internal fun scanCornerPickId(pick: io.github.artcraftandroid.pdfcraft.core.ScanCornerPick): String = when (pick) {
+    io.github.artcraftandroid.pdfcraft.core.ScanCornerPick.NONE -> "none"
+    io.github.artcraftandroid.pdfcraft.core.ScanCornerPick.FIRST -> "first"
+    io.github.artcraftandroid.pdfcraft.core.ScanCornerPick.OTHER -> "other"
 }

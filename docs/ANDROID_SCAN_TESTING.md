@@ -35,6 +35,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Find the page with | Automatic: the network (#290), or the line detector when its model is missing | Neural network only · Lines only (the detector before #290) · Nothing (the whole photo) |
 | Refine edges on the full photo (#291) | On | Off: the corners are the detector's own, from its small copy of the photo |
 | Ask the line detector too when the network is unsure (#290) | On | Off: the network alone, as before. On: when the network finds nothing, or an unsure page (under 0.7) with at most two sides on edges of the photo, the line detector is asked too; its page is taken with three sides on edges over nothing, all four over an unsure page. Only with the detector on Auto and Refine edges on. Log: `second_look`, `network_sides`, `lines_sides` on `photo`; the page file's `finding` has the same three |
+| Refuse corners that cannot be one sheet of paper (#782) | On | Off: each corner is the surest place of its map whatever shape the four make, as before. On: the network's four corners are measured against a rectangular sheet seen by a camera (how far from a right angle its corners would be in space, in degrees: about 1 for a real page however slanted the view, 11 and more for corners taken from different sheets of a pile). Over 7 degrees they are refused; each corner's next two surest places are tried, then the turned looks, then nothing is found (and the line detector asked, as above; its page is refused by the same measure). A quad with a corner on the photo's border is not judged. The camera's live outline does the same. Log: `corner_pick`, `shapes_refused`, `skew` on `photo`, `second_look=refused`; `shape_refused` on `live_frame`, `shapes_refused` on `live_summary`; the page file's `finding` has `corner_pick`, `shapes_refused`, `skew`. Option field `sheet_check` |
 | Proportions from perspective (#293) | On | Off: from the lengths of the page's sides, as before |
 | Match standard paper sizes (#293) | On | Off: the page keeps the shape worked out for it |
 | Show pages as they will be saved (#301) | On | Off: the scan screen shows the camera's photo with its outline, as before; nothing is previewed |
@@ -307,6 +308,10 @@ deleted or the person cancels its question (`index` from 1, `pages` before the d
 still holds no file name, path or document content.
 
 ## Not verified
+
+The sheet check (#782) was measured on a desktop on one pile of the owner's (12 photos of
+2026-11-19) and on the drawn photos; it has not run on a phone. Its limit of 7 degrees rests on
+those photos alone.
 
 None of this has run on a phone: the Kotlin is checked by CI's build and unit tests, the Rust
 options and the replay tool by tests and by hand on a desktop.

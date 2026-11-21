@@ -23,6 +23,7 @@ change was made after the build he ran, or his logs have no line for it.
 | #289 | Model files: pinned, loaded, exported, copied again when changed, packs ready, tensor helpers | Done | #360, #365, #370, #403, #410, #415 | Nothing. All three models stay in the app by the owner's choice; `docs/ANDROID_SCAN_MODELS.md` says how to make one a download |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #290 | The second look: the line detector asked too when the network finds nothing, or an unsure page with at most two sides on edges. On the owner's photos (on a computer): on 2026-11-20 the line detector found 2 of the 3 pages the network missed (Detect again); on 2026-11-19's pile it found the top sheet where the network found nothing on one photo and cut across sheets on another, and three of four corners on a third. Nothing changes on the single-page photos | Done in code, not run on a phone | this PR | Native `ScanFindOptions.second_look` (default false) with `second_look_wanted` and `second_look_takes` in the scan crate; testing option `secondLook` (`second_look`, on). Log `second_look`, `network_sides`, `lines_sides` on `photo`. Its time on a phone (the line detector took 287–555 ms in Detect again on 2026-11-20), and how often it takes a wrong page, are for the owner's next scans |
+| #782 | The sheet check: the network's four corners must be able to be one rectangular sheet seen by a camera (`aspect::sheet_fit`: the perspective formula's two sides in space, at the likeliest focal length; a slanted page fits, corners from two sheets do not). Over 7 degrees the four are refused, each map's next two surest places tried (`detect::read_sheet`), then the turned looks, then nothing found; the second look's line page is held to the same measure, and so is the live outline. On the owner's pile of 2026-11-19 (12 photos, on a computer, through `find_in` with the app's options): 7 single pages unchanged to the pixel; 3 outlines across sheets (two the network's, one the line detector's, a corner 18 to 34 % of the diagonal off) are now "nothing found"; 2 line-detector pages kept. No photo gained a right page: on these the network does not mark the top sheet's hidden corner at all, so there is nothing better to choose. Drawn gate unchanged (0 of 40 photos differ) | Done in code, not run on a phone | this PR | Native `ScanFindOptions.sheet_check` (default true), `CornerRule`, `scan_detect_frame_by`; testing option `sheetCheck` (`sheet_check`, on). Log `corner_pick`, `shapes_refused`, `skew` on `photo`. The check refuses what cannot be a sheet, not everything that is none: of made-up mixes of two sheets' corners about four in ten were refused, the rest pass for a sheet seen steeply (the owner's three measured 11.5 to 13.9 and were all refused). Simulated honest shots with the detector's corner error: under 1 % refused with a main camera up to 65 degrees of lean, about 2 % with an ultra-wide one, 2 to 4 % at 3× to 5× with large corner error (simulation, not photos). Left: a pile's top sheet is still not found (3 of its corners are, surely: completing the fourth from edges is untried); the 7 degrees rest on one pile; a photo cropped before it is scanned has its centre elsewhere and reads more skewed; a quad with a corner on the border is not judged; no rule for narrow quads was added (no measured error; long receipts pass); the live quad is not reused for the still (item 3 of #782) |
 | #291 | Edges refined at full size | Core done | #356, #291 PR | Corners off the photo (up to 15%) checked on drawn pages only; the owner's set; phone time |
 | #292 | Crop screen: magnifier, side handles, snap, rotate | Done in code, not run on a phone | #381, #400 | Rotate is on the scan screen (#387, with #339's turns in `ScanSession` 2); the crop screen itself has no Rotate button, so the issue's bottom-row Rotate is not built. All of it on a phone (`docs/ANDROID_SCAN_CROP.md`) |
 | #293 | True proportions, paper sizes | Core done | #353 | The focal length from the in-app camera (#294, section 7 there) |
@@ -162,6 +163,8 @@ ScanCameraRouter: PdfCraft's camera screen (ui/scan, #294) or the phone's camera
 AppViewModel.onScanPhoto
     prepareOcrModels            copy new or changed models into filesDir/models, set PDFCRAFT_MODELS
     scan_find_document_with     decode, detect (detect.rs), refine edges (refine.rs)
+                                detect.rs reads each corner map's surest place and checks the four
+                                can be one sheet (aspect.rs sheet_fit, #782); then the second look
 ScanScreen / ScanCrop (ui/ToolScreens.kt)   thumbnail with the outline; four corner handles
 AppViewModel.saveScan, per page
     ScanSizeSheet (#505)        the size choice; scan_size_options makes page 1 at each choice
@@ -330,6 +333,15 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
   32 of 40 pages when shown the page shrunk to its 224 pixels, and on 40 of 40 when shown nine
   tiles at a size where print is legible, voting. The same may hold for any small-input network
   used on a page.
+- **Whether four corners are a sheet is a question about perspective, not about rectangles.**
+  Side ratios and corner angles in the photo cannot tell a slanted page from corners of two
+  sheets (the drawn photos have honest pages with a side 1.5 times its opposite and corners of
+  69 to 121 degrees). The angle the sides would make in space can: under 2 degrees for every
+  page found right, 11 to 18 for the outlines across a pile (#782). The focal lengths tried
+  must reach an ultra-wide camera's: with 0.5 to 2.5 of the longer side an honest 45 degree
+  shot at 0.38 measured 7.7 and was refused. And on a pile the detector
+  network marks the corners it can see against the table; the top sheet's corner that lies on
+  other paper it does not mark in any look, so no choice among its peaks finds that sheet.
 - **A network must be shown what it was trained on.** UVDoc given the bounding box of a page
   lying at an angle was 11 % of the diagonal off; given the perspective-straightened page with
   a margin, 1.3–1.5 %.

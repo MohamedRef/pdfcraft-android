@@ -40,12 +40,14 @@ internal fun scanLiveAnalysis(): ImageAnalysis = ImageAnalysis.Builder()
  * executor. The frame is copied (rows packed) and closed before the detector runs. One frame in
  * [SAMPLE] is written to the diagnostics log; the screen gets every answer through [onResult].
  */
-internal class ScanLiveAnalyzer(turnedLooks: Boolean = true, private val onResult: (ScanLiveDetection) -> Unit) : ImageAnalysis.Analyzer {
+internal class ScanLiveAnalyzer(turnedLooks: Boolean = true, private val sheetCheck: Boolean = true, private val onResult: (ScanLiveDetection) -> Unit) : ImageAnalysis.Analyzer {
     private var buffer = ByteArray(0)
     private val frames = AtomicInteger(0)
     private val found = AtomicInteger(0)
     /** Frames that found the page at a turned look (#295). */
     private val foundTurned = AtomicInteger(0)
+    /** Frames whose four surest corners the sheet check refused: no one sheet of paper has that shape. */
+    private val shapesRefused = AtomicInteger(0)
     /** Each frame's turn (#295), changed on the analysis thread only. */
     private val looks = ScanLiveLooks(turnedLooks)
     private var totalMs = 0L
@@ -62,11 +64,12 @@ internal class ScanLiveAnalyzer(turnedLooks: Boolean = true, private val onResul
         if (!copied) return
         val started = SystemClock.elapsedRealtime()
         val angle = looks.angle
-        val quad = runCatching { io.github.artcraftandroid.pdfcraft.core.scanDetectFrameAt(buffer, w.toUInt(), h.toUInt(), rotation.toUInt(), angle.toShort()) }.getOrNull() ?: return
+        val quad = runCatching { io.github.artcraftandroid.pdfcraft.core.scanDetectFrameBy(buffer, w.toUInt(), h.toUInt(), rotation.toUInt(), angle.toShort(), sheetCheck) }.getOrNull() ?: return
         val ms = SystemClock.elapsedRealtime() - started
         val n = frames.incrementAndGet()
         if (quad.found) found.incrementAndGet()
         if (quad.found && angle != 0) foundTurned.incrementAndGet()
+        if (quad.shapeRefused) shapesRefused.incrementAndGet()
         looks.next(quad.found)
         totalMs += ms
         if (ms > maxMs) maxMs = ms
@@ -76,6 +79,8 @@ internal class ScanLiveAnalyzer(turnedLooks: Boolean = true, private val onResul
                 "found" to quad.found, "confidence" to quad.confidence.toDouble(), "luma" to quad.meanLuma.toDouble(), "cut_off" to quad.cutOff,
                 // the turn the frame was looked at (#295)
                 "angle" to angle,
+                // the sheet check: this frame's surest corners were refused for their shape
+                "shape_refused" to quad.shapeRefused, "sheet_check" to sheetCheck,
             )
         }
         val points = quad.points.toFloatArray()
@@ -87,7 +92,7 @@ internal class ScanLiveAnalyzer(turnedLooks: Boolean = true, private val onResul
     fun logSummary(shownMs: Long) {
         val n = frames.get()
         if (n == 0) return
-        Diag.event(DiagArea.Scan, "live_summary", "frames" to n, "found" to found.get(), "found_turned" to foundTurned.get(), "avg_ms" to totalMs / n, "max_ms" to maxMs, "shown_ms" to shownMs)
+        Diag.event(DiagArea.Scan, "live_summary", "frames" to n, "found" to found.get(), "found_turned" to foundTurned.get(), "avg_ms" to totalMs / n, "max_ms" to maxMs, "shown_ms" to shownMs, "shapes_refused" to shapesRefused.get())
     }
 
     private companion object {

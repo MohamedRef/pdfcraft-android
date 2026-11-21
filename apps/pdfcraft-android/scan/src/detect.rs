@@ -19,6 +19,7 @@ use pdfcraft_geom::perspective::Point;
 use rten_tensor::NdTensor;
 use rten_tensor::prelude::*;
 
+use crate::aspect::{SheetFit, sheet_fit};
 use crate::models::{EDGES, load};
 pub(crate) use crate::tensor::{Picture, shrink_rgb};
 use crate::tensor::{argmax_2d, sigmoid, soft_argmax_window};
@@ -63,10 +64,44 @@ pub struct Detection {
     pub angle: i16,
     /// How many times the network looked.
     pub passes: u8,
+    /// Which places of the network's corner maps the answer that was kept is made of.
+    pub pick: CornerPick,
+    /// How many of the network's looks had the four surest places refused for their shape.
+    pub refused: u8,
+    /// How far the kept answer is from a rectangular sheet seen by a camera, in degrees
+    /// ([`crate::aspect::SheetFit::skew`]); 0 when it was not measured (no page, the line
+    /// detector's page, a corner on the photo's border, or the check off).
+    pub skew: f32,
 }
 
 impl Detection {
-    const NOTHING: Detection = Detection { quad: None, confidence: 0.0, source: QuadSource::None, angle: 0, passes: 0 };
+    const NOTHING: Detection =
+        Detection { quad: None, confidence: 0.0, source: QuadSource::None, angle: 0, passes: 0, pick: CornerPick::None, refused: 0, skew: 0.0 };
+}
+
+/// Which places of the corner maps a page is made of.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CornerPick {
+    /// No page from the network (nothing found, or the line detector's page).
+    #[default]
+    None,
+    /// Each corner map's surest place: the network's answer as it always was read.
+    First,
+    /// At least one corner is a less sure place of its map: the surest four made no sheet of
+    /// paper (corners of different sheets of a pile), and these do.
+    Other,
+}
+
+/// How the network's corner maps are read.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CornerRule {
+    /// Four corners that cannot be one sheet of paper are refused, and each map's next surest
+    /// places are tried in their stead.
+    #[default]
+    Sheet,
+    /// Each map's surest place, whatever shape the four make: as before the check (a testing
+    /// choice).
+    Surest,
 }
 
 /// The network's input side, and the side of its maps.
@@ -83,6 +118,26 @@ const MARGIN: f32 = 0.1;
 const LEAST: f32 = 0.45;
 /// The page must be at least this share of the photo.
 const LEAST_AREA: f64 = 0.05;
+/// Four corners further than this from a rectangular sheet seen by a camera, in degrees
+/// ([`crate::aspect::SheetFit::skew`]), are not one sheet. On the owner's photos of 2026-11-19
+/// the pages found right measured 1.1 at most and the 40 drawn photos of the gate 1.7, before
+/// their sides were refined; the three piles whose corners came from different sheets measured
+/// 11.5, 11.5 and 13.9, and the line detector's page across a pile 18.
+pub const SKEW_MOST: f64 = 7.0;
+/// A corner within this share of the photo's width or height of its border may be a corner the
+/// frame cut off, put where the sheet's side leaves the photo: such four corners are no
+/// rectangle's and are not judged by their shape.
+const BORDER: f64 = 0.02;
+/// How many places of a corner map are tried: the surest and the next two.
+const PLACES: usize = 3;
+/// A further place of a corner map must be this sure (the surest is taken whatever it is).
+const PLACE_LEAST: f32 = 0.1;
+/// ...and this many cells from every surer place of the map (either way).
+const PLACE_APART: usize = 4;
+/// A quad made with a further place must lean away from the camera by no more than this, in
+/// degrees ([`crate::aspect::SheetFit::tilt`]): seen steeply enough, almost any four points pass
+/// for a rectangle. The surest four are not held to it.
+const OTHER_TILT_MOST: f64 = 50.0;
 /// The further angles, in the order their authors found them to rescue a search most often
 /// (with the quarter turn the other way added).
 const ANGLES: [i16; 6] = [90, -90, -30, 30, -60, 60];
@@ -175,34 +230,146 @@ fn inside(q: &[Point; 4], p: Point) -> bool {
     sides.iter().all(|s| *s >= 0.0) || sides.iter().all(|s| *s <= 0.0)
 }
 
-/// Read the corner maps (`4 × 64 × 64` logits) and the page map (`64 × 64` logits).
-pub(crate) fn read(heat: &[f32], page: &[f32]) -> Reading {
+/// How well a quad of the square and the page map (`64 × 64` logits) agree: the cells in both
+/// over the cells in either.
+fn agreement(corners: &[Point; 4], page: &[f32]) -> f32 {
     let cell = (SIDE / CELLS) as f64;
+    let (mut both, mut either) = (0usize, 0usize);
+    for (i, &logit) in page.iter().enumerate().take(CELLS * CELLS) {
+        let centre = [((i % CELLS) as f64 + 0.5) * cell, ((i / CELLS) as f64 + 0.5) * cell];
+        let (in_quad, in_page) = (inside(corners, centre), logit > 0.0);
+        both += usize::from(in_quad && in_page);
+        either += usize::from(in_quad || in_page);
+    }
+    both as f32 / either.max(1) as f32
+}
+
+/// A place of a corner map as a point of the square: the centre of the probability within two
+/// cells of the peak.
+fn place_of(map: &[f32], (px, py): (usize, usize)) -> Point {
+    let cell = (SIDE / CELLS) as f64;
+    let [cx, cy] = soft_argmax_window(map, CELLS, CELLS, (px, py), 2);
+    [(cx + 0.5) * cell, (cy + 0.5) * cell]
+}
+
+/// Read the corner maps (`4 × 64 × 64` logits) and the page map (`64 × 64` logits): each map's
+/// surest place.
+pub(crate) fn read(heat: &[f32], page: &[f32]) -> Reading {
     let mut corners = [[0.0; 2]; 4];
     let mut surest_less = 1.0f32;
     for (k, map) in heat.chunks_exact(CELLS * CELLS).enumerate().take(4) {
         let (px, py) = argmax_2d(map, CELLS);
         surest_less = surest_less.min(sigmoid(map[py * CELLS + px]));
-        // the centre of the probability within two cells of the peak
-        let [cx, cy] = soft_argmax_window(map, CELLS, CELLS, (px, py), 2);
-        corners[k] = [(cx + 0.5) * cell, (cy + 0.5) * cell];
+        corners[k] = place_of(map, (px, py));
     }
-    let mut agreement = 0.0;
-    if convex(&corners) {
-        let (mut both, mut either) = (0usize, 0usize);
-        for (i, &logit) in page.iter().enumerate().take(CELLS * CELLS) {
-            let centre = [((i % CELLS) as f64 + 0.5) * cell, ((i / CELLS) as f64 + 0.5) * cell];
-            let (in_quad, in_page) = (inside(&corners, centre), logit > 0.0);
-            both += usize::from(in_quad && in_page);
-            either += usize::from(in_quad || in_page);
-        }
-        agreement = both as f32 / either.max(1) as f32;
-    }
+    let agreement = if convex(&corners) { agreement(&corners, page) } else { 0.0 };
     Reading { corners, surest_less, agreement }
 }
 
-/// One look of the network at the square. `None` when the model cannot be run.
-fn look(model: &rten::Model, planes: Vec<f32>) -> Option<Reading> {
+/// The places of one corner map that are tried: the surest (as [`read`] takes it), then the
+/// peaks of the map that are at least [`PLACE_LEAST`] sure and [`PLACE_APART`] cells from every
+/// surer one, surest first, [`PLACES`] in all at most. Each as a point of the square and how
+/// sure it is.
+fn places(map: &[f32]) -> Vec<(Point, f32)> {
+    let first = argmax_2d(map, CELLS);
+    let at = |x: usize, y: usize| map[y * CELLS + x];
+    let least = -((1.0 / PLACE_LEAST - 1.0).ln());
+    // a peak: no cell beside it is higher
+    let mut peaks: Vec<(usize, usize)> = (0..CELLS * CELLS)
+        .map(|i| (i % CELLS, i / CELLS))
+        .filter(|&(x, y)| {
+            let here = at(x, y);
+            here >= least
+                && (y.saturating_sub(1)..=(y + 1).min(CELLS - 1)).all(|v| (x.saturating_sub(1)..=(x + 1).min(CELLS - 1)).all(|u| at(u, v) <= here))
+        })
+        .collect();
+    peaks.sort_by(|a, b| at(b.0, b.1).total_cmp(&at(a.0, a.1)).then(a.1.cmp(&b.1)).then(a.0.cmp(&b.0)));
+    let mut kept = vec![first];
+    for peak in peaks {
+        if kept.len() == PLACES {
+            break;
+        }
+        if kept.iter().all(|k| k.0.abs_diff(peak.0).max(k.1.abs_diff(peak.1)) >= PLACE_APART) {
+            kept.push(peak);
+        }
+    }
+    kept.into_iter().map(|(x, y)| (place_of(map, (x, y)), sigmoid(at(x, y)))).collect()
+}
+
+/// What [`read_sheet`] settled on.
+pub(crate) struct Choice {
+    pub reading: Reading,
+    /// [`CornerPick::None`] when no four places make a sheet: the reading is then each map's
+    /// surest place with an agreement of 0.
+    pub pick: CornerPick,
+    /// The surest four made a quad and it was refused for its shape.
+    pub refused: bool,
+    /// The skew of the quad taken, 0 when it was not measured.
+    pub skew: f32,
+}
+
+/// How a quad of the square looks as a sheet in the photo: `None` when it is no page at all there
+/// (not convex, too small); `Some(None)` when its shape cannot be judged (a corner on the photo's
+/// border); else its fit.
+pub(crate) type Judged = Option<Option<SheetFit>>;
+
+/// Read the maps as [`read`] does, and check that the four corners can be one sheet of paper:
+/// `judge` says how a quad of the square looks in the photo. The surest four are kept when they
+/// can (or cannot be judged): exactly [`read`]'s answer. When they cannot (they are corners of
+/// different sheets), or make no page, every other choice of [`places`] is tried, and of those
+/// that are a sheet, seen no more steeply than [`OTHER_TILT_MOST`], the one whose least sure
+/// corner times its agreement with the page map is highest is taken.
+pub(crate) fn read_sheet(heat: &[f32], page: &[f32], judge: impl Fn(&[Point; 4]) -> Judged) -> Choice {
+    let first = read(heat, page);
+    let mut refused = false;
+    if first.agreement > 0.0 {
+        match judge(&first.corners) {
+            Some(None) => return Choice { reading: first, pick: CornerPick::First, refused: false, skew: 0.0 },
+            Some(Some(fit)) if fit.skew <= SKEW_MOST => {
+                return Choice { reading: first, pick: CornerPick::First, refused: false, skew: fit.skew as f32 };
+            }
+            Some(Some(_)) => refused = true,
+            None => {}
+        }
+    }
+    let map = CELLS * CELLS;
+    let tried: Vec<Vec<(Point, f32)>> = (0..4).filter_map(|k| heat.get(k * map..(k + 1) * map)).map(places).collect();
+    let mut best: Option<(f32, Reading, f32)> = None;
+    if tried.len() == 4 {
+        for i in 1..tried.iter().map(Vec::len).product::<usize>() {
+            // the places of this choice: map 3's change fastest (0 is the surest four, done above)
+            let mut rest = i;
+            let mut of = [0usize; 4];
+            for k in (0..4).rev() {
+                of[k] = rest % tried[k].len();
+                rest /= tried[k].len();
+            }
+            let corners: [Point; 4] = std::array::from_fn(|k| tried[k][of[k]].0);
+            let surest_less = (0..4).map(|k| tried[k][of[k]].1).fold(1.0f32, f32::min);
+            // no choice with a less sure corner than the best's score can beat it
+            if !convex(&corners) || best.as_ref().is_some_and(|(score, ..)| surest_less <= *score) {
+                continue;
+            }
+            let Some(Some(fit)) = judge(&corners) else { continue };
+            if fit.skew > SKEW_MOST || fit.tilt > OTHER_TILT_MOST {
+                continue;
+            }
+            let agreement = agreement(&corners, page);
+            let score = surest_less * agreement;
+            if best.as_ref().is_none_or(|(most, ..)| score > *most) {
+                best = Some((score, Reading { corners, surest_less, agreement }, fit.skew as f32));
+            }
+        }
+    }
+    match best {
+        Some((_, reading, skew)) => Choice { reading, pick: CornerPick::Other, refused, skew },
+        None => Choice { reading: Reading { agreement: 0.0, ..first }, pick: CornerPick::None, refused, skew: 0.0 },
+    }
+}
+
+/// The network's maps for the square: the four corner maps and the page map, as logits. `None`
+/// when the model cannot be run.
+pub(crate) fn maps(model: &rten::Model, planes: Vec<f32>) -> Option<(Vec<f32>, Vec<f32>)> {
     // one at a time: the runtime uses every core for a single run already
     static RUNNING: Mutex<()> = Mutex::new(());
     let _one = RUNNING.lock().unwrap_or_else(PoisonError::into_inner);
@@ -213,32 +380,79 @@ fn look(model: &rten::Model, planes: Vec<f32>) -> Option<Reading> {
     if heat.shape() != [1, 4, CELLS, CELLS] || page.shape() != [1, 1, CELLS, CELLS] {
         return None;
     }
-    Some(read(&heat.to_vec(), &page.to_vec()))
+    Some((heat.to_vec(), page.to_vec()))
 }
 
-/// The network's answer for the photo turned by `degrees`: the quad in photo pixels and its
-/// confidence (0 without a quad).
-fn pass(model: &rten::Model, photo: &Photo, small: &Picture, scale: f64, degrees: i16) -> Option<(Option<Quad>, f32)> {
-    let place = Placement::new(small, degrees);
-    let reading = look(model, square(small, &place))?;
-    let corners = reading.corners.map(|p| place.in_small(p).map(|v| v / scale));
+/// The quad the corners of the square `corners` make in the photo: clamped to its borders (a
+/// corner the network puts just outside the photo is on its border), `None` when they make no
+/// convex quad there or one too small to be a page.
+fn in_photo(photo: &Photo, place: &Placement, scale: f64, corners: &[Point; 4]) -> Option<Quad> {
     let (w, h) = (f64::from(photo.width), f64::from(photo.height));
-    // a corner the network puts just outside the photo is on its border
-    let quad = Quad::new(corners.map(|[x, y]| [x.clamp(0.0, w), y.clamp(0.0, h)])).ok().filter(|q| q.area() >= LEAST_AREA * w * h);
-    let confidence = if quad.is_some() { reading.surest_less * reading.agreement } else { 0.0 };
-    Some((quad, confidence))
+    let corners = corners.map(|p| place.in_small(p).map(|v| v / scale));
+    Quad::new(corners.map(|[x, y]| [x.clamp(0.0, w), y.clamp(0.0, h)])).ok().filter(|q| q.area() >= LEAST_AREA * w * h)
 }
 
-fn with_model(model: &rten::Model, photo: &Photo) -> Option<Detection> {
+/// How `quad` fits a rectangular sheet in a `width` × `height` photo, for the sheet check (a fit
+/// with a skew over [`SKEW_MOST`] is no sheet): `None`
+/// when a corner lies within [`BORDER`] of the photo's border (its shape is not judged).
+pub fn sheet_of(quad: &Quad, width: u32, height: u32) -> Option<SheetFit> {
+    let (w, h) = (f64::from(width), f64::from(height));
+    let on_border = |[x, y]: Point| x < BORDER * w || x > (1.0 - BORDER) * w || y < BORDER * h || y > (1.0 - BORDER) * h;
+    if quad.0.iter().any(|p| on_border(*p)) {
+        return None;
+    }
+    // corners no rectangle gives at all are as far from a sheet as can be
+    Some(sheet_fit(quad, width, height).unwrap_or(SheetFit { skew: 90.0, tilt: 90.0 }))
+}
+
+/// One look of the network: its answer for the photo turned by `degrees`.
+struct Look {
+    /// The quad in photo pixels; `None` for none.
+    quad: Option<Quad>,
+    /// 0 without a quad.
+    confidence: f32,
+    pick: CornerPick,
+    refused: bool,
+    skew: f32,
+}
+
+/// The network's answer for the photo turned by `degrees`. `None` when the model cannot be run.
+fn pass(model: &rten::Model, photo: &Photo, small: &Picture, scale: f64, degrees: i16, rule: CornerRule) -> Option<Look> {
+    let place = Placement::new(small, degrees);
+    let (heat, page) = maps(model, square(small, &place))?;
+    let choice = match rule {
+        CornerRule::Surest => Choice { reading: read(&heat, &page), pick: CornerPick::First, refused: false, skew: 0.0 },
+        CornerRule::Sheet => {
+            read_sheet(&heat, &page, |corners| in_photo(photo, &place, scale, corners).map(|quad| sheet_of(&quad, photo.width, photo.height)))
+        }
+    };
+    let quad = in_photo(photo, &place, scale, &choice.reading.corners);
+    let confidence = if quad.is_some() { choice.reading.surest_less * choice.reading.agreement } else { 0.0 };
+    let pick = if confidence > 0.0 { choice.pick } else { CornerPick::None };
+    Some(Look { quad, confidence, pick, refused: choice.refused, skew: if confidence > 0.0 { choice.skew } else { 0.0 } })
+}
+
+fn with_model(model: &rten::Model, photo: &Photo, rule: CornerRule) -> Option<Detection> {
     let (small, scale) = shrink(photo, SIDE);
-    let (quad, confidence) = pass(model, photo, &small, scale, 0)?;
-    let mut best = Detection { quad, confidence, source: QuadSource::Model, angle: 0, passes: 1 };
+    let first = pass(model, photo, &small, scale, 0, rule)?;
+    let mut refused = u8::from(first.refused);
+    let mut best = Detection {
+        quad: first.quad,
+        confidence: first.confidence,
+        source: QuadSource::Model,
+        angle: 0,
+        passes: 1,
+        pick: first.pick,
+        refused: 0,
+        skew: first.skew,
+    };
     if best.confidence < ACCEPT {
         for angle in ANGLES {
-            let (quad, confidence) = pass(model, photo, &small, scale, angle)?;
+            let look = pass(model, photo, &small, scale, angle, rule)?;
             best.passes += 1;
-            if confidence > best.confidence + if best.angle == 0 { MARGIN } else { 0.0 } {
-                best = Detection { quad, confidence, angle, ..best };
+            refused += u8::from(look.refused);
+            if look.confidence > best.confidence + if best.angle == 0 { MARGIN } else { 0.0 } {
+                best = Detection { quad: look.quad, confidence: look.confidence, angle, pick: look.pick, skew: look.skew, ..best };
             }
             if best.confidence >= SURE {
                 break;
@@ -246,30 +460,41 @@ fn with_model(model: &rten::Model, photo: &Photo) -> Option<Detection> {
         }
     }
     if best.confidence < LEAST {
-        return Some(Detection { passes: best.passes, confidence: best.confidence, ..Detection::NOTHING });
+        return Some(Detection { passes: best.passes, confidence: best.confidence, refused, ..Detection::NOTHING });
     }
-    Some(best)
+    Some(Detection { refused, ..best })
 }
 
 /// The network's answer from one look at the photo as it is, with no turned looks when it is
 /// unsure: for a camera frame (#295), where the next frame is the next try. Under the same least
 /// confidence as [`detect`] nothing was found. `None` when the model cannot be run.
 pub(crate) fn one_look(model: &rten::Model, photo: &Photo) -> Option<Detection> {
-    one_look_at(model, photo, 0)
+    one_look_at(model, photo, 0, CornerRule::Sheet)
 }
 
 /// [`one_look`] with the photo shown to the network turned by `degrees` (#295): a camera frame
 /// can try another of the still search's turns each time, as the next frame is the next try.
-pub(crate) fn one_look_at(model: &rten::Model, photo: &Photo, degrees: i16) -> Option<Detection> {
+/// The corners are read by `rule`.
+pub(crate) fn one_look_at(model: &rten::Model, photo: &Photo, degrees: i16, rule: CornerRule) -> Option<Detection> {
     if photo.width < 16 || photo.height < 16 {
         return Some(Detection::NOTHING);
     }
     let (small, scale) = shrink(photo, SIDE);
-    let (quad, confidence) = pass(model, photo, &small, scale, degrees)?;
-    if confidence < LEAST {
-        return Some(Detection { passes: 1, confidence, angle: degrees, ..Detection::NOTHING });
+    let look = pass(model, photo, &small, scale, degrees, rule)?;
+    let refused = u8::from(look.refused);
+    if look.confidence < LEAST {
+        return Some(Detection { passes: 1, confidence: look.confidence, angle: degrees, refused, ..Detection::NOTHING });
     }
-    Some(Detection { quad, confidence, source: QuadSource::Model, angle: degrees, passes: 1 })
+    Some(Detection {
+        quad: look.quad,
+        confidence: look.confidence,
+        source: QuadSource::Model,
+        angle: degrees,
+        passes: 1,
+        pick: look.pick,
+        refused,
+        skew: look.skew,
+    })
 }
 
 /// The turns a look may be given: none, and the still search's own (`ANGLES`).
@@ -285,7 +510,7 @@ pub(crate) fn with_lines(photo: &Photo) -> Detection {
     let found = pdfcraft_engine::camera_edges::detect_document(&rgba, small.w as u32, small.h as u32);
     let quad = found.and_then(|q| Quad::new(q.map(|[x, y]| [x / scale, y / scale])).ok());
     match quad {
-        Some(quad) => Detection { quad: Some(quad), confidence: 0.5, source: QuadSource::Lines, angle: 0, passes: 0 },
+        Some(quad) => Detection { quad: Some(quad), confidence: 0.5, source: QuadSource::Lines, angle: 0, passes: 0, ..Detection::NOTHING },
         None => Detection::NOTHING,
     }
 }
@@ -317,10 +542,15 @@ pub fn second_look_takes(network_found: bool, lines_sides: usize) -> bool {
 
 /// Find the page in `photo` with the detector `finder` names.
 pub fn detect_with(photo: &Photo, finder: Finder) -> Detection {
+    detect_by(photo, finder, CornerRule::default())
+}
+
+/// [`detect_with`], the network's corner maps read by `rule`.
+pub fn detect_by(photo: &Photo, finder: Finder, rule: CornerRule) -> Detection {
     if photo.width < 16 || photo.height < 16 {
         return Detection::NOTHING;
     }
-    let network = || load(EDGES).and_then(|model| with_model(&model, photo));
+    let network = || load(EDGES).and_then(|model| with_model(&model, photo, rule));
     match finder {
         Finder::Auto => network().unwrap_or_else(|| with_lines(photo)),
         Finder::Network => network().unwrap_or(Detection::NOTHING),
