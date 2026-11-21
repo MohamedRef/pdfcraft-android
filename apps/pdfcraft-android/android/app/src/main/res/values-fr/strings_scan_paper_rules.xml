@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- A scan's pages share one paper size; ID card only from a sure outline (#759) -->
-<resources>
-    <string name="scan_lab_paper_shared">Les pages d’un scan au même format</string>
-    <string name="scan_lab_card_sure">Format carte seulement si le contour est sûr</string>
-</resources>

@@ -1251,6 +1251,31 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /**
+     * [runTool] waited for (#787): engine tool [name] on [doc], and the view refreshed, before this
+     * returns. A refusal is thrown to the caller, who then knows the edit was not made; once the
+     * tool has answered the edit is made, so a refresh that fails is logged and not thrown.
+     */
+    internal suspend fun toolNow(eng: Engine, doc: OpenDocument, name: String, args: Map<String, Any?> = emptyMap()): JSONObject {
+        val pending = PendingEdit(doc)
+        try {
+            val start = System.nanoTime()
+            val r = eng.tool(name, args + ("doc" to doc.id))
+            try {
+                refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedBy(name, args))
+            } catch (e: Exception) {
+                Diag.failure(DiagArea.Pages, "refresh", e)
+            }
+            if (name.startsWith("page_") && Diag.enabled()) {
+                Diag.event(DiagArea.Pages, "page_edit", "doc" to doc.diagNumber, "tool" to name, "pages" to ((args["pages"] as? List<*>)?.size ?: -1),
+                    "page_count" to doc.pageCount, "ms" to (System.nanoTime() - start) / 1_000_000)
+            }
+            return r
+        } finally {
+            pending.done()
+        }
+    }
+
+    /**
      * Apply [groups] of same-kind edits in submission order with one refresh. Pressure-aware ink
      * may create several PDF annotations, so one refresh per short segment would stall the viewer.
      * Each group is all or nothing (see [Engine.toolBatch]); [onSettled] gets how many groups the

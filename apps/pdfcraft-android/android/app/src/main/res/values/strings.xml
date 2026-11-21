@@ -2,12 +2,11 @@
 <!--
   PdfCraft's text, in US English.
 
-  To translate PdfCraft: copy this file to res/values-<language>/strings.xml (values-es for
-  Spanish, values-pt-rBR for Brazilian Portuguese, values-zh-rCN for simplified Chinese) and
-  translate the text between the tags. Keep each name, every placeholder (%1$s, %2$d: the
-  number says which value goes there, so a translation may move them), escapes such as \' and
-  \n, and the "one" and "other" items of plurals (add the items your language needs: zero, two,
-  few, many). A string left out shows in English.
+  The interface is English and Arabic only: every string here also goes in res/values-ar/,
+  and no other values-<language> folder is added. Keep each name, every placeholder (%1$s,
+  %2$d: the number says which value goes there, so a translation may move them), escapes such
+  as \' and \n, and the "one" and "other" items of plurals (Arabic also needs zero, two, few
+  and many). A string left out shows in English.
 -->
 <!--
   Glossary (#201): one word per thing, US spelling, sentence case.

@@ -5,7 +5,9 @@
 //! with paper only when the ring around it is blank paper; over print it is left and flagged
 //! (`covers_ink`), so the app can say "retake". A finger is flagged when print runs up to it
 //! (it hides part of that print): [`fill_blank`] leaves such a finger, [`fill_fingers`] puts
-//! paper over every finger and leaves saying so to the caller. A stain is not filled at all: its
+//! paper over every finger and leaves saying so to the caller. Either fills a finger whole (its
+//! skin, its sides in shadow, the dark line beside it) or, when it cannot be found whole, not at
+//! all. A stain is not filled at all: its
 //! colour and darkness are divided out like a coloured shadow, so print under it keeps its
 //! contrast.
 //!
@@ -15,7 +17,8 @@
 //! [`WORK_SIDE`] pixels long; the masks it returns are at that size, and [`fill_blank`] and
 //! [`normalise_stains`] scale them up.
 //!
-//! Nothing in the app changes a page with this yet (the testing option of #306 only reports).
+//! The automatic look fills fingers with this (#466, [`remove_fingers`]); glare and stains are
+//! only reported (the testing option of #306).
 //! The glare and stain thresholds are the issue's starting values except those marked as added
 //! here. The finger rules were set again on real photos (#466): with the issue's starting values
 //! none of the three fingers on the owner's reference photos was found. `docs/
@@ -48,6 +51,23 @@ pub const FINGER_CLOSE: f32 = 0.012;
 pub const FINGER_SLIVER: f32 = 0.008;
 /// A pocket the skin shuts in (a nail) joins the finger when it is under this share of the page.
 pub const FINGER_POCKET: f32 = 0.01;
+/// Around a finger's skin, what is darker than this share of the paper is not paper...
+pub const FINGER_PAPER: f32 = 0.93;
+/// ...and belongs to the finger when it is wider than twice this share of the page's short side
+/// (print is thinner) and within [`FINGER_SHADOW`] of the finger's width from its skin...
+pub const FINGER_SOLID_PRINT: f32 = 0.008;
+/// See [`FINGER_SOLID_PRINT`].
+pub const FINGER_SHADOW: f32 = 0.6;
+/// ...or, however thin, within this share of the page's short side of that: the dark line a
+/// finger casts along its edge.
+pub const FINGER_RIM: f32 = 0.008;
+/// The band around a finger looked at for what a fill would leave, as a share of the page's
+/// short side...
+pub const RAGGED_BAND: f32 = 0.012;
+/// ...and the most of it that may be neither paper nor print for the finger to be filled (the
+/// owner's two thumbs over a form's frame: 0.00 with the whole thumb found; 0.16 and 0.68 with
+/// its skin alone, which left a dark streak beside one patch and a dark flank beside the other).
+pub const FINGER_RAGGED: f32 = 0.10;
 /// Print touches a finger when more than [`TOUCH_INK`] of the band this wide around it, as a
 /// share of the page's width, is ink.
 pub const TOUCH_BAND: f32 = 0.008;
@@ -89,6 +109,18 @@ pub struct Region {
     pub area: f32,
     /// The ring around it holds print: a fill would hide or invent text, so none is made.
     pub covers_ink: bool,
+    /// A finger only (0 for glare and stains): the share of the band just around it that is
+    /// neither paper nor print. Over [`FINGER_RAGGED`] the finger goes on past what was found (a sleeve, the rest
+    /// of the hand, a shadow), and paper over the found part would leave a dark piece cut off
+    /// beside a white patch, so no fill is made.
+    pub ragged: f32,
+}
+
+impl Region {
+    /// A fill of this finger leaves clean paper: little but paper lies just around it.
+    pub fn fills_clean(&self) -> bool {
+        self.ragged <= FINGER_RAGGED
+    }
 }
 
 /// Everything [`find`] saw.
@@ -260,6 +292,10 @@ fn fingers(work: &Work, paper: [f32; 3], ink: &[bool]) -> Vec<Region> {
     let mask = closed_skin(&skin, w, h);
     let short = w.min(h) as f32;
     let total = (w * h) as f32;
+    // what is not paper, and the part of that too wide to be print: worked out for the first
+    // finger found, since most pages have none
+    let mut around: Option<(Vec<bool>, Vec<bool>)> = None;
+    let rim = ((FINGER_RIM * short).round() as usize).max(1);
     let mut out = Vec::new();
     for pixels in components(&mask, w, h) {
         let area = pixels.len() as f32 / total;
@@ -282,9 +318,98 @@ fn fingers(work: &Work, paper: [f32; 3], ink: &[bool]) -> Vec<Region> {
             continue;
         }
         let covers_ink = touches_ink(&pixels, w, h, ink, &mask);
-        out.push(Region { pixels, area, covers_ink });
+        // the skin is the finger's lit part: its sides in shadow and the dark line it casts on the
+        // paper are the finger too, and a fill that leaves them leaves a smear
+        let reach = (FINGER_SHADOW * width as f32).round() as usize;
+        let (dull, solid) = around.get_or_insert_with(|| {
+            let dull: Vec<bool> = work.rgb.iter().map(|&c| luma(c) < FINGER_PAPER * paper_luma).collect();
+            let solid = opened(&dull, w, h, ((FINGER_SOLID_PRINT * short).round() as usize).max(1));
+            (dull, solid)
+        });
+        let pixels = whole_finger(&pixels, dull, solid, w, h, reach, rim);
+        let area = pixels.len() as f32 / total;
+        let mut own = mask.clone();
+        for &i in &pixels {
+            own[i] = true;
+        }
+        let covers_ink = covers_ink || touches_ink(&pixels, w, h, ink, &own);
+        let ragged = ragged(&pixels, solid, w, h);
+        out.push(Region { pixels, area, covers_ink, ragged });
     }
     out
+}
+
+/// The whole finger around its skin `core`: what is not paper and too wide to be print (`solid`)
+/// within `reach` steps of the skin, then whatever is not paper (`dull`) within `rim` steps of
+/// that. Steps go from a pixel to its four neighbours and never cross paper, so print that does
+/// not touch the finger is not reached, and print that does loses `rim` pixels at most.
+fn whole_finger(core: &[usize], dull: &[bool], solid: &[bool], w: usize, h: usize, reach: usize, rim: usize) -> Vec<usize> {
+    let mut inside = vec![false; w * h];
+    for &i in core {
+        inside[i] = true;
+    }
+    spread(&mut inside, core.to_vec(), solid, w, h, reach);
+    let body: Vec<usize> = (0..inside.len()).filter(|&i| inside[i]).collect();
+    spread(&mut inside, body, dull, w, h, rim);
+    (0..inside.len()).filter(|&i| inside[i]).collect()
+}
+
+/// Grow `inside` from `front` through `allowed`, `steps` four-neighbour steps at most.
+fn spread(inside: &mut [bool], mut front: Vec<usize>, allowed: &[bool], w: usize, h: usize, steps: usize) {
+    for _ in 0..steps {
+        let mut next = Vec::new();
+        for &i in &front {
+            let (x, y) = (i % w, i / w);
+            let mut visit = |j: usize| {
+                if allowed[j] && !inside[j] {
+                    inside[j] = true;
+                    next.push(j);
+                }
+            };
+            if x > 0 {
+                visit(i - 1);
+            }
+            if x + 1 < w {
+                visit(i + 1);
+            }
+            if y > 0 {
+                visit(i - w);
+            }
+            if y + 1 < h {
+                visit(i + w);
+            }
+        }
+        if next.is_empty() {
+            return;
+        }
+        front = next;
+    }
+}
+
+/// How much of the band just outside a finger is `solid`, something that is neither paper nor
+/// print: the share of [`RAGGED_BAND`] around it, past the pixel a fill grows by and its feather.
+/// A finger found whole has paper and print there; one whose sleeve, hand or shadow goes on past
+/// what was found has the rest of it.
+fn ragged(pixels: &[usize], solid: &[bool], w: usize, h: usize) -> f32 {
+    let near = dilate(pixels, w, h, 2);
+    let far = dilate(pixels, w, h, 2 + ((RAGGED_BAND * w.min(h) as f32).round() as usize).max(2));
+    let (mut count, mut dark) = (0usize, 0usize);
+    for i in 0..w * h {
+        if far[i] && !near[i] {
+            count += 1;
+            dark += usize::from(solid[i]);
+        }
+    }
+    if count == 0 { 0.0 } else { dark as f32 / count as f32 }
+}
+
+/// What is thinner than twice `r` goes from a mask (an opening with a square).
+fn opened(mask: &[bool], w: usize, h: usize, r: usize) -> Vec<bool> {
+    let outside: Vec<usize> = (0..mask.len()).filter(|&i| !mask[i]).collect();
+    let worn = dilate(&outside, w, h, r);
+    let core: Vec<usize> = (0..mask.len()).filter(|&i| !worn[i]).collect();
+    let back = dilate(&core, w, h, r);
+    mask.iter().zip(&back).map(|(&m, &b)| m && b).collect()
 }
 
 /// Print runs up to a region: the thin band [`TOUCH_BAND`] around it holds ink. A finger hides
@@ -368,7 +493,7 @@ fn glare(raw: &Work, ink: &[bool], taken: &[bool], w: usize) -> Vec<Region> {
             continue;
         }
         let covers_ink = ring_has_ink(&pixels, w, h, ink, &mask);
-        out.push(Region { pixels, area, covers_ink });
+        out.push(Region { pixels, area, covers_ink, ragged: 0.0 });
     }
     out
 }
@@ -427,7 +552,7 @@ fn stains(work: &Work, paper: [f32; 3], ink: &[bool], taken: &[bool]) -> Vec<Reg
             }
         }
         pixels.sort_unstable();
-        out.push(Region { pixels, area, covers_ink: false });
+        out.push(Region { pixels, area, covers_ink: false, ragged: 0.0 });
     }
     out
 }
@@ -436,16 +561,18 @@ fn stains(work: &Work, paper: [f32; 3], ink: &[bool], taken: &[bool]) -> Vec<Reg
 /// feathered and the paper's own grain added back so the patch does not look flat. Regions over
 /// print are left alone. Returns how many regions were filled.
 pub fn fill_blank(page: &mut Rgb, found: &Defects) -> usize {
-    let regions: Vec<&Region> = found.fingers.iter().chain(&found.glare).filter(|r| !r.covers_ink).collect();
+    let regions: Vec<&Region> = found.fingers.iter().chain(&found.glare).filter(|r| !r.covers_ink && r.fills_clean()).collect();
     fill(page, found, &regions)
 }
 
 /// Fill every finger with the paper's colour, also one that print runs up to (`covers_ink`). No
 /// print is made up: what the finger hid stays hidden, and the page shows paper where the finger
 /// was. The caller says so to the person when [`Defects::fingers_over_print`] is not zero, since
-/// only a new photo brings that print back. Glare is not touched. Returns how many were filled.
+/// only a new photo brings that print back. A finger whose fill would not be clean
+/// ([`Region::fills_clean`]) is left as it is: a whole finger reads better than half of one.
+/// Glare is not touched. Returns how many were filled.
 pub fn fill_fingers(page: &mut Rgb, found: &Defects) -> usize {
-    let regions: Vec<&Region> = found.fingers.iter().collect();
+    let regions: Vec<&Region> = found.fingers.iter().filter(|r| r.fills_clean()).collect();
     fill(page, found, &regions)
 }
 
@@ -671,7 +798,8 @@ fn components(mask: &[bool], w: usize, h: usize) -> Vec<Vec<usize>> {
 }
 
 /// What removing fingers did to one page (#466): fingers found, how many of them hid print, how
-/// many were filled, and the milliseconds it took.
+/// many were filled, and the milliseconds it took. Fewer filled than found: the rest would not
+/// have left clean paper ([`Region::fills_clean`]) and are still on the page.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FingerFill {
     pub found: u32,
@@ -683,7 +811,8 @@ pub struct FingerFill {
 /// The automatic look's finger step (#466): [`find`] on the page as the look left it (no glare,
 /// so no `before`; no second look), then [`fill_fingers`] when any were found. A finger that hid
 /// print is filled too, and counted in `over_print`, so the caller can say that only a new photo
-/// brings that print back.
+/// brings that print back. A finger is its skin with its sides in shadow and the dark line beside
+/// it ([`whole_finger`]); one that goes on past what was found is not filled.
 pub fn remove_fingers(page: &mut Rgb) -> FingerFill {
     let clock = std::time::Instant::now();
     let ms = |clock: std::time::Instant| u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX);

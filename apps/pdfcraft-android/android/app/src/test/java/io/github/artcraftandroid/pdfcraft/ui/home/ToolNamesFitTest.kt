@@ -83,9 +83,4 @@ class ToolNamesFitTest {
 
     @Test @Config(qualifiers = "en-w800dp-h1280dp-xhdpi") fun english() = everyNameFits()
     @Test @Config(qualifiers = "ar-w800dp-h1280dp-xhdpi") fun arabic() = everyNameFits()
-    @Test @Config(qualifiers = "de-w800dp-h1280dp-xhdpi") fun german() = everyNameFits()
-    @Test @Config(qualifiers = "es-w800dp-h1280dp-xhdpi") fun spanish() = everyNameFits()
-    @Test @Config(qualifiers = "fr-w800dp-h1280dp-xhdpi") fun french() = everyNameFits()
-    @Test @Config(qualifiers = "it-w800dp-h1280dp-xhdpi") fun italian() = everyNameFits()
-    @Test @Config(qualifiers = "pt-rBR-w800dp-h1280dp-xhdpi") fun brazilianPortuguese() = everyNameFits()
 }
