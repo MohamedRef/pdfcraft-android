@@ -1050,7 +1050,7 @@ pub(crate) fn refine_in(root: &Path, photo_path: &str, corners: &[f32], sides: &
 
 /// The page a request asks for, as the scan crate takes it: the same for a saved page and for
 /// its preview, so the preview shows what will be saved.
-fn page_request<'a>(
+pub(crate) fn page_request<'a>(
     request: &ScanPageRequest,
     photo: &'a [u8],
     corners: [f32; 8],
@@ -1643,7 +1643,7 @@ pub(crate) fn preview_stoppable(
 }
 
 /// The engine's paper as the app names it.
-fn scan_paper(paper: Paper) -> ScanPaper {
+pub(crate) fn scan_paper(paper: Paper) -> ScanPaper {
     match paper {
         Paper::A4 => ScanPaper::A4,
         Paper::A5 => ScanPaper::A5,
@@ -1966,7 +1966,7 @@ pub(crate) fn merge_in(root: &Path, request: &ScanMergeRequest) -> Result<ScanMe
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn photo(dir: &Path) -> PathBuf {
@@ -1997,7 +1997,7 @@ mod tests {
         assert_eq!(hinted.paper, ScanPaper::A4);
     }
 
-    fn request(photo: &Path, out: &Path) -> ScanPageRequest {
+    pub(crate) fn request(photo: &Path, out: &Path) -> ScanPageRequest {
         ScanPageRequest {
             photo_path: photo.to_string_lossy().into_owned(),
             corners: vec![0.1, 0.1, 0.9, 0.1, 0.9, 0.9, 0.1, 0.9],
