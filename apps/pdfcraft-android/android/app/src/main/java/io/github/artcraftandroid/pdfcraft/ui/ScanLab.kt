@@ -339,6 +339,15 @@ internal data class ScanLab(
      */
     val inspect: Boolean = false,
     /**
+     * The sheet check: four corners of the network that cannot be one sheet of paper (corners of
+     * different sheets of a pile) are refused; each corner's next surest places are tried, then the
+     * turned looks, and then nothing is found, in the photo and in the camera's live outline. Off:
+     * each corner's surest place whatever shape the four make, as before. On the owner's photos of
+     * a pile (2026-11-19) the three outlines that spanned several sheets were refused, and none of
+     * the seven found right changed.
+     */
+    val sheetCheck: Boolean = true,
+    /**
      * A page that is not made yet is shown at once in a first picture (#785): straightened by its
      * corners in its look from the photo's thumbnail, without flattening, the classifier's turn, the
      * document type or the finger search, until the page itself is made. The camera's pages button
@@ -355,7 +364,7 @@ internal data class ScanLab(
     /** The pull's release distance in use (#773): the testing value with the gentle snap, else 32 dp as before. */
     val pullReleaseInUse: Int get() = if (gentleSnap) pullReleaseDp else io.github.artcraftandroid.pdfcraft.ui.scan.PULL_RELEASE_DP_FIRM
 
-    fun findOptions() = ScanFindOptions(finder, refine, secondLook)
+    fun findOptions() = ScanFindOptions(finder, refine, secondLook, sheetCheck)
 
     /** The strength a look with its own [level] is applied at. */
     fun strengthFor(level: Int): Int = (strength ?: level).coerceIn(0, 100)
@@ -367,6 +376,7 @@ internal data class ScanLab(
         "denoise" to denoise, "grain_white" to grainWhite, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "strict_book" to strictBook, "book_gutter" to bookGutter, "line_flatten" to lineFlatten, "flatten_reuse" to flattenReuse, "flatten_keep_all" to flattenKeepAll, "skip_flat" to skipFlat, "parallel_pages" to parallelPages, "parallel_save" to parallelSave,
         "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "background_pages" to backgroundPages, "full_pages_ahead" to fullPagesAhead, "sizes_ahead" to sizesAhead, "ask_discard" to askDiscard, "auto_look" to autoLook, "remove_fingers" to removeFingers, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
         "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "camera_bar" to cameraBar, "live_turned" to liveTurned, "auto_eased" to autoEased, "steps" to steps, "recent_scans" to recentScans, "edit_from_viewer" to editFromViewer, "snap_while_dragging" to snapWhileDragging, "pull_catch_dp" to pullCatchInUse, "pull_release_dp" to pullReleaseInUse, "gentle_snap" to gentleSnap, "batch_borders" to batchBorders, "check_unsure" to checkUnsure, "tools_in_reach" to toolsInReach, "markup" to markup, "markup_colours" to markupColours, "markup_edge" to markupEdge, "markup_ink" to markupInk, "auto_encode" to autoEncode, "size_override" to (size ?: "none"), "keep" to keep, "inspect" to inspect,
+        "sheet_check" to sheetCheck,
         "first_picture" to firstPicture,
     )
 
@@ -377,6 +387,7 @@ internal data class ScanLab(
         .put("sharpen", sharpen).put("denoise", denoise).put("grain_white", grainWhite).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("strict_book", strictBook).put("book_gutter", bookGutter).put("line_flatten", lineFlatten).put("flatten_reuse", flattenReuse).put("flatten_keep_all", flattenKeepAll).put("skip_flat", skipFlat).put("parallel_pages", parallelPages).put("parallel_save", parallelSave)
         .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("background_pages", backgroundPages).put("full_pages_ahead", fullPagesAhead).put("sizes_ahead", sizesAhead).put("ask_discard", askDiscard).put("auto_look", autoLook).put("remove_fingers", removeFingers).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
         .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("camera_bar", cameraBar).put("live_turned", liveTurned).put("auto_eased", autoEased).put("steps", steps).put("recent_scans", recentScans).put("edit_from_viewer", editFromViewer).put("snap_while_dragging", snapWhileDragging).put("pull_catch_dp", pullCatchInUse).put("pull_release_dp", pullReleaseInUse).put("gentle_snap", gentleSnap).put("batch_borders", batchBorders).put("check_unsure", checkUnsure).put("tools_in_reach", toolsInReach).put("markup", markup).put("markup_colours", markupColours).put("markup_edge", markupEdge).put("markup_ink", markupInk).put("auto_encode", autoEncode).put("size_override", size ?: JSONObject.NULL).put("inspect", inspect)
+        .put("sheet_check", sheetCheck)
         .put("first_picture", firstPicture)
 
     /** One line of text for the app's preferences. */
@@ -387,6 +398,7 @@ internal data class ScanLab(
         "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "strict_book" to flag(strictBook), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten), "flatten_reuse" to flag(flattenReuse), "flatten_keep_all" to flag(flattenKeepAll), "skip_flat" to flag(skipFlat), "parallel_pages" to flag(parallelPages), "parallel_save" to flag(parallelSave),
         "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "bg_pages" to flag(backgroundPages), "full_ahead" to flag(fullPagesAhead), "sizes_ahead" to flag(sizesAhead), "ask_discard" to flag(askDiscard), "auto_look" to flag(autoLook), "fingers" to flag(removeFingers), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
         "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "camera_bar" to flag(cameraBar), "live_turned" to flag(liveTurned), "auto_eased" to flag(autoEased), "steps" to flag(steps), "recent" to flag(recentScans), "edit_viewer" to flag(editFromViewer), "snap_drag" to flag(snapWhileDragging), "pull_catch" to pullCatchDp.toString(), "pull_release" to pullReleaseDp.toString(), "gentle_snap" to flag(gentleSnap), "batch" to flag(batchBorders), "check_unsure" to flag(checkUnsure), "reach" to flag(toolsInReach), "markup" to flag(markup), "markup_colours" to flag(markupColours), "markup_edge" to flag(markupEdge), "ink" to flag(markupInk), "auto_encode" to flag(autoEncode), "size" to (size ?: ""), "inspect" to flag(inspect),
+        "sheet_check" to flag(sheetCheck),
         "first_picture" to flag(firstPicture),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
@@ -492,6 +504,7 @@ internal data class ScanLab(
                 autoEncode = on("auto_encode", default.autoEncode),
                 size = values["size"]?.takeIf { it in SIZES },
                 inspect = on("inspect", default.inspect),
+                sheetCheck = on("sheet_check", default.sheetCheck),
                 firstPicture = on("first_picture", default.firstPicture),
             )
         }
@@ -519,6 +532,12 @@ data class ScanFinding(
     val networkSides: Int = 0,
     /** The line detector's page's sides on edges of the photo when it was asked (#290), else 0. */
     val linesSides: Int = 0,
+    /** Which places of the network's corner maps the page is made of (the sheet check): `none`, `first` or `other`. */
+    val cornerPick: String = "none",
+    /** How many of the network's looks had their four surest corners refused: no one sheet has that shape. */
+    val shapesRefused: Int = 0,
+    /** How far the network's page is from a rectangular sheet seen by a camera, in degrees; 0 when not measured. */
+    val skew: Double = 0.0,
 )
 
 /** A page as Save made it, for a kept scan's page file. */
@@ -714,6 +733,8 @@ internal fun scanTestPageJson(
                     .put("curved_opposite", it.curvedOpposite)
                     // #290: the second look
                     .put("second_look", it.secondLook).put("network_sides", it.networkSides).put("lines_sides", it.linesSides)
+                    // the sheet check: which corners were taken, and the looks refused for their shape
+                    .put("corner_pick", it.cornerPick).put("shapes_refused", it.shapesRefused).put("skew", Math.round(it.skew * 10.0) / 10.0)
             } ?: JSONObject.NULL,
         )
         .put("look", look ?: JSONObject.NULL).put("strength", strength ?: JSONObject.NULL).put("flatten", flatten)

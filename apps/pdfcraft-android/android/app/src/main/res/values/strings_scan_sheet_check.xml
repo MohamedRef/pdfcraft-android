@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The sheet check: corners of different sheets of a pile are not taken for one page -->
+<resources>
+    <string name="scan_lab_sheet_check">Refuse corners that cannot be one sheet of paper</string>
+</resources>

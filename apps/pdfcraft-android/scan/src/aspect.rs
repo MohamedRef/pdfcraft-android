@@ -190,6 +190,48 @@ fn ratio_at(n2: V3, n3: V3, f: f64) -> f64 {
     ((n2[0] * n2[0] + n2[1] * n2[1] + f * f * n2[2] * n2[2]) / (n3[0] * n3[0] + n3[1] * n3[1] + f * f * n3[2] * n3[2])).sqrt()
 }
 
+/// How many focal lengths of [`FOCAL_RANGE`] [`sheet_fit`] tries, evenly spaced by ratio.
+const SHEET_FOCAL_STEPS: usize = 24;
+
+/// How well four corners fit a rectangular sheet seen by a camera.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SheetFit {
+    /// How far from a right angle the sheet's corners would be in space, in degrees, at the focal
+    /// length of [`FOCAL_RANGE`] (an ultra-wide camera to a 5× one) that makes it least: about 0 for any rectangle a camera
+    /// sees, however oblique the view; large for four corners no rectangle gives.
+    pub skew: f64,
+    /// How far the sheet would lean away from the camera at that focal length, in degrees (0 seen
+    /// square on).
+    pub tilt: f64,
+}
+
+/// Whether `quad` in a `photo_w` × `photo_h` photo can be a rectangular sheet (the detector's
+/// shape check): its sides in space as the perspective formula gives them, and how far from a
+/// right angle they are at the likeliest focal length. A page seen at a slant is a quad with
+/// unequal sides and corners far from 90 degrees in the photo and still fits; corners taken from
+/// different sheets do not. `None` for corners no rectangle gives at all.
+pub fn sheet_fit(quad: &Quad, photo_w: u32, photo_h: u32) -> Option<SheetFit> {
+    let unit = f64::from(photo_w.max(photo_h)).max(1.0);
+    let (cx, cy) = (f64::from(photo_w) / 2.0, f64::from(photo_h) / 2.0);
+    let m = |i: usize| -> V3 { [(quad.0[i][0] - cx) / unit, (quad.0[i][1] - cy) / unit, 1.0] };
+    let (n2, n3) = side_vectors(&[m(0), m(1), m(3), m(2)])?;
+    let at = |f: f64| -> Option<SheetFit> {
+        let (a, b): (V3, V3) = ([n2[0], n2[1], f * n2[2]], [n3[0], n3[1], f * n3[2]]);
+        let (la, lb) = (dot(a, a).sqrt(), dot(b, b).sqrt());
+        let normal = cross(a, b);
+        let ln = dot(normal, normal).sqrt();
+        (la > 0.0 && lb > 0.0 && ln > 0.0).then(|| SheetFit {
+            skew: (dot(a, b).abs() / (la * lb)).min(1.0).asin().to_degrees(),
+            tilt: (normal[2].abs() / ln).min(1.0).acos().to_degrees(),
+        })
+    };
+    let (lo, hi) = (*FOCAL_RANGE.start(), *FOCAL_RANGE.end());
+    let steps = (0..SHEET_FOCAL_STEPS).map(|i| lo * (hi / lo).powf(i as f64 / (SHEET_FOCAL_STEPS - 1) as f64));
+    // the focal length at which the sides are exactly at right angles, when it is a likely one
+    let exact = focal_of(n2, n3).filter(|f| FOCAL_RANGE.contains(f));
+    steps.chain(exact).filter_map(at).filter(|fit| fit.skew.is_finite() && fit.tilt.is_finite()).min_by(|a, b| a.skew.total_cmp(&b.skew))
+}
+
 /// The focal length the corners imply and how uncertain it is: the logarithm's variance when
 /// every corner coordinate is off by [`CORNER_NOISE`]. With one pair of sides parallel in the
 /// photo the corners say nothing about the focal length, and this shows as a huge variance.
