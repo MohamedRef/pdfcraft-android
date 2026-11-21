@@ -20,7 +20,7 @@ class ScanSecondLookTest {
     @Test
     fun theSearchAsksForItAsDesigned() {
         assertTrue(ScanLab().secondLook)
-        assertEquals(ScanFindOptions(ScanFinder.AUTO, true, true), ScanLab().findOptions())
+        assertEquals(ScanFindOptions(ScanFinder.AUTO, true, true, orderLooks = true), ScanLab().findOptions())
         // off: the network alone, as before
         assertFalse(ScanLab(secondLook = false).findOptions().secondLook)
     }

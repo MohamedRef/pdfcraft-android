@@ -63,8 +63,8 @@ pub mod warp;
 pub use aspect::{AspectSource, Focal, Paper, PaperMatch, Proportions, SheetFit, proportions, proportions_by_sides, proportions_by_sides_matched, proportions_matched};
 pub use capture::{MergeFrame, MergeOutcome, MergeRequest, PhotoSharpness, merge_frames, photo_sharpness};
 pub use detect::{
-    CornerPick, CornerRule, Detection, Finder, QuadSource, SECOND_LOOK_MOST_SIDES, SKEW_MOST, detect, detect_by, detect_with, second_look_takes,
-    second_look_wanted, sheet_of,
+    CornerPick, CornerRule, Detection, Finder, LookOrder, LooksBy, QuadSource, SECOND_LOOK_MOST_SIDES, SKEW_MOST, detect, detect_by, detect_in_order,
+    detect_with, second_look_takes, second_look_wanted, sheet_of,
 };
 pub use encode::Format;
 pub use enhance::{AutoOutput, AutoParams, DEFAULT_SHARPEN, PaperMode, auto};

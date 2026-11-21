@@ -200,6 +200,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_review_borders, o.reviewBorders) { lab.update(o.copy(reviewBorders = it)) }
     // flattening that the check could not keep is not run (#785)
     Sw(R.string.scan_lab_flatten_foresee, o.flattenForesee) { lab.update(o.copy(flattenForesee = it)) }
+    // the page search's turned looks ordered by how the page lies (#785)
+    Sw(R.string.scan_lab_order_looks, o.orderLooks) { lab.update(o.copy(orderLooks = it)) }
 
     SettingsHeader(stringResource(R.string.scan_lab_group_reports))
     // the research detectors (#305, #306): a report only, in kept scans, so it changes no page
