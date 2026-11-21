@@ -20,7 +20,7 @@ class ScanSheetCheckTest {
     @Test
     fun theSearchAsksForItAsDesigned() {
         assertTrue(ScanLab().sheetCheck)
-        assertEquals(ScanFindOptions(ScanFinder.AUTO, true, true, true), ScanLab().findOptions())
+        assertEquals(ScanFindOptions(ScanFinder.AUTO, true, true, true, orderLooks = true), ScanLab().findOptions())
         // a search that does not name it has it on
         assertTrue(ScanFindOptions(ScanFinder.AUTO, true).sheetCheck)
         // off: each corner's surest place whatever shape the four make, as before

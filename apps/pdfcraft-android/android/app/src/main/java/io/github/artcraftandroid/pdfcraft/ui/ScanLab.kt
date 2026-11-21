@@ -408,6 +408,15 @@ internal data class ScanLab(
      * beforehand. Off: they run and their page is thrown away, as before.
      */
     val flattenForesee: Boolean = true,
+    /**
+     * When the page search's unturned look is not sure, its turned looks (±30, ±60, ±90) are made
+     * in the order of how upright each would show the page, going by the outline the camera showed
+     * at the shutter or else by the unturned look's own corners (#785). The same looks and the
+     * same rules: a search with no sure look has the same answer, and one that ends on a sure look
+     * ends sooner (in the owner's log of 2026-11-21 three searches took 5, 5 and 4 looks to a sure
+     * one). Off: always the same order, as before.
+     */
+    val orderLooks: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans and reporting what the detectors see change no page). */
     val asDesigned: Boolean get() = copy(keep = false, inspect = false) == ScanLab()
@@ -418,7 +427,7 @@ internal data class ScanLab(
     /** The pull's release distance in use (#773): the testing value with the gentle snap, else 32 dp as before. */
     val pullReleaseInUse: Int get() = if (gentleSnap) pullReleaseDp else io.github.artcraftandroid.pdfcraft.ui.scan.PULL_RELEASE_DP_FIRM
 
-    fun findOptions() = ScanFindOptions(finder, refine, secondLook, sheetCheck)
+    fun findOptions() = ScanFindOptions(finder, refine, secondLook, sheetCheck, orderLooks)
 
     /** The strength a look with its own [level] is applied at. */
     fun strengthFor(level: Int): Int = (strength ?: level).coerceIn(0, 100)
@@ -439,6 +448,7 @@ internal data class ScanLab(
         "capture_guards" to captureGuards,
         "photo_tone" to photoTone,
         "flatten_foresee" to flattenForesee,
+        "order_looks" to orderLooks,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -457,6 +467,7 @@ internal data class ScanLab(
         .put("capture_guards", captureGuards)
         .put("photo_tone", photoTone)
         .put("flatten_foresee", flattenForesee)
+        .put("order_looks", orderLooks)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -475,6 +486,7 @@ internal data class ScanLab(
         "capture_guards" to flag(captureGuards),
         "photo_tone" to flag(photoTone),
         "flatten_foresee" to flag(flattenForesee),
+        "order_looks" to flag(orderLooks),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -588,6 +600,7 @@ internal data class ScanLab(
                 captureGuards = on("capture_guards", default.captureGuards),
                 photoTone = on("photo_tone", default.photoTone),
                 flattenForesee = on("flatten_foresee", default.flattenForesee),
+                orderLooks = on("order_looks", default.orderLooks),
             )
         }
     }
@@ -620,6 +633,8 @@ data class ScanFinding(
     val shapesRefused: Int = 0,
     /** How far the network's page is from a rectangular sheet seen by a camera, in degrees; 0 when not measured. */
     val skew: Double = 0.0,
+    /** What the order of the network's turned looks went by (#785): `fixed`, `outline` or `first_look`. */
+    val lookOrder: String = "fixed",
 )
 
 /** A page as Save made it, for a kept scan's page file. */
@@ -827,6 +842,7 @@ internal fun scanTestPageJson(
                     .put("second_look", it.secondLook).put("network_sides", it.networkSides).put("lines_sides", it.linesSides)
                     // the sheet check: which corners were taken, and the looks refused for their shape
                     .put("corner_pick", it.cornerPick).put("shapes_refused", it.shapesRefused).put("skew", Math.round(it.skew * 10.0) / 10.0)
+                    .put("look_order", it.lookOrder)
             } ?: JSONObject.NULL,
         )
         .put("look", look ?: JSONObject.NULL).put("strength", strength ?: JSONObject.NULL).put("flatten", flatten)

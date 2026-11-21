@@ -38,6 +38,52 @@ Without the model file the engine's line detector is asked, as before. When the 
 was not convinced, the line detector was **not** asked until #290's second look: on the ten
 reference photos below it was right on none.
 
+**The order of the turned looks** (#785; testing option *Search for a slanted page at its own
+angle first*, on). The six turned looks of step 3 are the same, and so are the rules (surer by
+0.1, stop at 0.7, the surest otherwise); only their order follows how the page lies. Each turn is
+given a *lean*: how far the page's top and bottom sides would be from level or upright in the
+photo so turned, 0° to 45°, taken from the outline the camera showed at the shutter
+(`ScanCapture.previewQuad`) or, without one, from the unturned look's own corners, however unsure.
+The looks go by their lean in steps of 7.5° (to the nearest step), and looks in the same step keep
+the order above, so a page within 3.75° of straight is searched exactly as before. That outline
+is never taken for the page: it only says where to look first. `look_order` says what the order
+went by (`fixed`, `outline`, `first_look`).
+
+What it can and cannot change. A search with no sure look (0.7) makes all seven looks in any
+order and takes the same surest one. A search that ends on a sure look ends on the first sure
+look of its order: sooner when that look comes earlier, and on **another sure look** than the
+fixed order's when two turned looks are sure and lie in different steps. Then the outline is
+that other look's: the same sheet, its corners a little apart before they are put on the edges.
+
+Measured on drawn photos (tests; nothing on a phone):
+
+| | Looks, fixed order | By the first look's corners | By the page's outline | Outline |
+| --- | --- | --- | --- | --- |
+| The 40 photos of the gate (`ordered_looks_find_the_same_outline_on_the_40_drawn_photos`) | 58 | 56 | 54 | the same to the pixel on all 40 |
+| Ten sheets lying at 0° to 150° (`a_slanted_sheet_is_found_the_same_in_fewer_looks`) | 31 | 21 | 17 | the same to the pixel on 8; on 2 (60° and −120°) the search ended on the other sure look (0.85 for 0.79, 0.83 for 0.82), corners 14 and 16 px apart on 900 px, and 0.0 px apart once put on the edges (#291) |
+
+On the owner's twelve photos of 2026-11-21 (desktop, `scan_find_passes`; the corners he left stand
+in for the camera's outline, which that scan did not keep): 65 looks in the fixed order, 59 by
+the first look's corners and 57 by the outline, the page the same to the pixel on all twelve.
+Two photos were sure at once, three ended on a sure turned look (5, 5 and 4 looks, now 2 each by
+the outline), and seven have no sure look and stay at seven looks. In his log of that day the search made 112 looks for 23 shots: one look
+on 7, seven on 13 (5 of those found nothing), and 5, 5 and 4 on the three that ended on a sure
+turned look. Only searches like those three can gain.
+
+What this leaves. A search with no sure look still makes seven looks, and that is most of the
+time spent: 13 of the 23 shots. In the same log the time of one look (`detect_ms` over `passes`)
+runs from about 110 ms to about 500 ms between searches. The camera's live outline runs the same
+network on the same threads, and whether it was running during the slow searches was not
+established here; if it was, holding it while a photo is searched would cut more than any order
+of looks. Not tried: it needs a phone to measure.
+`cargo run --release -p pdfcraft-scan --example scan_find_passes -- <folder>` makes every look of
+every photo once and counts the looks each order needs and whether the page is the same.
+
+Tried and refused: taking a look as soon as it agrees with the camera's outline. The outline is
+the same network's answer on a smaller picture of the same scene, so it agrees with the network's
+mistakes; on one of the owner's twelve photos of 2026-11-21 it would have taken an outline of
+0.45 over the right one of 0.61 that a later look gave.
+
 **The second look** (testing option *Ask the line detector too when the network is unsure*, on).
 When the network finds nothing, or an unsure page (under 0.7) with at most two of its four sides
 on edges of the photo (the refine of #291), the line detector is asked too. Its page is taken

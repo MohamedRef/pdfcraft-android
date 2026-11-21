@@ -72,11 +72,50 @@ pub struct Detection {
     /// ([`crate::aspect::SheetFit::skew`]); 0 when it was not measured (no page, the line
     /// detector's page, a corner on the photo's border, or the check off).
     pub skew: f32,
+    /// What the order of the network's turned looks went by.
+    pub order: LooksBy,
 }
 
 impl Detection {
-    const NOTHING: Detection =
-        Detection { quad: None, confidence: 0.0, source: QuadSource::None, angle: 0, passes: 0, pick: CornerPick::None, refused: 0, skew: 0.0 };
+    const NOTHING: Detection = Detection {
+        quad: None,
+        confidence: 0.0,
+        source: QuadSource::None,
+        angle: 0,
+        passes: 0,
+        pick: CornerPick::None,
+        refused: 0,
+        skew: 0.0,
+        order: LooksBy::Fixed,
+    };
+}
+
+/// The order the network's turned looks are made in (#785).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum LookOrder {
+    /// Always the same order ([`ANGLES`]): as before.
+    #[default]
+    Fixed,
+    /// The looks that would show the page most nearly upright first. How the page lies is taken
+    /// from the outline given (the one the camera showed when the photo was taken) or, without
+    /// one, from the unturned look's own corners, however unsure. The same looks are made and
+    /// the same rules end the search. A search with no sure look makes them all and has the same
+    /// answer; one that ends on a sure look ends on the first sure look of this order, which is
+    /// another look than the fixed order's when two turned looks are sure.
+    Upright(Option<Quad>),
+}
+
+/// What the order of a search's turned looks went by.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LooksBy {
+    /// The fixed order: not asked otherwise, no turned look was needed, or nothing said how the
+    /// page lies.
+    #[default]
+    Fixed,
+    /// The outline given with the photo.
+    Outline,
+    /// The unturned look's own corners.
+    FirstLook,
 }
 
 /// Which places of the corner maps a page is made of.
@@ -141,6 +180,10 @@ const OTHER_TILT_MOST: f64 = 50.0;
 /// The further angles, in the order their authors found them to rescue a search most often
 /// (with the quarter turn the other way added).
 const ANGLES: [i16; 6] = [90, -90, -30, 30, -60, 60];
+/// Leans are counted in steps of this many degrees when the turned looks are ordered (to the
+/// nearest step), so that looks which show the page about equally upright keep the fixed order
+/// between them: a page within 3.75 degrees of straight is searched in the fixed order.
+const LEAN_STEP: f64 = 7.5;
 /// The line detector looks at a copy this long (as the engine's own photo search does).
 const LINES_SIDE: usize = 1200;
 
@@ -406,14 +449,15 @@ pub fn sheet_of(quad: &Quad, width: u32, height: u32) -> Option<SheetFit> {
 }
 
 /// One look of the network: its answer for the photo turned by `degrees`.
-struct Look {
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Look {
     /// The quad in photo pixels; `None` for none.
-    quad: Option<Quad>,
+    pub quad: Option<Quad>,
     /// 0 without a quad.
-    confidence: f32,
-    pick: CornerPick,
-    refused: bool,
-    skew: f32,
+    pub confidence: f32,
+    pub pick: CornerPick,
+    pub refused: bool,
+    pub skew: f32,
 }
 
 /// The network's answer for the photo turned by `degrees`. `None` when the model cannot be run.
@@ -432,9 +476,35 @@ fn pass(model: &rten::Model, photo: &Photo, small: &Picture, scale: f64, degrees
     Some(Look { quad, confidence, pick, refused: choice.refused, skew: if confidence > 0.0 { choice.skew } else { 0.0 } })
 }
 
-fn with_model(model: &rten::Model, photo: &Photo, rule: CornerRule) -> Option<Detection> {
-    let (small, scale) = shrink(photo, SIDE);
-    let first = pass(model, photo, &small, scale, 0, rule)?;
+/// How far the page `quad` outlines is from lying upright or on its side when the photo is shown
+/// turned by `degrees`: 0 to 45 degrees, from the direction its top and bottom sides run in.
+pub(crate) fn lean(quad: &Quad, degrees: i16) -> f64 {
+    let q = &quad.0;
+    let across = [(q[1][0] - q[0][0]) + (q[2][0] - q[3][0]), (q[1][1] - q[0][1]) + (q[2][1] - q[3][1])];
+    let turned = (across[1].atan2(across[0]).to_degrees() + f64::from(degrees)).rem_euclid(90.0);
+    turned.min(90.0 - turned)
+}
+
+/// The turned looks in the order `order` asks, given the unturned look's own corners, and what
+/// that order went by. Looks whose leans are the same number of [`LEAN_STEP`]s keep the fixed
+/// order.
+pub(crate) fn turned_looks(order: LookOrder, first: Option<&Quad>) -> ([i16; 6], LooksBy) {
+    let (by, page) = match (order, first) {
+        (LookOrder::Fixed, _) | (LookOrder::Upright(None), None) => return (ANGLES, LooksBy::Fixed),
+        (LookOrder::Upright(Some(outline)), _) => (LooksBy::Outline, outline),
+        (LookOrder::Upright(None), Some(first)) => (LooksBy::FirstLook, *first),
+    };
+    let mut angles = ANGLES;
+    // a stable sort: equal steps stay in the fixed order
+    angles.sort_by_key(|degrees| (lean(&page, *degrees) / LEAN_STEP).round() as i64);
+    (angles, by)
+}
+
+/// The search over the network's looks: `look` answers for the photo turned by an angle (`None`
+/// when the model cannot be run). The unturned look is taken when it is sure enough; else the
+/// turned looks follow in `order`, the surest wins, and a sure one ends the search.
+pub(crate) fn search(mut look: impl FnMut(i16) -> Option<Look>, order: LookOrder) -> Option<Detection> {
+    let first = look(0)?;
     let mut refused = u8::from(first.refused);
     let mut best = Detection {
         quad: first.quad,
@@ -445,10 +515,13 @@ fn with_model(model: &rten::Model, photo: &Photo, rule: CornerRule) -> Option<De
         pick: first.pick,
         refused: 0,
         skew: first.skew,
+        order: LooksBy::Fixed,
     };
     if best.confidence < ACCEPT {
-        for angle in ANGLES {
-            let look = pass(model, photo, &small, scale, angle, rule)?;
+        let (angles, by) = turned_looks(order, first.quad.as_ref());
+        best.order = by;
+        for angle in angles {
+            let look = look(angle)?;
             best.passes += 1;
             refused += u8::from(look.refused);
             if look.confidence > best.confidence + if best.angle == 0 { MARGIN } else { 0.0 } {
@@ -460,9 +533,37 @@ fn with_model(model: &rten::Model, photo: &Photo, rule: CornerRule) -> Option<De
         }
     }
     if best.confidence < LEAST {
-        return Some(Detection { passes: best.passes, confidence: best.confidence, refused, ..Detection::NOTHING });
+        return Some(Detection { passes: best.passes, confidence: best.confidence, refused, order: best.order, ..Detection::NOTHING });
     }
     Some(Detection { refused, ..best })
+}
+
+fn with_model(model: &rten::Model, photo: &Photo, rule: CornerRule, order: LookOrder) -> Option<Detection> {
+    let (small, scale) = shrink(photo, SIDE);
+    search(|degrees| pass(model, photo, &small, scale, degrees, rule), order)
+}
+
+/// What one look of the still search answered, for measuring the search (#785).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LookFact {
+    /// The turn the photo was shown at.
+    pub degrees: i16,
+    /// 0 without a quad.
+    pub confidence: f32,
+    /// The look's page in photo pixels, whatever its confidence.
+    pub quad: Option<Quad>,
+}
+
+/// Every look the still search can make at `photo`: unturned, then the turned ones in the
+/// search's own order, whether or not the search would have stopped before. For measuring how
+/// many looks a search needs; the app never calls it. `None` without the model file.
+pub fn every_look(photo: &Photo, rule: CornerRule) -> Option<Vec<LookFact>> {
+    let model = load(EDGES)?;
+    let (small, scale) = shrink(photo, SIDE);
+    std::iter::once(0)
+        .chain(ANGLES)
+        .map(|degrees| pass(&model, photo, &small, scale, degrees, rule).map(|l| LookFact { degrees, confidence: l.confidence, quad: l.quad }))
+        .collect()
 }
 
 /// The network's answer from one look at the photo as it is, with no turned looks when it is
@@ -494,6 +595,7 @@ pub(crate) fn one_look_at(model: &rten::Model, photo: &Photo, degrees: i16, rule
         pick: look.pick,
         refused,
         skew: look.skew,
+        order: LooksBy::Fixed,
     })
 }
 
@@ -547,10 +649,15 @@ pub fn detect_with(photo: &Photo, finder: Finder) -> Detection {
 
 /// [`detect_with`], the network's corner maps read by `rule`.
 pub fn detect_by(photo: &Photo, finder: Finder, rule: CornerRule) -> Detection {
+    detect_in_order(photo, finder, rule, LookOrder::Fixed)
+}
+
+/// [`detect_by`], the network's turned looks made in `order` (#785).
+pub fn detect_in_order(photo: &Photo, finder: Finder, rule: CornerRule, order: LookOrder) -> Detection {
     if photo.width < 16 || photo.height < 16 {
         return Detection::NOTHING;
     }
-    let network = || load(EDGES).and_then(|model| with_model(&model, photo, rule));
+    let network = || load(EDGES).and_then(|model| with_model(&model, photo, rule, order));
     match finder {
         Finder::Auto => network().unwrap_or_else(|| with_lines(photo)),
         Finder::Network => network().unwrap_or(Detection::NOTHING),

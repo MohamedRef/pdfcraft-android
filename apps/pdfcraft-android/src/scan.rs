@@ -10,8 +10,8 @@ use pdfcraft_scan::page::page_look_kind;
 use pdfcraft_scan::page_kind::{PageKind, PresetChoice, preset_from_id};
 use pdfcraft_scan::upright_pages::{PageTurn, followed, settle};
 use pdfcraft_scan::{
-    AspectSource, CornerPick, CornerRule, Detection, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource,
-    RefineOptions, Refined, SKEW_MOST, detect_by, detect_with, page_base, refine, second_look_takes, second_look_wanted, sheet_of,
+    AspectSource, CornerPick, CornerRule, Detection, Finder, Format, Look, LookOrder, LooksBy, PageBase, PageRequest, Paper, Photo, Pyramid, Quad,
+    QuadSource, RefineOptions, Refined, SKEW_MOST, detect_in_order, detect_with, page_base, refine, second_look_takes, second_look_wanted, sheet_of,
 };
 
 use crate::MobileError;
@@ -656,6 +656,19 @@ pub struct ScanDocument {
     /// How far the network's page is from a rectangular sheet seen by a camera, in degrees; 0 when
     /// it was not measured (no page, the line detector's, a corner on the photo's border, the check off).
     pub skew: f32,
+    /// What the order of the network's turned looks went by (#785).
+    pub look_order: ScanLooksBy,
+}
+
+/// What the order of the network's turned looks went by (#785).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ScanLooksBy {
+    /// The fixed order: not asked otherwise, no turned look was needed, or nothing said how the page lies.
+    Fixed,
+    /// The outline given with the photo: the one the camera showed when it was taken.
+    Outline,
+    /// The unturned look's own corners.
+    FirstLook,
 }
 
 /// Which places of the network's corner maps a page is made of (the sheet check).
@@ -956,11 +969,19 @@ pub struct ScanFindOptions {
     /// the four make, as before.
     #[uniffi(default = true)]
     pub sheet_check: bool,
+    /// When the unturned look is not sure, the network's turned looks are made in the order of
+    /// how upright each would show the page, going by the outline given with the photo
+    /// ([`scan_find_document_near`]) or else by the unturned look's own corners (#785). The same
+    /// looks and the same rules: a search with no sure look has the same answer, and one that ends
+    /// on a sure look ends on the first sure look of this order. Off: always the same order, as
+    /// before.
+    #[uniffi(default = false)]
+    pub order_looks: bool,
 }
 
 impl Default for ScanFindOptions {
     fn default() -> Self {
-        ScanFindOptions { finder: ScanFinder::Auto, refine: true, second_look: false, sheet_check: true }
+        ScanFindOptions { finder: ScanFinder::Auto, refine: true, second_look: false, sheet_check: true, order_looks: false }
     }
 }
 
@@ -982,7 +1003,22 @@ pub fn scan_find_document_with(photo_path: String, options: ScanFindOptions) -> 
     find_in(&root, &photo_path, options)
 }
 
+/// [`scan_find_document_with`] for a photo the camera took while it showed an outline (#785):
+/// `outline` is that outline, x1, y1 … x4, y4 as shares of the upright photo. With
+/// `options.order_looks` the turned looks are ordered by it; it is never taken for the page, and
+/// one that is not eight usable numbers is left out.
+#[uniffi::export]
+pub fn scan_find_document_near(photo_path: String, options: ScanFindOptions, outline: Option<Vec<f32>>) -> Result<ScanDocument, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    find_near_in(&root, &photo_path, options, outline.as_deref())
+}
+
 pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -> Result<ScanDocument, MobileError> {
+    find_near_in(root, photo_path, options, None)
+}
+
+pub(crate) fn find_near_in(root: &Path, photo_path: &str, options: ScanFindOptions, outline: Option<&[f32]>) -> Result<ScanDocument, MobileError> {
     let bytes = read_photo(root, photo_path)?;
     let mut timings = Vec::with_capacity(3);
     let mut clock = std::time::Instant::now();
@@ -993,7 +1029,14 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
     let photo = Photo::decode(&bytes).map_err(|e| MobileError::Command(e.to_string()))?;
     drop(bytes);
     lap("scan_decode", &mut timings);
-    let mut found = detect_by(
+    let order = match options.order_looks {
+        true => {
+            let shares: Option<[f32; 8]> = outline.and_then(|o| o.try_into().ok());
+            LookOrder::Upright(shares.and_then(|s| Quad::from_shares(&s, photo.width, photo.height).ok()))
+        }
+        false => LookOrder::Fixed,
+    };
+    let mut found = detect_in_order(
         &photo,
         match options.finder {
             ScanFinder::Auto => Finder::Auto,
@@ -1002,8 +1045,14 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
             ScanFinder::Off => Finder::Off,
         },
         if options.sheet_check { CornerRule::Sheet } else { CornerRule::Surest },
+        order,
     );
     lap("scan_detect", &mut timings);
+    let look_order = match found.order {
+        LooksBy::Fixed => ScanLooksBy::Fixed,
+        LooksBy::Outline => ScanLooksBy::Outline,
+        LooksBy::FirstLook => ScanLooksBy::FirstLook,
+    };
     // what the network's looks refused stays in the log when the line detector's page is taken
     let shapes_refused = found.refused;
     // the second look (#290): the line detector too when the network found nothing, or an unsure
@@ -1029,7 +1078,7 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
                 || lines_fit.as_ref().and_then(|r| sheet_of(&r.quad, photo.width, photo.height)).is_none_or(|fit| fit.skew <= SKEW_MOST);
             if enough && sheet {
                 // the network's passes stay in the log: they were made
-                found = Detection { passes: found.passes, refused: found.refused, ..lines };
+                found = Detection { passes: found.passes, refused: found.refused, order: found.order, ..lines };
                 kept = lines_fit;
                 second_look = ScanSecondLook::Taken;
             } else if enough {
@@ -1071,6 +1120,7 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
             corner_pick,
             shapes_refused,
             skew,
+            look_order,
         });
     };
     if !options.refine {
@@ -1091,6 +1141,7 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
             corner_pick,
             shapes_refused,
             skew,
+            look_order,
         });
     }
     let refined = match settled {
@@ -1125,6 +1176,7 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
         corner_pick,
         shapes_refused,
         skew,
+        look_order,
     })
 }
 
@@ -2563,7 +2615,8 @@ pub(crate) mod tests {
 
         // the testing options (#288): each detector alone, the closer look off, and nothing at all
         let with = |finder, refine| {
-            find_in(&root, &shot.to_string_lossy(), ScanFindOptions { finder, refine, second_look: false, sheet_check: true }).unwrap()
+            find_in(&root, &shot.to_string_lossy(), ScanFindOptions { finder, refine, second_look: false, sheet_check: true, order_looks: false })
+                .unwrap()
         };
         assert_eq!(with(ScanFinder::Auto, true).corners, found.corners);
         assert_eq!(with(ScanFinder::Network, true).corners, found.corners);
@@ -2600,6 +2653,16 @@ pub(crate) mod tests {
         // the sheet check (#782): a single sheet is each corner's surest place either way, and says so
         assert_eq!((found.corner_pick, found.shapes_refused), (ScanCornerPick::First, 0));
         assert!(found.skew < SKEW_MOST as f32, "{found:?}");
+        // the turned looks ordered (#785): the same page, with or without the camera's outline;
+        // an outline that is no four corners is left out
+        let ordered = ScanFindOptions { order_looks: true, ..ScanFindOptions::default() };
+        for outline in [None, Some(found.corners.clone()), Some(vec![0.5; 3]), Some(vec![f32::NAN; 8])] {
+            let near = find_near_in(&root, &shot.to_string_lossy(), ordered, outline.as_deref()).unwrap();
+            assert_eq!((near.corners.clone(), near.passes, near.angle), (found.corners.clone(), found.passes, found.angle), "{outline:?}");
+            // a sure unturned look makes no turned look, so nothing was ordered
+            assert_eq!(near.look_order, if near.passes == 1 { ScanLooksBy::Fixed } else { near.look_order });
+        }
+        assert!(!ScanFindOptions::default().order_looks);
         let unchecked = find_in(&root, &shot.to_string_lossy(), ScanFindOptions { sheet_check: false, ..ScanFindOptions::default() }).unwrap();
         assert_eq!((unchecked.corners, unchecked.corner_pick, unchecked.skew), (found.corners.clone(), ScanCornerPick::First, 0.0));
         assert_eq!((none.corner_pick, lines.corner_pick), (ScanCornerPick::None, ScanCornerPick::None));
@@ -2608,7 +2671,7 @@ pub(crate) mod tests {
         let named = find_in(
             &root,
             &blank.to_string_lossy(),
-            ScanFindOptions { finder: ScanFinder::Network, refine: true, second_look: true, sheet_check: true },
+            ScanFindOptions { finder: ScanFinder::Network, refine: true, second_look: true, sheet_check: true, order_looks: false },
         )
         .unwrap();
         assert_eq!(named.second_look, ScanSecondLook::NotAsked);

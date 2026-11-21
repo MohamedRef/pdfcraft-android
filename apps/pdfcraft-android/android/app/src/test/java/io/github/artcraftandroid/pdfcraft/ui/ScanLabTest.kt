@@ -22,7 +22,7 @@ class ScanLabTest {
         val lab = ScanLab()
         assertTrue(lab.asDesigned)
         assertFalse(lab.keep)
-        assertEquals(ScanFindOptions(ScanFinder.AUTO, true, true), lab.findOptions())
+        assertEquals(ScanFindOptions(ScanFinder.AUTO, true, true, orderLooks = true), lab.findOptions())
         assertEquals(60, lab.strengthFor(60))
         // keeping scans changes no page; every other option does
         assertTrue(lab.copy(keep = true).asDesigned)

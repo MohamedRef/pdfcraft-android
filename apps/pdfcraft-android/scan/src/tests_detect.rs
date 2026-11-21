@@ -218,6 +218,7 @@ fn the_line_detector_is_asked_only_when_the_network_is_not_convinced() {
         pick: if found { crate::detect::CornerPick::First } else { crate::detect::CornerPick::None },
         refused: 0,
         skew: 0.0,
+        order: crate::detect::LooksBy::Fixed,
     };
     // nothing found (the owner's photos of 2026-11-19 and -20: 0.22 to 0.39)
     assert!(second_look_wanted(&network(0.39, false), 0));
@@ -425,4 +426,154 @@ fn the_check_leaves_a_single_sheet_as_it_was() {
     // (the quad was set by hand, not by a camera: its skew is 3.6 degrees, a real sheet's about 1)
     assert!(checked.skew < crate::detect::SKEW_MOST as f32 && before.skew == 0.0, "{} {}", checked.skew, before.skew);
     assert_eq!(CornerRule::default(), CornerRule::Sheet);
+}
+
+/// The largest distance between the corners of two outlines of one page, in pixels, whichever
+/// corner each outline starts at.
+fn corners_apart(a: &Quad, b: &Quad) -> f64 {
+    (0..4)
+        .map(|shift| (0..4).map(|i| (a.0[i][0] - b.0[(i + shift) % 4][0]).hypot(a.0[i][1] - b.0[(i + shift) % 4][1])).fold(0.0, f64::max))
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// A sheet of 420 × 594 lying turned by `degrees` (clockwise on the screen) about the middle of a
+/// 900 × 900 photo, its corners in the sheet's own order.
+fn turned_sheet(degrees: f64) -> [Point; 4] {
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    [[-210.0, -297.0], [210.0, -297.0], [210.0, 297.0], [-210.0, 297.0]].map(|[x, y]| [450.0 + x * cos - y * sin, 450.0 + x * sin + y * cos])
+}
+
+/// The looks that show a page most nearly upright come first (#785), and looks that show it
+/// equally upright keep the fixed order between them.
+#[test]
+fn the_turned_looks_are_ordered_by_how_upright_they_show_the_page() {
+    use crate::detect::{LookOrder, LooksBy, lean, turned_looks};
+    let fixed = [90, -90, -30, 30, -60, 60];
+    assert_eq!(turned_looks(LookOrder::Fixed, None), (fixed, LooksBy::Fixed));
+    // nothing says how the page lies: the fixed order
+    assert_eq!(turned_looks(LookOrder::Upright(None), None), (fixed, LooksBy::Fixed));
+    let lying = |degrees: f64| Quad::new(turned_sheet(degrees)).unwrap();
+    // an upright page: a quarter turn shows it as upright as no turn, so the fixed order stays
+    assert_eq!(turned_looks(LookOrder::Upright(Some(lying(0.0))), None), (fixed, LooksBy::Outline));
+    assert!(lean(&lying(0.0), 0) < 0.01 && lean(&lying(0.0), 90) < 0.01 && (lean(&lying(0.0), 30) - 30.0).abs() < 0.01);
+    // a page turned 30 degrees clockwise is upright in the look turned 30 the other way, and on
+    // its side in the one turned 60 on; those two first, in the fixed order
+    let (angles, by) = turned_looks(LookOrder::Upright(None), Some(&lying(30.0)));
+    assert_eq!((&angles[..2], by), (&[-30, 60][..], LooksBy::FirstLook));
+    assert_eq!(&turned_looks(LookOrder::Upright(Some(lying(-30.0))), None).0[..2], [30, -60]);
+    assert_eq!(&turned_looks(LookOrder::Upright(Some(lying(60.0))), None).0[..2], [30, -60]);
+    // the outline given wins over the first look's corners
+    assert_eq!(turned_looks(LookOrder::Upright(Some(lying(-30.0))), Some(&lying(30.0))).1, LooksBy::Outline);
+    // a small lean changes nothing: every look is where it was
+    assert_eq!(turned_looks(LookOrder::Upright(Some(lying(3.0))), None).0, fixed);
+    assert_eq!(turned_looks(LookOrder::Upright(Some(lying(-3.0))), None).0, fixed);
+    // every order is the same six looks
+    for degrees in [-80.0, -45.0, -10.0, 17.0, 45.0, 73.0] {
+        let mut angles = turned_looks(LookOrder::Upright(Some(lying(degrees))), None).0;
+        angles.sort_unstable();
+        assert_eq!(angles, [-90, -60, -30, 30, 60, 90]);
+    }
+}
+
+/// The search over made-up answers: in any order the same looks are made and the same answer
+/// kept when no turned look is sure, and a sure look ends the search where it stands in the order.
+#[test]
+fn ordering_the_looks_changes_the_search_only_where_a_sure_look_ends_it() {
+    use crate::detect::{CornerPick, Look, LookOrder, search};
+    let page = Quad::new(turned_sheet(30.0)).unwrap();
+    let mut seed = 785u64;
+    let mut next = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        ((seed >> 40) as f32) / (1u64 << 24) as f32
+    };
+    let (mut unsure, mut sooner, mut later) = (0, 0, 0);
+    for round in 0..4000 {
+        // confidences for no turn and the six turns; in half the rounds none is sure
+        let cap = if round % 2 == 0 { 0.69 } else { 0.95 };
+        let table: Vec<(i16, f32)> = [0, 90, -90, -30, 30, -60, 60].into_iter().map(|d| (d, next() * cap)).collect();
+        let run = |order: LookOrder| {
+            let mut made = Vec::new();
+            let found = search(
+                |degrees| {
+                    made.push(degrees);
+                    let confidence = table.iter().find(|(d, _)| *d == degrees).map_or(0.0, |(_, c)| *c);
+                    Some(Look { quad: Some(page), confidence, pick: CornerPick::First, refused: false, skew: 0.0 })
+                },
+                order,
+            )
+            .unwrap();
+            (found, made)
+        };
+        let ((before, looks_before), (after, looks_after)) = (run(LookOrder::Fixed), run(LookOrder::Upright(None)));
+        assert_eq!(usize::from(before.passes), looks_before.len());
+        assert_eq!(usize::from(after.passes), looks_after.len());
+        let sure: Vec<i16> = table.iter().skip(1).filter(|(_, c)| *c >= 0.7).map(|(d, _)| *d).collect();
+        if table[0].1 >= 0.5 {
+            assert_eq!((before.passes, after.passes, before.angle, after.angle), (1, 1, 0, 0));
+        } else if sure.is_empty() {
+            // every look is made either way, and the surest is kept
+            unsure += 1;
+            assert_eq!((before.passes, after.passes), (7, 7));
+            assert_eq!((before.angle, before.confidence, before.quad), (after.angle, after.confidence, after.quad), "{table:?}");
+        } else {
+            // each search ends on the first sure look of its own order
+            assert!(sure.contains(&before.angle) && sure.contains(&after.angle), "{table:?}");
+            assert_eq!(Some(&after.angle), looks_after.last());
+            sooner += usize::from(after.passes < before.passes);
+            later += usize::from(after.passes > before.passes);
+        }
+    }
+    assert!(unsure > 500 && sooner > 100, "{unsure} unsure, {sooner} sooner, {later} later");
+}
+
+/// Sheets lying at a slant, found by the network (#785): with the looks ordered, by the first
+/// look's own corners or by the page's true outline, no search makes more looks, and the page is
+/// the same to the pixel wherever the search ends on the same look. Where two turned looks are
+/// sure the ordered search may end on the other one: the same sheet, its corners a little apart.
+#[test]
+fn a_slanted_sheet_is_found_the_same_in_fewer_looks() {
+    use crate::detect::{CornerRule, LookOrder, detect_by, detect_in_order};
+    let (mut fixed, mut by_first, mut by_outline, mut other_look) = (0u32, 0u32, 0u32, 0u32);
+    for degrees in [0.0, 12.0, 30.0, -30.0, 45.0, 60.0, -60.0, 90.0, 150.0, -120.0] {
+        let truth = turned_sheet(degrees);
+        let shot = photo(900, 900, truth);
+        let before = detect_by(&shot, Finder::Network, CornerRule::Sheet);
+        let first = detect_in_order(&shot, Finder::Network, CornerRule::Sheet, LookOrder::Upright(None));
+        let outline = detect_in_order(&shot, Finder::Network, CornerRule::Sheet, LookOrder::Upright(Quad::new(truth).ok()));
+        println!(
+            "sheet turned {degrees}: {} looks (at {}, {:.2}), {} by the first look's corners, {} by its outline",
+            before.passes, before.angle, before.confidence, first.passes, outline.passes
+        );
+        assert!(before.quad.is_some(), "turned {degrees}: not found");
+        for ordered in [&first, &outline] {
+            if ordered.angle == before.angle {
+                assert_eq!((ordered.quad, ordered.confidence), (before.quad, before.confidence), "turned {degrees}");
+            } else {
+                // another sure look of the same sheet
+                let apart = corners_apart(&ordered.quad.unwrap(), &before.quad.unwrap());
+                // put on the sheet's edges, as the app does next, the two are the same page
+                let pyramid = crate::Pyramid::new(shot.luma());
+                let on_edges = |quad: &Quad| crate::refine(&pyramid, quad, &crate::RefineOptions::default()).quad;
+                let (edges, edges_before, sheet) = (on_edges(&ordered.quad.unwrap()), on_edges(&before.quad.unwrap()), Quad::new(truth).unwrap());
+                let (refined_apart, off, off_before) =
+                    (corners_apart(&edges, &edges_before), corners_apart(&edges, &sheet), corners_apart(&edges_before, &sheet));
+                println!(
+                    "  another sure look: at {} ({:.2}), corners {apart:.1} px apart; on the edges {refined_apart:.1} px apart, {off:.1} px from the sheet against {off_before:.1}",
+                    ordered.angle, ordered.confidence
+                );
+                assert!(ordered.confidence >= 0.7 && before.confidence >= 0.7, "turned {degrees}");
+                assert!(apart < 0.025 * 900.0, "turned {degrees}: {apart} px");
+                assert!(refined_apart < 2.0 && off < 2.0, "turned {degrees}: {refined_apart} px apart, {off} px from the sheet");
+                other_look += 1;
+            }
+            assert!(ordered.passes <= before.passes, "turned {degrees}");
+        }
+        fixed += u32::from(before.passes);
+        by_first += u32::from(first.passes);
+        by_outline += u32::from(outline.passes);
+    }
+    println!(
+        "looks on the ten sheets: {fixed} in the fixed order, {by_first} by the first look's corners, {by_outline} by the outline; {other_look} ended on another sure look"
+    );
+    assert!(by_outline < fixed, "{by_outline} looks against {fixed}");
 }
