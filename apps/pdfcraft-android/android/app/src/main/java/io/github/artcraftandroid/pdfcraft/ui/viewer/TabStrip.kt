@@ -76,11 +76,15 @@ import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
 import io.github.artcraftandroid.pdfcraft.ui.TabPolicy
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 
-/** The tab strip's height, under the top bar while two or more documents are open (#138). */
+/** The tab strip's height, under the top bar whenever a document is open (#138). */
 val TabStripHeight = 40.dp
 
-/** Whether [vm] shows the tab strip for its document. */
-fun showTabStrip(vm: AppViewModel): Boolean = vm.tabs.tabs.size > 1
+/**
+ * Whether [vm] shows the tab strip for its document: always while one is open, as a browser
+ * keeps its tabs and their count in view. With one document it used to hide, and with it the
+ * way to see the open documents as cards and to open another beside it.
+ */
+fun showTabStrip(vm: AppViewModel): Boolean = vm.tabs.tabs.isNotEmpty()
 
 /** The button on the strip that shows every open document as cards, for layout tests (#669). */
 const val TAB_COUNT_TAG = "tab_count"
@@ -121,7 +125,7 @@ fun TabStrip(vm: AppViewModel, doc: OpenDocument) {
                 tabs.getOrNull(i)?.let { tab -> TabChip(vm, tab, active = tab.doc != null && tab.doc === doc) }
             }
         }
-        BarIcon(LucideIcons.Plus, stringResource(R.string.tabs_open_another), { vm.tabs.openAnother() }, size = 40.dp, iconSize = 20.dp)
+        OpenAnotherButton(vm)
         SplitButton(vm)
     }
 }
@@ -151,6 +155,36 @@ private fun TabChip(vm: AppViewModel, tab: DocTab, active: Boolean) {
             overflow = TextOverflow.Ellipsis,
         )
         BarIcon(LucideIcons.X, stringResource(R.string.tabs_close, tab.title), { vm.tabs.close(tab) }, size = 32.dp, iconSize = 16.dp)
+    }
+}
+
+/** The button on the strip that opens another document, for layout tests. */
+const val TAB_OPEN_TAG = "tab_open_another"
+
+/**
+ * + on the strip: another document opens in a tab of its own, this one stays open in its tab.
+ * Choose a PDF file goes straight to the system's file picker; Recent files goes Home.
+ */
+@Composable
+private fun OpenAnotherButton(vm: AppViewModel) {
+    var choosing by remember { mutableStateOf(false) }
+    Box {
+        BarIcon(
+            LucideIcons.Plus, stringResource(R.string.tabs_open_another), { choosing = true },
+            modifier = Modifier.testTag(TAB_OPEN_TAG), size = 40.dp, iconSize = 20.dp,
+        )
+        DropdownMenu(expanded = choosing, onDismissRequest = { choosing = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.tabs_open_file)) },
+                leadingIcon = { androidx.compose.material3.Icon(LucideIcons.FolderOpen, null, Modifier.width(20.dp).height(20.dp)) },
+                onClick = { choosing = false; vm.tabs.openFile("strip") },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.tabs_open_recent)) },
+                leadingIcon = { androidx.compose.material3.Icon(LucideIcons.Clock, null, Modifier.width(20.dp).height(20.dp)) },
+                onClick = { choosing = false; vm.tabs.openAnother() },
+            )
+        }
     }
 }
 
