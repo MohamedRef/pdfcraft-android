@@ -1,0 +1,110 @@
+{
+ "corners": [
+  0.1,
+  0.1,
+  0.9,
+  0.1,
+  1.0,
+  1.0,
+  0.1,
+  0.9
+ ],
+ "kind": "other",
+ "paper": "unknown",
+ "curved": false,
+ "notes": "",
+ "checked": false,
+ "app": "0.0.46-beta (46012)",
+ "outcome": "saved",
+ "found": [
+  0.1,
+  0.1,
+  0.9,
+  0.1,
+  0.9,
+  0.9,
+  0.1,
+  0.9
+ ],
+ "finding": {
+  "source": "model",
+  "confidence": 0.91,
+  "second_look": "not_asked"
+ },
+ "look": "auto",
+ "strength": 60,
+ "flatten": false,
+ "options": {
+  "finder": "auto",
+  "refine": true,
+  "second_look": true,
+  "flatten_auto": true,
+  "upright": true
+ },
+ "auto_decisions": {
+  "undone": "none",
+  "fingers_ms": 60
+ },
+ "document_type": {
+  "preset": "document"
+ },
+ "turns": {
+  "manual": 1,
+  "auto": true,
+  "total": 1,
+  "followed": false,
+  "source": "manual"
+ },
+ "preview": {
+  "shown": true,
+  "ms": 600
+ },
+ "crop": {
+  "visits": 2,
+  "moved_pct": 10.0,
+  "ms": 20000,
+  "snap_ms_max": 300
+ },
+ "borders_checked": true,
+ "unsure": false,
+ "capture": {
+  "source": "in_app",
+  "mode": "batch",
+  "width": 4000,
+  "height": 3000,
+  "rotation": 90,
+  "capture_ms": 650,
+  "sharpness_ms": 80,
+  "auto_shot": false,
+  "merge": null
+ },
+ "page_look": {
+  "id": "clean"
+ },
+ "position": 3,
+ "made_full_before_save": true,
+ "from_recent": false,
+ "edited_from_viewer": false,
+ "encoding": {
+  "size_choice": "balanced",
+  "bytes": 300000
+ },
+ "result": {
+  "width": 1000,
+  "height": 1300,
+  "format": "jpeg",
+  "dpi": 200,
+  "paper": "a4",
+  "flattened": false,
+  "flatten_check": {
+   "kept": false,
+   "why": "notbetter"
+  },
+  "line_flatten": null,
+  "flatten_reused": false,
+  "flatten_skipped_flat": false,
+  "orientation": {
+   "sure": true
+  }
+ }
+}
