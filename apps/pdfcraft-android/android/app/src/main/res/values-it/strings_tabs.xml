@@ -2,8 +2,6 @@
 <!-- Document tabs and split view (#138 #139), kept apart from strings.xml so parallel work merges cleanly. -->
 <resources>
     <string name="tabs_open_another">Apri un altro documento</string>
-    <string name="tabs_open_file">Scegli un file PDF</string>
-    <string name="tabs_open_recent">Dai file recenti</string>
     <string name="tabs_parked">%1$s, chiuso per risparmiare memoria</string>
     <string name="tabs_close">Chiudi %1$s</string>
     <string name="tabs_split">Vista divisa</string>
