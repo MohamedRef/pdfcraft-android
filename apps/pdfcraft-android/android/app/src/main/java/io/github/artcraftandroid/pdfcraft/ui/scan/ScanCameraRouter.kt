@@ -193,7 +193,7 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         if (m.target != null) {
             ScanCameraScreen(
                 m, vm().scanPages.map { scanCameraPageThumb(vm().scanLab.options.firstPicture, vm().pageQueue.thumbOf(it), it.thumb) }, actions, vm().scanBook,
-                vm().scanLab.options.cameraBar, vm().scanLab.options.liveTurned, vm().scanLab.options.autoEased,
+                vm().scanLab.options.cameraBar, vm().scanLab.options.liveTurned, vm().scanLab.options.autoEased, vm().scanLab.options.sheetCheck,
                 // Review pages, Undo and Done each a button (#780); the pages' photos tell which are this camera's
                 buttons = vm().scanLab.options.cameraButtons, pagePaths = vm().scanPages.map { it.file.path },
             )

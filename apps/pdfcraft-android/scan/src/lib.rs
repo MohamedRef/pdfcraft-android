@@ -60,14 +60,17 @@ pub mod upright;
 pub mod upright_pages;
 pub mod warp;
 
-pub use aspect::{AspectSource, Focal, Paper, PaperMatch, Proportions, proportions, proportions_by_sides, proportions_by_sides_matched, proportions_matched};
+pub use aspect::{AspectSource, Focal, Paper, PaperMatch, Proportions, SheetFit, proportions, proportions_by_sides, proportions_by_sides_matched, proportions_matched};
 pub use capture::{MergeFrame, MergeOutcome, MergeRequest, PhotoSharpness, merge_frames, photo_sharpness};
-pub use detect::{Detection, Finder, QuadSource, SECOND_LOOK_MOST_SIDES, detect, detect_with, second_look_takes, second_look_wanted};
+pub use detect::{
+    CornerPick, CornerRule, Detection, Finder, QuadSource, SECOND_LOOK_MOST_SIDES, SKEW_MOST, detect, detect_by, detect_with, second_look_takes,
+    second_look_wanted, sheet_of,
+};
 pub use encode::Format;
 pub use enhance::{AutoOutput, AutoParams, DEFAULT_SHARPEN, PaperMode, auto};
 pub use error::ScanError;
 pub use flatten::{FlattenGrid, flat_grid, predict_grid, unwarp};
-pub use live::{LiveQuad, MAX_FRAME_PIXELS, detect_frame, detect_frame_at};
+pub use live::{LiveQuad, MAX_FRAME_PIXELS, detect_frame, detect_frame_at, detect_frame_by};
 pub use look::Look;
 pub use page::{FlattenCheck, PageBase, PageRequest, PageResult, compare_flattened, page_base, page_look, process_page};
 pub use photo::{Luma, MAX_PHOTO_PIXELS, Photo, luma};

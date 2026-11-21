@@ -1,0 +1,20 @@
+PdfCraft diagnostics log
+Only event names, times, counts and sizes. No file names, paths or document contents.
+app: 0.0.46-beta (46012)
+engine: 0.21.1
+device: example Phone-1
+android: 17 (API 37)
+
+Areas (lines · issues):
+  [scan] 9 · #286-#307
+
+12-01 08:00:00.000 [scan] photo retake=false bytes=100 edges_found=true find_ms=9000 source=model confidence=0.50 passes=1 decode_ms=9000 detect_ms=9000 finder=auto refine=true
+12-01 08:30:00.000 [update] install launched=true
+12-01 09:00:01.000 [scan] photo retake=false bytes=100 edges_found=true find_ms=800 source=model confidence=0.90 passes=1 decode_ms=200 detect_ms=400 refine_ms=40 finder=auto refine=true second_look=not_asked
+12-01 09:00:02.000 [scan] photo retake=false bytes=100 edges_found=true find_ms=1200 source=lines confidence=0.40 passes=7 decode_ms=300 detect_ms=600 refine_ms=60 finder=auto refine=true second_look=taken second_look_ms=250
+12-01 09:00:03.000 [scan] photo retake=false bytes=100 edges_found=false find_ms=2000 source=none confidence=0.20 passes=7 decode_ms=400 detect_ms=1500 finder=auto refine=true second_look=kept second_look_ms=100
+12-01 09:00:04.000 [render] page ms=5 scale=2.00
+12-01 09:00:05.000 [scan] page index=1 edges_found=true corners_moved=false max_move_pct=0.00 look_ms=700 encode_ms=80 flattened=true flatten_why=straighter markup_ms=-1
+12-01 09:00:06.000 [scan] page index=2 edges_found=true corners_moved=true max_move_pct=0.12 look_ms=900 encode_ms=120 flattened=false flatten_why=notbetter markup_ms=-1
+12-01 09:00:07.000 [scan] saved pages=5 untouched_pages=1 found_pages=3 ms=300 wait_ms=300 size_choice=balanced bytes_per_page=300000
+12-01 09:00:08.000 [scan] tests_shared pages=6 bytes=1000

@@ -4,6 +4,10 @@ How the scanner is measured on a desktop and in CI, without anyone's photos. The
 evidence comes from kept scans on his phone ([ANDROID_SCAN_TESTING.md](ANDROID_SCAN_TESTING.md));
 this page is about the photos drawn in code, which anyone can make again from a seed.
 
+The baseline for 0.0.46-beta, with the words every comparison uses, the runs to make on the phone
+and the tablet, and which border decision each runner makes, is in
+[ANDROID_SCAN_BASELINE.md](ANDROID_SCAN_BASELINE.md) (#779).
+
 **Nothing here has run on a phone, and a drawn photo is not a real one.** Drawn photos catch a
 change that makes the scanner worse on pages whose answers are known exactly; they say nothing
 about how often the scanner is right on real documents in real light.
@@ -71,8 +75,14 @@ photo's resolution, so the finest print is lost in the photo and cannot come bac
 cargo run --release -p pdfcraft-scan --features synth --bin scan-eval -- --synthetic 200 --json now.json
 # a test set: <name>.jpg with <name>.json, in any subfolder (an unzipped kept-scans export is one)
 cargo run --release -p pdfcraft-scan --features synth --bin scan-eval -- ~/kept-scans
-# options: --finder auto|network|lines|off, --no-refine, --unchecked, --md report.md, --contact-sheet <folder>
+# options: --finder auto|network|lines|off, --no-refine, --second-look, --unchecked, --md report.md, --contact-sheet <folder>
 ```
+
+**The second look (#779).** The app asks the line detector too when the network is unsure (#290,
+on by default in the app). The runner does so only with `--second-look`; without it, and in the
+CI gate, the page is the network's alone, as every figure on this page was taken. With the flag
+the report says on how many photos the line detector was asked and taken, and the JSON has
+`second_look` per entry and in its head. The baseline page has both paths side by side.
 
 **What a kept-scans export needs before its figures mean anything (#425).** A page file is a
 detection test only when its `corners` are the page's true corners. The runner leaves out, and

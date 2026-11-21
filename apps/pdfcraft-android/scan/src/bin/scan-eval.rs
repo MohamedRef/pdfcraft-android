@@ -3,7 +3,7 @@
 //! ```text
 //! cargo run --release -p pdfcraft-scan --features synth --bin scan-eval -- \
 //!     (--synthetic N [--seed S] [--size WxH] | <folder>) \
-//!     [--finder auto|network|lines|off] [--no-refine] [--unchecked] \
+//!     [--finder auto|network|lines|off] [--no-refine] [--second-look] [--unchecked] \
 //!     [--json out.json] [--md out.md] [--baseline base.json] [--contact-sheet <folder>]
 //! ```
 //!
@@ -46,7 +46,7 @@ enum Source {
     Folder(PathBuf),
 }
 
-const USAGE: &str = "usage: scan-eval (--synthetic N [--seed S] [--size WxH] | <folder>) [--finder auto|network|lines|off] [--no-refine] [--unchecked] [--json out.json] [--md out.md] [--baseline base.json] [--contact-sheet <folder>]";
+const USAGE: &str = "usage: scan-eval (--synthetic N [--seed S] [--size WxH] | <folder>) [--finder auto|network|lines|off] [--no-refine] [--second-look] [--unchecked] [--json out.json] [--md out.md] [--baseline base.json] [--contact-sheet <folder>]";
 
 fn parse(mut it: impl Iterator<Item = String>) -> Result<Args, String> {
     let (mut synthetic, mut seed, mut size, mut folder) = (None, 0u64, (800u32, 1066u32), None);
@@ -73,6 +73,7 @@ fn parse(mut it: impl Iterator<Item = String>) -> Result<Args, String> {
                 }
             }
             "--no-refine" => options.refine = false,
+            "--second-look" => options.second_look = true,
             "--unchecked" => set.unchecked = true,
             "--json" => json = Some(PathBuf::from(value()?)),
             "--md" => md = Some(PathBuf::from(value()?)),
@@ -117,10 +118,21 @@ fn kinds_of(measured: &[Measured]) -> Vec<Kind> {
     kinds
 }
 
-fn report(measured: &[Measured], source: &str, left_out: &Loaded) -> String {
+/// How many photos had the second look asked, and on how many the line detector's page was taken.
+fn second_looks(measured: &[Measured]) -> (usize, usize) {
+    (measured.iter().filter(|m| m.second_look != "not_asked").count(), measured.iter().filter(|m| m.second_look == "taken").count())
+}
+
+fn report(measured: &[Measured], source: &str, options: &Options, left_out: &Loaded) -> String {
     let all: Vec<&Measured> = measured.iter().collect();
     let found = measured.iter().filter(|m| m.detected).count();
     let mut out = format!("## scan-eval: {source}\n\n{} photos; the detector found a page in {found}.\n", measured.len());
+    if options.second_look {
+        let (asked, taken) = second_looks(measured);
+        let _ = writeln!(out, "\nSecond look on (the app's default path): the line detector was asked on {asked} and its page taken on {taken}.");
+    } else {
+        let _ = writeln!(out, "\nSecond look off: the app has it on by default, so this is not the app's default path (--second-look).");
+    }
     if !left_out.left_out.is_empty() {
         let _ = writeln!(out, "\n{} left out, not measured (#425):\n\n| why | n |\n|---|---|", left_out.left_out.len());
         for (why, n) in left_out.counts().into_iter().filter(|(_, n)| *n > 0) {
@@ -148,7 +160,7 @@ fn summary_json(rows: &[(&'static str, Summary)]) -> Value {
     )
 }
 
-fn report_json(measured: &[Measured], source: &str, left_out: &Loaded) -> Value {
+fn report_json(measured: &[Measured], source: &str, options: &Options, left_out: &Loaded) -> Value {
     let all: Vec<&Measured> = measured.iter().collect();
     let mut summary = serde_json::Map::new();
     summary.insert("all".into(), summary_json(&eval::summary_of(&all)));
@@ -165,13 +177,20 @@ fn report_json(measured: &[Measured], source: &str, left_out: &Loaded) -> Value 
                 .map(|(metric, v)| (metric.name.to_string(), if v.is_finite() { json!(v) } else { Value::Null }))
                 .collect();
             let timings: serde_json::Map<String, Value> = m.timings.iter().map(|(s, ms)| ((*s).to_string(), json!(ms))).collect();
-            json!({"name": m.name, "kind": m.kind.name(), "detected": m.detected, "metrics": metrics, "timings_ms": timings})
+            json!({
+                "name": m.name, "kind": m.kind.name(), "detected": m.detected, "second_look": m.second_look,
+                "metrics": metrics, "timings_ms": timings,
+            })
         })
         .collect();
     let counts: serde_json::Map<String, Value> = left_out.counts().into_iter().map(|(why, n)| (why.name().to_string(), json!(n))).collect();
     let names: Vec<Value> = left_out.left_out.iter().map(|(name, why)| json!({"name": name, "why": why.name()})).collect();
+    let (asked, taken) = second_looks(measured);
     json!({
         "source": source,
+        "photos": measured.len(),
+        "detected": measured.iter().filter(|m| m.detected).count(),
+        "second_look": {"on": options.second_look, "asked": asked, "taken": taken},
         "summary": summary,
         "timings_ms": summary_json(&eval::timing_summary(&all)),
         "entries": entries,
@@ -246,13 +265,13 @@ fn run(args: &Args) -> Result<bool, String> {
         eprintln!("{}: iou {} corner_err_max {}", m.name, fmt(m.get("iou")), fmt(m.get("corner_err_max")));
         measured.push(m);
     }
-    let md = report(&measured, &source, &left_out);
+    let md = report(&measured, &source, &args.options, &left_out);
     println!("{md}");
     if let Some(path) = &args.md {
         std::fs::write(path, &md).map_err(|e| e.to_string())?;
     }
     if let Some(path) = &args.json {
-        let text = serde_json::to_string_pretty(&report_json(&measured, &source, &left_out)).map_err(|e| e.to_string())?;
+        let text = serde_json::to_string_pretty(&report_json(&measured, &source, &args.options, &left_out)).map_err(|e| e.to_string())?;
         std::fs::write(path, text).map_err(|e| e.to_string())?;
     }
     let Some(path) = &args.baseline else { return Ok(true) };

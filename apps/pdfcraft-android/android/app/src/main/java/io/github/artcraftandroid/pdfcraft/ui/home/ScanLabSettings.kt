@@ -77,6 +77,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_refine, o.refine) { lab.update(o.copy(refine = it)) }
     // the line detector asked too when the network is not convinced (#290)
     Sw(R.string.scan_lab_second_look, o.secondLook) { lab.update(o.copy(secondLook = it)) }
+    // corners that cannot be one sheet of paper are refused (a pile of sheets)
+    Sw(R.string.scan_lab_sheet_check, o.sheetCheck) { lab.update(o.copy(sheetCheck = it)) }
     Sw(R.string.scan_lab_strict_gutter, o.strictGutter) { lab.update(o.copy(strictGutter = it)) }
     Sw(R.string.scan_lab_strict_photo, o.strictPhoto) { lab.update(o.copy(strictPhoto = it)) }
     // one curved side suggests flattening, a book page needs more (#442)

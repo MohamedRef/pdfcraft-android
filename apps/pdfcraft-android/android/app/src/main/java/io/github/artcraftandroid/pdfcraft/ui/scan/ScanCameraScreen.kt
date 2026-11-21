@@ -130,7 +130,7 @@ internal class ScanCameraActions(
  */
 @Composable
 internal fun ScanCameraScreen(
-    model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null, bar: Boolean = false, turnedLooks: Boolean = true, autoEased: Boolean = true,
+    model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null, bar: Boolean = false, turnedLooks: Boolean = true, autoEased: Boolean = true, sheetCheck: Boolean = true,
     /** Review pages, Undo and Done each a button (#780, with [bar]); [pagePaths] are the pages' photo files, in the pages' order. */
     buttons: Boolean = false, pagePaths: List<String> = emptyList(),
 ) {
@@ -145,7 +145,7 @@ internal fun ScanCameraScreen(
     }
     Box(Modifier.fillMaxSize().background(Color.Black).scanCameraKeepsTouches().windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (model.route) {
-            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar, turnedLooks, autoEased, buttons && bar, pagePaths)
+            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar, turnedLooks, autoEased, sheetCheck, buttons && bar, pagePaths)
             else -> if (bar) ScanCameraPermissionView(model.route, actions) else NoCameraView(model.route, actions)
         }
     }
@@ -190,7 +190,7 @@ private fun NoCameraView(route: ScanCaptureRoute, actions: ScanCameraActions) {
 /** The camera, once allowed. */
 @Composable
 private fun CameraView(
-    file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean, turnedLooks: Boolean, autoEased: Boolean,
+    file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean, turnedLooks: Boolean, autoEased: Boolean, sheetCheck: Boolean,
     controlsOn: Boolean, pagePaths: List<String>,
 ) {
     val context = LocalContext.current
@@ -263,7 +263,7 @@ private fun CameraView(
     val analysisExecutor = remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
     val analyzer = remember {
         val main = ContextCompat.getMainExecutor(context)
-        ScanLiveAnalyzer(turnedLooks) { d ->
+        ScanLiveAnalyzer(turnedLooks, sheetCheck) { d ->
             main.execute {
                 outline = tracker.update(d)
                 lastLuma = d.meanLuma

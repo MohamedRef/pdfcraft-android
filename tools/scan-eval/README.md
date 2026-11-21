@@ -73,3 +73,32 @@ test-set format: every 30th frame as `<background>-<document>-<frame>.jpg` with 
 (corners, `kind`, `paper: a4`). It downloads nothing; `--list` shows what it would write without
 OpenCV. See [ANDROID_SCAN_MEASURING.md](../../docs/ANDROID_SCAN_MEASURING.md) for the commands and
 what has not been verified. Tests: `python3 -m unittest discover -s tools/scan-eval -p 'test_*.py'`.
+
+## Aggregates of kept scans (`kept_scan_summary.py`)
+
+Reads one or more unzipped kept-scan exports (the `page-NN.json` files and `diagnostics.txt`) and
+prints aggregates only: pages, found and not found, untouched and no-touch shares with their
+counts, the spread of corner moves, turns, flattening decisions, looks, output sizes, and for every
+time field of every `[scan]` log event the sample size, median, 90th and 95th percentile and the
+largest value. No file name and no corner is printed, so the output can be quoted in an issue; the
+exports themselves hold someone's documents and stay outside the repository.
+
+```sh
+python3 -I tools/scan-eval/kept_scan_summary.py ~/kept/run-1 [~/kept/run-2 ...] \
+    [--since last-install | --since "MM-DD HH:MM"] [--until "MM-DD HH:MM"] [--wrong-accepted N] [--json out.json]
+```
+
+- Needs only the standard library. Of a photo it reads the file header, for the pixel size a corner
+  move is measured against; with no photo it uses `capture`'s size, and failing that the unit
+  square (counted as `size_unknown`).
+- Every key is optional: exports from older builds give fewer rows, never an error.
+- A log usually runs over several builds. `--since last-install` counts from the last
+  `[update] install` line; the report says when an install lies inside the window.
+- `--wrong-accepted N` takes N pages a person judged wrong off the untouched count. The tool cannot
+  see a wrong crop that nobody corrected.
+- The 90th percentile is given from 10 values and the 95th from 20.
+
+The definitions (found, untouched, no touch, miss, wrong accepted page) and the runs it is meant
+for are in [ANDROID_SCAN_BASELINE.md](../../docs/ANDROID_SCAN_BASELINE.md). Its tests read made-up
+exports in `testdata/kept-scans/`, written by `make_kept_scan_fixtures.py` (every number invented
+there; a test fails when the files and the generator differ).

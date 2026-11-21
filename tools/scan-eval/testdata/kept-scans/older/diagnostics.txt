@@ -1,0 +1,7 @@
+PdfCraft diagnostics log
+app: 0.0.26-beta (26001)
+device: example Phone-1
+
+11-12 08:15:01.000 [scan] photo retake=false bytes=100 edges_found=true find_ms=900 source=model confidence=0.80 finder=auto refine=true
+11-12 08:15:09.000 [scan] page index=1 edges_found=true corners_moved=false filter=cleanscan enhance_ms=1500 out_width=1654 out_height=2339
+11-12 08:15:10.000 [scan] saved pages=3 filter=cleanscan bytes=900000
