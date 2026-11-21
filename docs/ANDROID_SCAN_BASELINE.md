@@ -605,9 +605,10 @@ numbers:
   crop screen (3 presses, a page found each time).
 - **Options**: all 12 page files say 0.0.46-beta (46012), finder auto, refine on, second look on,
   automatic flattening on, upright on; Clean scan, document type "document", size Balanced.
-- **Adjudication**: one of the pages saved as found and untouched is a wrong crop. That count
-  came with the request for this baseline on 21 November 2026; who looked, and at which page,
-  is not written down here. Nobody has checked the other pages' corners
+- **Adjudication**: one of the pages saved as found and untouched is a wrong crop. That is
+  page 8, judged on 21 November 2026 in the analysis of this export by the assistant that wrote
+  this baseline, from the page file's corners (opposite sides 1.79 to 1 against 1.28 at most
+  on the pages found right), not by the owner. Nobody has checked the other pages' corners
   against the photos (`checked` is false on all 12), so `scan-eval`'s geometry measures cannot be
   taken on this export.
 - Made with `kept_scan_summary.py <export> --since "11-21 14:33" --wrong-accepted 1`.
