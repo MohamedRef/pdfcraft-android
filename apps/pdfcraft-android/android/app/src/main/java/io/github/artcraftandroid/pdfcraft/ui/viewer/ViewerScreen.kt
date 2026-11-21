@@ -140,8 +140,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         if (railVisible) 0f else if (ctl.tool == ViewerTool.None) QuickBarHeight.toPx() + quickExtraPx else if (ctl.tool == ViewerTool.Draw) DrawToolbarHeight.toPx() else BottomBarHeight.toPx()
     }
     // keyed on the document too: one opened over another (Create, Combine) has a fresh page view
-    // the tab strip under the top bar while two or more documents are open (#138)
-    val stripShown = showTabStrip(vm) && !ctl.searching
+    // the tab strip under the top bar whenever a document is open (#138), searching too
+    val stripShown = showTabStrip(vm)
     val stripPx = if (stripShown) with(density) { TabStripHeight.toPx() } else 0f
     LaunchedEffect(doc, ctl.barsVisible, statusPx, navPx, ctl.searching, ctl.tool, vm.settings.readingMode, bottomPx, statusBar, stripPx) {
         val bottomShown = ctl.barsVisible && !ctl.searching && !vm.settings.readingMode

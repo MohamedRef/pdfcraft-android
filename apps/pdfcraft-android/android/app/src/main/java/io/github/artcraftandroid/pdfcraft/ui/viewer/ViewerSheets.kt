@@ -153,6 +153,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.sign_signatures), { ctl.sheet = ViewerSheet.Signatures }, chevron = true)
             if (doc.info.layers > 0u) SheetRow(LucideIcons.Layers, stringResource(R.string.sheet_layers), { ctl.sheet = ViewerSheet.Layers }, chevron = true)
             // tabs (#138): keep this document open and open another beside it
+            SheetRow(LucideIcons.FolderOpen, stringResource(R.string.tabs_open_file), { close(); vm.tabs.openFile("menu") })
             SheetRow(LucideIcons.FilePlus, stringResource(R.string.tabs_open_another), { close(); vm.tabs.openAnother() })
             GroupDivider()
             MoreHeading(stringResource(R.string.sheet_group_study))
