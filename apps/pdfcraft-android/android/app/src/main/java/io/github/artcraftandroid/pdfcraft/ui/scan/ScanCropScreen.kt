@@ -322,8 +322,11 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
         stats = stats.copy(nudges = stats.nudges + 1)
     }
 
-    /** Leave with [done] (Done) or not; in a pass over several pages (#515) towards [dir] (-1, +1, 0 for the tick). */
-    fun finish(done: Boolean, dir: Int = 0) {
+    /**
+     * Leave with [done] (Done) or not; in a pass over several pages (#515) towards [dir] (-1, +1, 0 for the tick).
+     * [backEdit] is what Back's question about moved corners was answered (#783): `kept`, `dropped`, or `none` when it was not asked.
+     */
+    fun finish(done: Boolean, dir: Int = 0, backEdit: String = "none") {
         val batch = steps?.batch
         val s = stats.copy(
             visits = if (done) 1 else 0, snapOn = snapOn, ms = SystemClock.elapsedRealtime() - openedAt,
@@ -336,11 +339,23 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             DiagArea.Scan, "crop", "index" to scanLogPageNumber(index), "done" to done, "opened_by" to (steps?.opener?.id ?: "crop_button"), *s.diag(),
             // #515: in a pass over several pages, the page's place in it and where the person went
             "batch" to (batch != null), "batch_at" to (batch?.at ?: 0), "batch_pages" to (batch?.count ?: 0), "batch_go" to dir,
+            // #783: whether the pass is a review of flagged pages, what the page was, and Back's question about moved corners
+            "review" to (batch?.review?.id ?: "none"), "back_edit" to backEdit,
             // #773: the gentle snap, and the pull's distances in use
             "gentle_snap" to lab.gentleSnap, "catch_dp" to lab.pullCatchInUse, "release_dp" to lab.pullReleaseInUse,
         )
         when {
+            // Back answered Keep (#783): the page keeps its corners and the pass ends there
+            batch != null && done && backEdit == "kept" -> {
+                val keep = batch.onBackKeep
+                if (keep != null) keep(corners, s) else batch.onLeave(0, corners, s)
+            }
             batch != null && done -> batch.onLeave(dir, corners, s)
+            // Back answered Discard: the page stays as it was
+            batch != null && backEdit == "dropped" -> {
+                val drop = batch.onBackDrop
+                if (drop != null) drop() else batch.onBack()
+            }
             batch != null -> batch.onBack()
             done -> onDone(corners, s)
             else -> onCancel()
@@ -412,8 +427,27 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
 
     // Back on Adjust borders right after a photo asks before the photo is dropped (#458, #456)
     var askDiscard by remember { mutableStateOf(false) }
+    // Back on a page of a borders pass whose corners were moved asks what to do with them (#783)
+    var askLeave by remember(page.key) { mutableStateOf(false) }
     val back = {
-        if (steps?.opener?.afterPhoto == true) askDiscard = true else finish(false)
+        when {
+            steps?.opener?.afterPhoto == true -> askDiscard = true
+            scanBatchBackAsks(steps?.batch?.onBackKeep != null, opened, corners) -> askLeave = true
+            else -> finish(false)
+        }
+    }
+    if (askLeave) {
+        ScanReviewLeaveDialog(
+            onKeep = {
+                askLeave = false
+                finish(true, 0, "kept")
+            },
+            onDiscard = {
+                askLeave = false
+                finish(false, 0, "dropped")
+            },
+            onStay = { askLeave = false },
+        )
     }
     if (askDiscard && steps != null) {
         ScanBordersDiscardDialog(

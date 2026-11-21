@@ -233,7 +233,7 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
         Text(stringResource(R.string.scan_doc_hint), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         // after an import of several photos (#515): their borders checked in one pass
         val offer = vm.scanBatch.offer
-        if (offer > 0 && !selecting && vm.scanLab.options.batchBorders) {
+        if (offer > 0 && !selecting && vm.scanLab.options.batchBorders && !vm.scanReviewOfferShown()) {
             ScanBatchOfferRow(
                 offer,
                 onCheck = {
@@ -247,10 +247,11 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
             )
         }
         // pages whose page wasn't found or is unsure (#758): those, and only those, checked in one pass
-        val unsure = pages.filter { scanPageUnsure(it) }
+        // with the review (#783) by each page's review state, and before the import's offer
+        val unsure = vm.scanReviewPages()
         val unsureKeys = unsure.map { it.key }.toSet()
         val unsureLab = vm.scanLab.options
-        if (!selecting && scanUnsureOffers(unsureLab.checkUnsure, unsureLab.batchBorders, unsureLab.steps, unsureKeys, vm.scanBatch.unsureDismissed, offer)) {
+        if (!selecting && scanUnsureOffers(unsureLab.checkUnsure, unsureLab.batchBorders, unsureLab.steps, unsureKeys, vm.scanBatch.unsureDismissed, if (unsureLab.reviewBorders) 0 else offer)) {
             LaunchedEffect(unsureKeys) {
                 Diag.event(DiagArea.Scan, "unsure_offer", *scanUnsureOfferDiag(unsure.size, unsure.count { it.found == null }, pages.size))
             }
@@ -369,6 +370,8 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
                         }
                         // a spread's halves keep their names (#303)
                         p.book?.let { ScanBookLabel(it, Modifier.align(Alignment.TopStart)) }
+                        // a page whose borders still need a check says so, also once the offer is closed (#783)
+                        if (unsureLab.reviewBorders && unsureLab.checkUnsure && p.key in unsureKeys) ScanReviewBadge(Modifier.align(Alignment.BottomStart))
                         if (selecting) {
                             Box(
                                 Modifier.align(Alignment.TopEnd).padding(8.dp).size(22.dp).clip(CircleShape)

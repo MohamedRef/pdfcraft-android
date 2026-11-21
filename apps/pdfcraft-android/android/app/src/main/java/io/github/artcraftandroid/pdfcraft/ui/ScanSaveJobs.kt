@@ -13,6 +13,7 @@ import io.github.artcraftandroid.pdfcraft.engine.Diag
 import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.userMessage
+import io.github.artcraftandroid.pdfcraft.ui.scan.scanReviewAsksSave
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -114,6 +115,8 @@ private suspend fun AppViewModel.saveScanToGalleryNow(indexes: List<Int>?) {
  */
 internal fun AppViewModel.saveScan(share: Boolean = false, size: String? = null, out: io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut = if (share) io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Share else io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Save) {
     val saving = out == io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Save
+    // pages whose borders still need a check are asked about before one is stored as it is (#783)
+    if (scanReviewAsksSave(share, size, out)) return
     // a scan opened from its PDF (#513): comments on pages whose borders or place change are asked about first
     if (saving && scanEdit.mustAsk(size)) return
     job(text(if (saving || out == io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Share) R.string.msg_busy_saving_scan else R.string.scan_busy_preparing)) { eng ->
@@ -550,7 +553,7 @@ private suspend fun AppViewModel.saveScanNow(eng: io.github.artcraftandroid.pdfc
                 // kept to be edited again (#461): a scan of its own (not pages going into an open
                 // document), with the switch in Settings and the testing option on; else the photos go
                 val recent = if (target == null && scanRecent.on()) {
-                    ScanSession(null, null, false, chosen, pages.map { ScanSession.Page(it.file.absolutePath, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten, it.auto, it.marks) })
+                    ScanSession(null, null, false, chosen, pages.map { ScanSession.Page(it.file.absolutePath, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten, it.auto, it.marks, review = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageReview(it, it.file.absolutePath in scanSteps.searched).id) })
                 } else null
                 if (recent != null) {
                     // the first page as made, for the Recent scans list's picture (#494)
@@ -577,6 +580,8 @@ private suspend fun AppViewModel.saveScanNow(eng: io.github.artcraftandroid.pdfc
                 scanBatch.look = null
                 scanBatch.offer = 0
                 scanBatch.asking = null
+                scanBatch.saveAsk = null
+                scanBatch.saveAccepted = emptySet()
                 scanGallerySaved.clear()
                 scanName = ""
                 tools.toolScreen = null

@@ -180,8 +180,16 @@ internal fun AppViewModel.onScanPhoto(ok: Boolean) {
         val at = scanPages.indexOfFirst { it.file == f }
         if (at >= 0) {
             // a page whose outline was not found remembers the corners it started with (#444)
-            val one = if (edges != null) scanPages[at].copy(corners = edges, found = edges, finding = finding)
-            else scanPages[at].let { it.copy(finding = finding, uncropped = io.github.artcraftandroid.pdfcraft.ui.scan.scanUncropped(it.corners, null, straightened)) }
+            // corners the person already moved or confirmed are theirs (#783): a search that answers
+            // late records what it found and leaves them where they are
+            val now = scanPages[at]
+            val own = !io.github.artcraftandroid.pdfcraft.ui.scan.scanSearchMovesCorners(lab.reviewBorders, now.corners, ScanPage.WHOLE, now.crop?.visits ?: 0)
+            if (own) Diag.event(DiagArea.Scan, "search_late", "page" to at + 1, "edges_found" to (edges != null), "visits" to (now.crop?.visits ?: 0))
+            val one = when {
+                edges != null && !own -> now.copy(corners = edges, found = edges, finding = finding)
+                edges != null -> now.copy(found = edges, finding = finding)
+                else -> now.copy(finding = finding, uncropped = io.github.artcraftandroid.pdfcraft.ui.scan.scanUncropped(if (own) ScanPage.WHOLE else now.corners, null, straightened))
+            }
             // in book mode the page becomes the spread's two halves, in the order chosen (#303)
             val halves = io.github.artcraftandroid.pdfcraft.ui.scan.scanBookPages(one.corners, cut, bookOrder).map { (corners, half) ->
                 // a half's own outline is what was found for it, so a corner moved later is measured from there
@@ -282,6 +290,8 @@ internal fun AppViewModel.discardScan(asked: Boolean = false) {
     scanBatch.look = null
     scanBatch.offer = 0
     scanBatch.asking = null
+    scanBatch.saveAsk = null
+    scanBatch.saveAccepted = emptySet()
     // a scan opened from Recent scans and given up on stays there as it was saved (#461)
     scanRecent.openedFrom = null
     scanGallerySaved.clear()
