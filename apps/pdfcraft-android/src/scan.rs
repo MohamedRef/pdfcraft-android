@@ -10,8 +10,8 @@ use pdfcraft_scan::page::page_look_kind;
 use pdfcraft_scan::page_kind::{PageKind, PresetChoice, preset_from_id};
 use pdfcraft_scan::upright_pages::{PageTurn, followed, settle};
 use pdfcraft_scan::{
-    AspectSource, Detection, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, Refined,
-    detect_with, page_base, refine, second_look_takes, second_look_wanted,
+    AspectSource, CornerPick, CornerRule, Detection, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource,
+    RefineOptions, Refined, SKEW_MOST, detect_by, detect_with, page_base, refine, second_look_takes, second_look_wanted, sheet_of,
 };
 
 use crate::MobileError;
@@ -612,6 +612,25 @@ pub struct ScanDocument {
     pub network_sides: u8,
     /// The line detector's page's sides on edges of the photo, when it was asked; else 0.
     pub lines_sides: u8,
+    /// Which places of the network's corner maps the page is made of (the sheet check).
+    pub corner_pick: ScanCornerPick,
+    /// How many of the network's looks had their four surest corners refused: no one sheet of
+    /// paper has that shape.
+    pub shapes_refused: u8,
+    /// How far the network's page is from a rectangular sheet seen by a camera, in degrees; 0 when
+    /// it was not measured (no page, the line detector's, a corner on the photo's border, the check off).
+    pub skew: f32,
+}
+
+/// Which places of the network's corner maps a page is made of (the sheet check).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ScanCornerPick {
+    /// No page from the network: nothing found, or the line detector's page.
+    None,
+    /// Each corner's surest place, as the network was always read.
+    First,
+    /// A less sure place for at least one corner: the surest four were corners of different sheets.
+    Other,
 }
 
 /// What the second look did (#290).
@@ -624,6 +643,9 @@ pub enum ScanSecondLook {
     Kept,
     /// The line detector's page was taken.
     Taken,
+    /// The line detector's page had enough sides on edges, but its shape is no one sheet of paper's
+    /// (the sheet check): the network's answer was kept.
+    Refused,
 }
 
 /// The one directory scan functions read from and write to.
@@ -812,6 +834,9 @@ pub struct ScanLiveQuad {
     pub cut_off: bool,
     /// How long the call took, in milliseconds.
     pub ms: u32,
+    /// The sheet check refused the network's four surest corners in this frame: no one sheet of
+    /// paper has that shape.
+    pub shape_refused: bool,
 }
 
 /// Find the page in one camera analysis frame, for the outline in the viewfinder (#295).
@@ -833,8 +858,25 @@ pub fn scan_detect_frame(rgba: Vec<u8>, width: u32, height: u32, rotation_degree
 /// other turn is refused.
 #[uniffi::export]
 pub fn scan_detect_frame_at(rgba: Vec<u8>, width: u32, height: u32, rotation_degrees: u32, look_degrees: i16) -> Result<ScanLiveQuad, MobileError> {
+    scan_detect_frame_by(rgba, width, height, rotation_degrees, look_degrees, true)
+}
+
+/// [`scan_detect_frame_at`] with the sheet check on or off (see [`ScanFindOptions::sheet_check`]):
+/// on, four corners that cannot be one sheet of paper give no outline for this frame; off, each
+/// corner's surest place is drawn whatever shape the four make, as before.
+#[uniffi::export]
+pub fn scan_detect_frame_by(
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+    rotation_degrees: u32,
+    look_degrees: i16,
+    sheet_check: bool,
+) -> Result<ScanLiveQuad, MobileError> {
     let clock = std::time::Instant::now();
-    let found = pdfcraft_scan::detect_frame_at(&rgba, width, height, rotation_degrees, look_degrees).map_err(|e| MobileError::Command(e.to_string()))?;
+    let rule = if sheet_check { CornerRule::Sheet } else { CornerRule::Surest };
+    let found = pdfcraft_scan::detect_frame_by(&rgba, width, height, rotation_degrees, look_degrees, rule)
+        .map_err(|e| MobileError::Command(e.to_string()))?;
     Ok(ScanLiveQuad {
         points: found.points.to_vec(),
         confidence: found.confidence,
@@ -842,6 +884,7 @@ pub fn scan_detect_frame_at(rgba: Vec<u8>, width: u32, height: u32, rotation_deg
         found: found.found,
         cut_off: found.cut_off,
         ms: u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX),
+        shape_refused: found.shape_refused,
     })
 }
 
@@ -871,11 +914,17 @@ pub struct ScanFindOptions {
     /// photo, and its page is taken when enough of its sides lie on edges.
     #[uniffi(default = false)]
     pub second_look: bool,
+    /// The sheet check: four corners of the network that cannot be one sheet of paper (corners of
+    /// different sheets of a pile) are refused, each corner's next surest places are tried, then
+    /// the turned looks, and then nothing is found. Off: each corner's surest place whatever shape
+    /// the four make, as before.
+    #[uniffi(default = true)]
+    pub sheet_check: bool,
 }
 
 impl Default for ScanFindOptions {
     fn default() -> Self {
-        ScanFindOptions { finder: ScanFinder::Auto, refine: true, second_look: false }
+        ScanFindOptions { finder: ScanFinder::Auto, refine: true, second_look: false, sheet_check: true }
     }
 }
 
@@ -908,7 +957,7 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
     let photo = Photo::decode(&bytes).map_err(|e| MobileError::Command(e.to_string()))?;
     drop(bytes);
     lap("scan_decode", &mut timings);
-    let mut found = detect_with(
+    let mut found = detect_by(
         &photo,
         match options.finder {
             ScanFinder::Auto => Finder::Auto,
@@ -916,8 +965,11 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
             ScanFinder::Lines => Finder::Lines,
             ScanFinder::Off => Finder::Off,
         },
+        if options.sheet_check { CornerRule::Sheet } else { CornerRule::Surest },
     );
     lap("scan_detect", &mut timings);
+    // what the network's looks refused stays in the log when the line detector's page is taken
+    let shapes_refused = found.refused;
     // the second look (#290): the line detector too when the network found nothing, or an unsure
     // page with few of its sides on edges; the refined page it settles on is kept for below
     let mut second_look = ScanSecondLook::NotAsked;
@@ -935,11 +987,17 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
             let lines_fit = lines.quad.map(|q| refine(&pyramid, &q, &RefineOptions::default()));
             let lines_count = lines_fit.as_ref().map_or(0, on_edges);
             lines_sides = lines_count as u8;
-            if lines.quad.is_some() && second_look_takes(found.quad.is_some(), lines_count) {
+            let enough = lines.quad.is_some() && second_look_takes(found.quad.is_some(), lines_count);
+            // the sheet check holds for the line detector's page too, as it lies on the edges found
+            let sheet = !options.sheet_check
+                || lines_fit.as_ref().and_then(|r| sheet_of(&r.quad, photo.width, photo.height)).is_none_or(|fit| fit.skew <= SKEW_MOST);
+            if enough && sheet {
                 // the network's passes stay in the log: they were made
-                found = Detection { passes: found.passes, ..lines };
+                found = Detection { passes: found.passes, refused: found.refused, ..lines };
                 kept = lines_fit;
                 second_look = ScanSecondLook::Taken;
+            } else if enough {
+                second_look = ScanSecondLook::Refused;
             } else {
                 second_look = ScanSecondLook::Kept;
             }
@@ -952,6 +1010,12 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
         QuadSource::Lines => ScanQuadSource::Lines,
         QuadSource::None => ScanQuadSource::None,
     };
+    let corner_pick = match found.pick {
+        CornerPick::None => ScanCornerPick::None,
+        CornerPick::First => ScanCornerPick::First,
+        CornerPick::Other => ScanCornerPick::Other,
+    };
+    let skew = found.skew;
     let (width, height) = (photo.width, photo.height);
     let Some(quad) = found.quad else {
         let whole = vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
@@ -968,6 +1032,9 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
             second_look,
             network_sides,
             lines_sides,
+            corner_pick,
+            shapes_refused,
+            skew,
         });
     };
     if !options.refine {
@@ -985,6 +1052,9 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
             second_look,
             network_sides,
             lines_sides,
+            corner_pick,
+            shapes_refused,
+            skew,
         });
     }
     let refined = match settled {
@@ -1016,6 +1086,9 @@ pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -
         second_look,
         network_sides,
         lines_sides,
+        corner_pick,
+        shapes_refused,
+        skew,
     })
 }
 
@@ -2386,6 +2459,10 @@ mod tests {
             assert!(scan_detect_frame_at(rgba.clone(), 640, 480, 90, look).is_ok(), "{look}");
         }
         assert!(scan_detect_frame_at(rgba.clone(), 640, 480, 90, 45).is_err());
+        // the sheet check on or off (#782): the same outline for a single sheet, nothing refused
+        let on = scan_detect_frame_by(rgba.clone(), 640, 480, 90, 0, true).unwrap();
+        let off = scan_detect_frame_by(rgba.clone(), 640, 480, 90, 0, false).unwrap();
+        assert_eq!((on.points, on.found, on.shape_refused), (off.points, off.found, false));
         assert!(scan_detect_frame(rgba[..100].to_vec(), 640, 480, 0).is_err());
         assert!(scan_detect_frame(Vec::new(), 0, 0, 0).is_err());
         // a grey frame: nothing, and its brightness
@@ -2432,7 +2509,9 @@ mod tests {
         assert_eq!(found.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_decode", "scan_detect", "scan_refine"]);
 
         // the testing options (#288): each detector alone, the closer look off, and nothing at all
-        let with = |finder, refine| find_in(&root, &shot.to_string_lossy(), ScanFindOptions { finder, refine, second_look: false }).unwrap();
+        let with = |finder, refine| {
+            find_in(&root, &shot.to_string_lossy(), ScanFindOptions { finder, refine, second_look: false, sheet_check: true }).unwrap()
+        };
         assert_eq!(with(ScanFinder::Auto, true).corners, found.corners);
         assert_eq!(with(ScanFinder::Network, true).corners, found.corners);
         let lines = with(ScanFinder::Lines, true);
@@ -2465,9 +2544,20 @@ mod tests {
         let blank_looked = find_in(&root, &blank.to_string_lossy(), ScanFindOptions { second_look: true, ..ScanFindOptions::default() }).unwrap();
         assert!(!blank_looked.found && blank_looked.second_look == ScanSecondLook::Kept && blank_looked.lines_sides == 0, "{blank_looked:?}");
         assert!(blank_looked.timings.iter().any(|t| t.stage == "scan_second_look"));
+        // the sheet check (#782): a single sheet is each corner's surest place either way, and says so
+        assert_eq!((found.corner_pick, found.shapes_refused), (ScanCornerPick::First, 0));
+        assert!(found.skew < SKEW_MOST as f32, "{found:?}");
+        let unchecked = find_in(&root, &shot.to_string_lossy(), ScanFindOptions { sheet_check: false, ..ScanFindOptions::default() }).unwrap();
+        assert_eq!((unchecked.corners, unchecked.corner_pick, unchecked.skew), (found.corners.clone(), ScanCornerPick::First, 0.0));
+        assert_eq!((none.corner_pick, lines.corner_pick), (ScanCornerPick::None, ScanCornerPick::None));
+        assert!(ScanFindOptions::default().sheet_check);
         // another detector named: no second look
-        let named =
-            find_in(&root, &blank.to_string_lossy(), ScanFindOptions { finder: ScanFinder::Network, refine: true, second_look: true }).unwrap();
+        let named = find_in(
+            &root,
+            &blank.to_string_lossy(),
+            ScanFindOptions { finder: ScanFinder::Network, refine: true, second_look: true, sheet_check: true },
+        )
+        .unwrap();
         assert_eq!(named.second_look, ScanSecondLook::NotAsked);
         // outside the root: refused
         let other = temp("find-other");

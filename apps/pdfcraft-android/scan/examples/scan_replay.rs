@@ -20,7 +20,7 @@
 use std::path::{Path, PathBuf};
 
 use pdfcraft_scan::page_kind::{PresetChoice, preset_from_id};
-use pdfcraft_scan::{Finder, Look, PageRequest, Paper, Photo, Pyramid, Quad, RefineOptions, detect_with, process_page, refine};
+use pdfcraft_scan::{CornerRule, Finder, Look, PageRequest, Paper, Photo, Pyramid, Quad, RefineOptions, detect_by, process_page, refine};
 use serde_json::Value;
 
 /// A corner within this share of the diagonal needs no moving by hand (#288, `no_touch`).
@@ -113,7 +113,12 @@ fn main() {
             Some("off") => Finder::Off,
             _ => Finder::Auto,
         };
-        let found = detect_with(&photo, finder);
+        // the sheet check as the phone had it; a file from before it had none, and this build's is on
+        let rule = match options["sheet_check"].as_bool() {
+            Some(false) => CornerRule::Surest,
+            _ => CornerRule::Sheet,
+        };
+        let found = detect_by(&photo, finder, rule);
         let here = found.quad.map(|quad| {
             let quad = match options["refine"].as_bool() {
                 Some(false) => quad,
@@ -125,13 +130,15 @@ fn main() {
         let moved = on_phone.is_some_and(|d| d > 0.0);
         let show = |d: Option<f64>| d.map_or_else(|| "nothing".to_owned(), |d| format!("{:.2} %", 100.0 * d));
         println!(
-            "{name}: {w} x {h}, {}; phone {} ({}), this build {} ({:?} {:.2})",
+            "{name}: {w} x {h}, {}; phone {} ({}), this build {} ({:?} {:.2}, corners {:?}, {} shapes refused)",
             facts["outcome"].as_str().unwrap_or("?"),
             show(on_phone),
             if moved { "corners moved by hand" } else { "corners left as found" },
             show(here_off),
             found.source,
-            found.confidence
+            found.confidence,
+            found.pick,
+            found.refused
         );
         // counted where the phone found a page: there the corners left are a judgement of what
         // it found (a page it found nothing on was left as the whole photo, moved or not)

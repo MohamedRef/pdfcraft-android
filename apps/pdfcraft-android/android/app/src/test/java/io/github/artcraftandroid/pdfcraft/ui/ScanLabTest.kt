@@ -121,6 +121,8 @@ class ScanLabTest {
             ScanLab(keep = true, inspect = true),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),
+            // the sheet check off: each corner's surest place, as before
+            ScanLab(sheetCheck = false),
         )
         for (lab in all) assertEquals(lab, ScanLab.decode(lab.encode()))
         // every detector has a name of its own
