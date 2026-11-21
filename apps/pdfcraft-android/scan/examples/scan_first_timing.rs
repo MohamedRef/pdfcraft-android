@@ -2,7 +2,7 @@
 //! takes (`pdfcraft_scan::first`), on a folder of scans kept for testing. Not part of the app.
 //!
 //! ```text
-//! cargo run --release -p pdfcraft-scan --example scan_first_timing -- <folder> [threads] [out_dir]
+//! cargo run --release -p pdfcraft-scan --example scan_first_timing -- <folder> [threads] [out_dir] [foresee|plain]
 //! ```
 //!
 //! For every `page-NN.json` under `<folder>` (see `scan_replay`), the page is made as the scan
@@ -10,7 +10,10 @@
 //! flattening with its check, the text lines, turning upright, the document type, fingers) and each
 //! stage's time is printed; then its first picture is made from a copy of the photo a quarter the
 //! size (as the app's thumbnail is), and from the photo itself. With `out_dir`, both are written
-//! there as PNG files to look at.
+//! there as PNG files to look at. A fourth word `foresee` or `plain` switches "Skip flattening that
+//! could not be kept" (#785) on or off for every page whatever its file says, so the same folder
+//! can be run both ways and the pages in the two `out_dir`s compared; the last lines count how
+//! often the flattening network ran and how often its page was thrown away.
 //!
 //! Times are this computer's, not a phone's. The folders hold someone's documents: keep them and
 //! `out_dir` outside the repository.
@@ -65,6 +68,9 @@ fn main() {
     };
     let threads = args.get(2).and_then(|t| t.parse().ok()).unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from).min(4));
     let out = args.get(3).map(PathBuf::from);
+    let foresee = args.get(4).map(|word| word == "foresee");
+    // how often flattening ran: the network, its page thrown away, not run as known beforehand, the text lines
+    let (mut ran, mut lost, mut foreseen, mut lines) = (0u32, 0u32, 0u32, 0u32);
     if let Some(out) = &out {
         std::fs::create_dir_all(out).unwrap_or_else(|e| panic!("{}: {e}", out.display()));
     }
@@ -114,6 +120,7 @@ fn main() {
             flatten_min_lines: if on("flatten_line_floor") { 8 } else { 0 },
             line_flatten: on("line_flatten"),
             skip_flat: on("skip_flat"),
+            flatten_foresee: foresee.unwrap_or_else(|| on("flatten_foresee")),
             curved_sides: facts["finding"]["curved_sides"].as_u64().map_or(0, |v| v.min(4) as u8),
             upright: fixed.is_none() && on("upright"),
             turns: fixed.map_or(0, |t| (t % 4) as u8),
@@ -156,6 +163,11 @@ fn main() {
         for (stage, ms) in base.timings.iter().chain(look.stages.iter()) {
             note(stage, f64::from(*ms));
         }
+        let stage_ran = |stage: &str| base.timings.iter().any(|(s, _)| *s == stage);
+        ran += u32::from(stage_ran(pdfcraft_scan::page::STAGE_FLATTEN));
+        lost += u32::from(stage_ran(pdfcraft_scan::page::STAGE_FLATTEN_CHECK) && !base.flatten_check.is_some_and(|c| c.kept));
+        foreseen += u32::from(base.flatten_foreseen);
+        lines += u32::from(stage_ran(pdfcraft_scan::page::STAGE_FLATTEN_LINES));
         if !base.flattened && base.flatten_check.is_some() {
             let spent: u32 = base.timings.iter().filter(|(s, _)| s.contains("flatten")).map(|(_, ms)| ms).sum();
             note("flattening not kept", f64::from(spent));
@@ -181,6 +193,10 @@ fn main() {
             write_png(out, &format!("{name}-preview.png"), &look.pixels, base.page.width, base.page.height);
         }
     }
+    println!(
+        "flattening on {} pages: the network ran on {ran}, its page was thrown away on {lost}, it was not run on {foreseen} (known beforehand), the text lines ran on {lines}",
+        files.len()
+    );
     println!("medians over the pages (and the most), in ms:");
     for (name, values) in &totals {
         println!("    {name}: {:.0} ({:.0}) on {} pages", median(values), values.iter().copied().fold(0.0, f64::max), values.len());

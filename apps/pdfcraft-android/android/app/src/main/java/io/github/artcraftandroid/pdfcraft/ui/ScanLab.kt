@@ -399,6 +399,15 @@ internal data class ScanLab(
      * 1.22 instead of 0.24. Off: one curve for the whole page, as before.
      */
     val photoTone: Boolean = true,
+    /**
+     * In the automatic mode the page straightened by its corners is measured before the flattening
+     * network runs, and when that measure alone says the check could keep no flattened page (not
+     * measured, already straight, or too few lines of text), the network, its check and the lines
+     * of text are not run (#785). The page is the same either way. On the owner's phone,
+     * 2026-11-21, the network's page was thrown away on 7 of 12 pages; 2 of those 7 are known
+     * beforehand. Off: they run and their page is thrown away, as before.
+     */
+    val flattenForesee: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans and reporting what the detectors see change no page). */
     val asDesigned: Boolean get() = copy(keep = false, inspect = false) == ScanLab()
@@ -429,6 +438,7 @@ internal data class ScanLab(
         "review_return" to reviewReturn,
         "capture_guards" to captureGuards,
         "photo_tone" to photoTone,
+        "flatten_foresee" to flattenForesee,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -446,6 +456,7 @@ internal data class ScanLab(
         .put("review_return", reviewReturn)
         .put("capture_guards", captureGuards)
         .put("photo_tone", photoTone)
+        .put("flatten_foresee", flattenForesee)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -463,6 +474,7 @@ internal data class ScanLab(
         "review_return" to flag(reviewReturn),
         "capture_guards" to flag(captureGuards),
         "photo_tone" to flag(photoTone),
+        "flatten_foresee" to flag(flattenForesee),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -575,6 +587,7 @@ internal data class ScanLab(
                 reviewReturn = on("review_return", default.reviewReturn),
                 captureGuards = on("capture_guards", default.captureGuards),
                 photoTone = on("photo_tone", default.photoTone),
+                flattenForesee = on("flatten_foresee", default.flattenForesee),
             )
         }
     }
@@ -644,6 +657,8 @@ internal data class ScanTestResult(
     val photoToneShare: Double? = null,
     /** Groups of blocks read as photographs and left out of it because the finger step had filled them (#784); null as above. */
     val photoToneFingers: Int? = null,
+    /** No flattened page could have been kept, known before the network ran, so it did not (#785). */
+    val flattenForeseen: Boolean = false,
 )
 
 /**
@@ -909,6 +924,7 @@ internal fun scanTestPageJson(
                 .put("line_flatten", it.lineFlatten?.let(::scanLineFlattenJson) ?: JSONObject.NULL)
                 .put("flatten_reused", it.flattenReused)
                 .put("flatten_skipped_flat", it.flattenSkippedFlat)
+                .put("flatten_foreseen", it.flattenForeseen)
                 .put(
                     "orientation",
                     it.orientation?.let { o ->

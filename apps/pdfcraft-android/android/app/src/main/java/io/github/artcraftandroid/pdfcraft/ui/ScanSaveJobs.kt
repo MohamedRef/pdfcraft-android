@@ -290,6 +290,8 @@ private suspend fun AppViewModel.saveScanNow(eng: io.github.artcraftandroid.pdfc
             "flatten_reuse" to lab.flattenReuse, "flatten_reused" to (r?.flattenReused ?: false), "flatten_keep_all" to lab.flattenKeepAll,
             // a page already flat left unflattened (#549)
             "skip_flat" to lab.skipFlat, "flatten_skipped_flat" to (r?.flattenSkippedFlat ?: false),
+            // flattening that could not be kept not run (#785)
+            "flatten_foresee" to lab.flattenForesee, "flatten_foreseen" to (r?.flattenForeseen ?: false),
             "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
             // the strength the page was really made at, and whether the slider's counts as set by hand (#424)
             *scanAppliedStrengthDiag(scanAppliedStrength(page.look, lab, r?.kind?.strength?.toInt()), lab),
@@ -362,6 +364,7 @@ private suspend fun AppViewModel.saveScanNow(eng: io.github.artcraftandroid.pdfc
                     flattenSkippedFlat = it.flattenSkippedFlat,
                     photoToneShare = it.photoTone?.share?.toDouble(),
                     photoToneFingers = it.photoTone?.fingersLeftOut?.toInt(),
+                    flattenForeseen = it.flattenForeseen,
                 )
             }
             val turn = ScanTestTurn(page.turns, autoUpright, r?.turns?.toInt() ?: 0, followed, turnSource)
