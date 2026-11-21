@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! cargo run --release -p pdfcraft-scan --features synth --bin scan-eval -- \
-//!     (--synthetic N [--seed S] [--size WxH] | <folder>) \
+//!     (--synthetic N [--seed S] [--size WxH] | <folder> | --clean N [--seed S] [--groups a,b]) \
 //!     [--finder auto|network|lines|off] [--no-refine] [--second-look] [--unchecked] \
 //!     [--json out.json] [--md out.md] [--baseline base.json] [--contact-sheet <folder>]
 //! ```
@@ -18,6 +18,13 @@
 //! time of each stage. With `--baseline`, it exits with 1 when a measure's mean got worse than
 //! the baseline report's by more than its tolerance (`eval::METRICS`).
 //!
+//! `--clean N` measures the Clean scan look alone (#784): N drawn pages of each group of
+//! `clean_pages` (text, receipt, pencil, colour, photo, shadow, lowlight), already straight, are
+//! made as the photo as taken, as Clean scan with the app's defaults and as Clean scan at strength
+//! 50 without document types, and each is measured mark by mark (`clean_eval`). With `--baseline`
+//! it exits with 1 when a group's mean of a measure of the app's Clean scan got worse than the
+//! baseline report's by more than its tolerance (`clean_eval::CLEAN_METRICS`).
+//!
 //! Contact sheets are the photos with the true outline in green and the found one in red. Never
 //! make them from someone's own documents and put them in the repository or a pull request.
 
@@ -26,6 +33,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use pdfcraft_scan::Finder;
+use pdfcraft_scan::clean_eval::{self, CLEAN_METRICS, CleanMeasured, Run};
+use pdfcraft_scan::clean_pages::Group;
 use pdfcraft_scan::eval::{self, Entry, METRICS, Measured, Options, Summary};
 use pdfcraft_scan::eval_set::{self, Loaded, SetOptions};
 use pdfcraft_scan::synth::Kind;
@@ -44,19 +53,25 @@ struct Args {
 enum Source {
     Synthetic { n: usize, seed: u64, width: u32, height: u32 },
     Folder(PathBuf),
+    Clean { n: usize, seed: u64, groups: Vec<Group> },
 }
 
-const USAGE: &str = "usage: scan-eval (--synthetic N [--seed S] [--size WxH] | <folder>) [--finder auto|network|lines|off] [--no-refine] [--second-look] [--unchecked] [--json out.json] [--md out.md] [--baseline base.json] [--contact-sheet <folder>]";
+const USAGE: &str = "usage: scan-eval (--synthetic N [--seed S] [--size WxH] | <folder> | --clean N [--seed S] [--groups text,receipt,pencil,colour,photo,shadow,lowlight]) [--finder auto|network|lines|off] [--no-refine] [--second-look] [--unchecked] [--json out.json] [--md out.md] [--baseline base.json] [--contact-sheet <folder>]";
 
 fn parse(mut it: impl Iterator<Item = String>) -> Result<Args, String> {
     let (mut synthetic, mut seed, mut size, mut folder) = (None, 0u64, (800u32, 1066u32), None);
     let mut options = Options::default();
     let (mut json, mut md, mut baseline, mut contact_sheet) = (None, None, None, None);
     let mut set = SetOptions::default();
+    let (mut clean, mut groups) = (None, Group::ALL.to_vec());
     while let Some(arg) = it.next() {
         let mut value = || it.next().ok_or_else(|| format!("{arg} needs a value"));
         match arg.as_str() {
             "--synthetic" => synthetic = Some(value()?.parse::<usize>().map_err(|e| e.to_string())?),
+            "--clean" => clean = Some(value()?.parse::<usize>().map_err(|e| e.to_string())?),
+            "--groups" => {
+                groups = value()?.split(',').map(|g| Group::from_name(g).ok_or_else(|| format!("unknown group {g}"))).collect::<Result<_, _>>()?;
+            }
             "--seed" => seed = value()?.parse().map_err(|e: std::num::ParseIntError| e.to_string())?,
             "--size" => {
                 let v = value()?;
@@ -84,9 +99,10 @@ fn parse(mut it: impl Iterator<Item = String>) -> Result<Args, String> {
             other => folder = Some(PathBuf::from(other)),
         }
     }
-    let source = match (synthetic, folder) {
-        (Some(n), None) => Source::Synthetic { n, seed, width: size.0, height: size.1 },
-        (None, Some(dir)) => Source::Folder(dir),
+    let source = match (synthetic, folder, clean) {
+        (Some(n), None, None) => Source::Synthetic { n, seed, width: size.0, height: size.1 },
+        (None, Some(dir), None) => Source::Folder(dir),
+        (None, None, Some(n)) => Source::Clean { n, seed, groups },
         _ => return Err(USAGE.into()),
     };
     Ok(Args { source, options, json, md, baseline, contact_sheet, set })
@@ -235,9 +251,141 @@ fn contact_sheet(entry: &Entry, m: &Measured, dir: &Path) -> Result<(), String> 
     img.save(&path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// The four ways a drawn page is made for `--clean`, as the report names them.
+const CLEAN_RUNS: [(&str, &str); 4] = [
+    ("original", "photo as taken"),
+    ("app", "Clean scan, app defaults"),
+    ("one_curve", "the same, one curve for photographs too"),
+    ("plain", "Clean scan 50, no types"),
+];
+
+fn one_curve(request: &mut pdfcraft_scan::PageRequest<'_>) {
+    request.photo_tone = false;
+}
+
+fn clean_run(name: &str) -> Run<'static> {
+    match name {
+        "original" => Run::Original,
+        "app" => Run::App,
+        "one_curve" => Run::With(&one_curve),
+        _ => Run::Plain,
+    }
+}
+
+/// `--clean`: every page made the four ways and measured; one table per group.
+fn run_clean(args: &Args, n: usize, seed: u64, groups: &[Group]) -> Result<bool, String> {
+    // (run, measured)
+    let mut measured: Vec<(&'static str, CleanMeasured)> = Vec::new();
+    for group in groups {
+        for i in 0..n as u64 {
+            let page = pdfcraft_scan::clean_pages::generate(*group, seed + i);
+            for (run, _) in CLEAN_RUNS {
+                let m = clean_eval::measure(&page, clean_run(run), args.options.threads)
+                    .ok_or_else(|| format!("{} {}: the page could not be made", group.name(), seed + i))?;
+                eprintln!(
+                    "{}-{:04} {run}: type {} white from {:.3} grain {:.2} fingers {}/{} photo tone on {:.3} look {:.0} ms",
+                    group.name(),
+                    seed + i,
+                    m.preset,
+                    m.white_point,
+                    m.noise,
+                    m.fingers.1,
+                    m.fingers.0,
+                    m.photo_tone,
+                    m.look_ms
+                );
+                measured.push((run, m));
+            }
+        }
+    }
+    let of = |run: &str, group: Option<Group>| -> Vec<&CleanMeasured> {
+        measured.iter().filter(|(r, m)| *r == run && group.is_none_or(|g| m.group == g)).map(|(_, m)| m).collect()
+    };
+    let mut out = String::new();
+    let _ = writeln!(out, "# scan-eval --clean\n\n{n} drawn pages a group, seeds from {seed}. Means; – where a group has no such mark.");
+    for group in groups {
+        let rows: Vec<Vec<(&'static str, Summary)>> = CLEAN_RUNS.iter().map(|(run, _)| clean_eval::summary_of(&of(run, Some(*group)))).collect();
+        let types: Vec<&str> = of("app", Some(*group)).iter().map(|m| m.preset).collect();
+        let _ = writeln!(
+            out,
+            "\n### {} (document types: {})\n\n| measure | {} | {} | {} | {} |\n|---|---|---|---|---|",
+            group.name(),
+            types.join(", "),
+            CLEAN_RUNS[0].1,
+            CLEAN_RUNS[1].1,
+            CLEAN_RUNS[2].1,
+            CLEAN_RUNS[3].1
+        );
+        for (i, metric) in CLEAN_METRICS.iter().enumerate() {
+            if rows.iter().all(|r| r[i].1.n == 0) {
+                continue;
+            }
+            let _ = writeln!(
+                out,
+                "| {} | {} | {} | {} | {} |",
+                metric.name,
+                fmt(rows[0][i].1.mean),
+                fmt(rows[1][i].1.mean),
+                fmt(rows[2][i].1.mean),
+                fmt(rows[3][i].1.mean)
+            );
+        }
+    }
+    println!("{out}");
+    if let Some(path) = &args.md {
+        std::fs::write(path, &out).map_err(|e| e.to_string())?;
+    }
+    let mut summary = serde_json::Map::new();
+    for (run, _) in CLEAN_RUNS {
+        let mut by_group = serde_json::Map::new();
+        for group in groups {
+            by_group.insert(group.name().into(), summary_json(&clean_eval::summary_of(&of(run, Some(*group)))));
+        }
+        summary.insert(run.into(), Value::Object(by_group));
+    }
+    if let Some(path) = &args.json {
+        let entries: Vec<Value> = measured
+            .iter()
+            .map(|(run, m)| {
+                let metrics: serde_json::Map<String, Value> = CLEAN_METRICS
+                    .iter()
+                    .zip(m.values)
+                    .map(|(metric, v)| (metric.name.to_string(), if v.is_finite() { json!(v) } else { Value::Null }))
+                    .collect();
+                json!({
+                    "group": m.group.name(), "seed": m.seed, "run": run, "type": m.preset, "white_point": m.white_point,
+                    "grain": m.noise, "fingers_found": m.fingers.0, "fingers_filled": m.fingers.1, "photo_tone": m.photo_tone, "metrics": metrics,
+                })
+            })
+            .collect();
+        let report = json!({"source": format!("{n} drawn pages a group, seeds from {seed}"), "clean": summary, "entries": entries});
+        std::fs::write(path, serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    }
+    let Some(path) = &args.baseline else { return Ok(true) };
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let base: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut ok = true;
+    for group in groups {
+        let now = clean_eval::summary_of(&of("app", Some(*group)));
+        for (metric, (_, s)) in CLEAN_METRICS.iter().zip(&now) {
+            let Some(was) = base["clean"]["app"][group.name()][metric.name]["mean"].as_f64() else { continue };
+            let worse = match metric.better {
+                eval::Better::Higher => was - s.mean,
+                eval::Better::Lower => s.mean - was,
+            };
+            if !s.mean.is_finite() || worse > metric.tolerance {
+                println!("REGRESSION {} {}: mean {} against {} in the baseline", group.name(), metric.name, fmt(s.mean), fmt(was));
+                ok = false;
+            }
+        }
+    }
+    Ok(ok)
+}
+
 fn run(args: &Args) -> Result<bool, String> {
     let mut left_out = Loaded::default();
     let (entries, source): (Box<dyn Iterator<Item = Entry>>, String) = match &args.source {
+        Source::Clean { n, seed, groups } => return run_clean(args, *n, *seed, groups),
         Source::Synthetic { n, seed, width, height } => {
             (Box::new(eval::synthetic(*n, *seed, *width, *height)), format!("{n} drawn photos, {width}×{height}, seeds from {seed}"))
         }

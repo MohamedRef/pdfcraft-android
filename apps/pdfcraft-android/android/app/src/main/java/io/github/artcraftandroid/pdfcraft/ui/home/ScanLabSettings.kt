@@ -152,6 +152,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_presets, o.presets) { lab.update(o.copy(presets = it)) }
     Sw(R.string.scan_lab_kind_tone, o.kindTone) { lab.update(o.copy(kindTone = it)) }
     Sw(R.string.scan_lab_photo_sharpen, o.photoSharpen) { lab.update(o.copy(photoSharpen = it)) }
+    // photographs on a page of print keep their shadows and highlights (#784)
+    Sw(R.string.scan_lab_photo_tone, o.photoTone) { lab.update(o.copy(photoTone = it)) }
     Sw(R.string.scan_lab_suggestions, o.suggestions) { lab.update(o.copy(suggestions = it)) }
     // the slider's strength counts as set by hand, and sharpening scales the type's (#424)
     Sw(R.string.scan_lab_page_strength, o.pageStrength) { lab.update(o.copy(pageStrength = it)) }

@@ -143,6 +143,17 @@ fn paper_light(small: &[Plane; 3], paper: &Mask, r: usize, parallel: bool) -> [P
     })
 }
 
+/// `light` with the cells where `outside` is false filled from the cells around them where it is
+/// true, at the scales of [`paper_light`] (#784): the light on a photograph is the light on the
+/// paper around it, whatever the first estimate took the photograph's own bright parts for.
+/// `light` itself when nothing is outside.
+pub(crate) fn carried_in(light: &[Plane; 3], outside: &Mask, radius: usize, parallel: bool) -> [Plane; 3] {
+    if !outside.data.contains(&true) || outside.data.len() != light[0].d.len() {
+        return light.clone();
+    }
+    paper_light(light, outside, radius, parallel)
+}
+
 /// The paper colour under the local light for `page`, with the object mask. With `parallel` the
 /// three colour channels are worked on at once (same result).
 pub(crate) fn background(page: &Rgb, parallel: bool) -> Background {

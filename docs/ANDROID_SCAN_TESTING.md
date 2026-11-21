@@ -62,6 +62,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
 | Document types shape Clean scan's tone (#299) | On | Off: a type sets only strength, sharpening and paper color (no receipt gamma, no whiteboard S-curve) |
 | Sharpen photos on the page gently (#299) | On | Off: only the objects the look finds itself are sharpened gently, as before |
+| Keep the shadows and highlights of photographs on a page, in Clean scan (#784) | On | Off: one tone curve for the whole page, as before, so a photograph among print comes out with black shadows and white highlights |
 | Suggest Flatten page or Grayscale for a document type (#299) | On | Off: no suggestion chips |
 | Barcodes, stamps and soft print are not photographs (#427) | On | Off: the first photograph rule, which also reads those as photographs, so a label with a large barcode becomes a document with photographs |
 | A page whose edges were not found is a Document until it is cropped (#444) | On | Off: the kind of such a page is worked out from the whole photo, table and surroundings included, as before #444 |
@@ -136,7 +137,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
              "sharpen": 30, "denoise": true, "grain_white": true, "preview": true, "crop_tools": true, "flatten_auto": true, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "strict_book": true, "book_gutter": true, "line_flatten": true, "flatten_reuse": true, "skip_flat": true, "parallel_pages": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
              "preview_zoom": true, "look_reuse": true, "first_picture": true, "continuous_pages": true,
-             "camera_buttons": true},
+             "camera_buttons": true, "photo_tone": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "bright_share": 0.0, "gutter_band": false, "gutter_loose": false, "gutter_cover": 0.0,
@@ -162,7 +163,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
             "orientation": {"quarter_turns": 3, "confidence": 0.81, "agreement": 1.0, "tiles": 4, "sure": true},
-            "noise": 0.33, "flatten_check": null, "flatten_trim": null, "line_flatten": null, "flatten_reused": false, "flatten_skipped_flat": false}
+            "noise": 0.33, "flatten_check": null, "flatten_trim": null, "line_flatten": null, "flatten_reused": false, "flatten_skipped_flat": false,
+            "photo_tone_share": 0.0, "photo_tone_fingers": 0}
 }
 ```
 
@@ -177,8 +179,8 @@ or `null`. `outcome` is `saved` or `discarded`; a discarded page has no `look`, 
 `reused` whether its straightened page was kept from an earlier preview, `ms` the time from the
 request to the result, `light_reused` whether Clean scan or Whiteboard found the page's light
 estimate kept from an earlier look (#446) and `look_parts_ms` the parts of that look that ran
-(`look_light`, `look_noise`, `look_denoise`, `look_sharpen`, `look_tone`; only the tone when the
-estimate was kept), and `look` the filter it showed, which can differ from the one saved when
+(`look_light`, `look_noise`, `look_denoise`, `look_sharpen`, `look_tone`, and `look_photo_tone`
+when photographs got their own curve, #784; only the tone when the estimate was kept), and `look` the filter it showed, which can differ from the one saved when
 the filter was changed and saved before the new preview came. `page_look` is the page's own look
 as the scan screen left it (#301): `id` (`original`, `clean`, `colour`, `greyscale`, `whiteboard`
 or `bw`; Auto color and Whiteboard share the native `colour` look, so `look` alone can't tell
@@ -262,7 +264,11 @@ Besides what `docs/ANDROID_DIAGNOSTICS_LOG.md` lists for `scan`: every `photo` l
 `book_order`, `book_gutter_search`, `book_split`, `gutter_found`, `gutter_top`, `gutter_bottom`,
 `gutter_confidence`, `book_ms`), every `page` line which `book_half` it is (`left`, `right` or
 `none`), every `page` line the `strength` used, `side_proportions`,
-`snap_paper`, `upright`, `sharpen` and `denoise`, `grain_white` with what Clean scan measured for
+`snap_paper`, `upright`, `sharpen` and `denoise`, `photo_tone` with what it did (#784:
+`photo_tone_share`, the share of the photo mask's blocks given the photographs' own curve, and
+`photo_tone_fingers`, how many groups of them were left out because the finger step filled
+something there; -1 for the other filters; the page file's `result` has the same two, null when
+it did not run), `grain_white` with what Clean scan measured for
 it (#466: `paper_spread`, how much the paper varies after its light is divided out, and
 `white_point`, the level from which paper was drawn white; -1 for the other filters; the page
 file's `result` has the same two, null for the other filters), and how its turn was decided (#339:

@@ -81,6 +81,8 @@ pub struct LookParams {
     /// Auto draws a grainy page's paper white from a lower level (#466); false is the curve as
     /// it was (a testing choice).
     pub grain_white: bool,
+    /// Auto sharpens the photographs it is given gently (#299); false sharpens them like print.
+    pub photo_gentle: bool,
 }
 
 /// A page with its look, and what the look found out about the page on the way.
@@ -104,6 +106,20 @@ pub struct Applied {
     pub fingers: Option<crate::defects::FingerFill>,
     /// What drawing the page's hand-made marks did (#495); `None` when it had none.
     pub markup: Option<crate::markup::Applied>,
+    /// What giving the page's photographs their own tone curve did (#784); `None` when it was not
+    /// asked for or the look is not Clean scan.
+    pub photo_tone: Option<PhotoTone>,
+}
+
+/// What giving a page's photographs their own tone curve did (#784).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PhotoTone {
+    /// The share of the page (of the photo mask's blocks) that took any of the gentler curve.
+    pub share: f32,
+    /// Groups of blocks the mask took for photographs that were left out because the finger step
+    /// had filled them: a finger, not a photograph.
+    pub fingers_left_out: u32,
+    pub ms: u32,
 }
 
 /// Give `page` the `look` at `strength` (0–100), taking it to be at 300 dpi. `None` when the
@@ -121,6 +137,7 @@ pub fn apply(page: &Rgb, look: Look, strength: u8) -> Option<Pixels> {
             keep_paper: false,
             shape: Shape::default(),
             grain_white: true,
+            photo_gentle: true,
         },
     )
 }
@@ -128,6 +145,22 @@ pub fn apply(page: &Rgb, look: Look, strength: u8) -> Option<Pixels> {
 /// Give `page` the `look`.
 pub fn apply_with(page: &Rgb, look: Look, params: &LookParams) -> Option<Pixels> {
     apply_full(page, look, params).map(|applied| applied.pixels)
+}
+
+/// The Auto look's settings for `params`.
+fn auto_params(params: &LookParams) -> AutoParams {
+    let LookParams { strength, threads, dpi, sharpen, denoise, keep_paper, shape, grain_white, photo_gentle } = *params;
+    let dpi = if dpi.is_finite() { dpi.clamp(1.0, 2400.0) as u16 } else { 300 };
+    let paper = if keep_paper { PaperMode::Keep } else { PaperMode::White };
+    AutoParams { strength, paper, threads, sharpen, denoise, dpi, shape, grain_white, photo_gentle }
+}
+
+/// Clean scan's own tone curve for the photographs on `page` (#784, [`crate::enhance::photo_tone`]):
+/// `rgb` is the page in the Auto look made with `params`, `photos` and `prepared`; where
+/// `weights` (one per block of `photos`) is over 0 it is mixed with the page at `strength`.
+/// False, with `rgb` untouched, when there was nothing to do.
+pub fn photo_tone(page: &Rgb, params: &LookParams, photos: &PhotoMask, weights: &[f32], strength: u8, prepared: &Prepared, rgb: &mut [u8]) -> bool {
+    crate::enhance::photo_tone(page, &auto_params(params), photos, weights, strength, prepared, rgb)
 }
 
 /// Give `page` the `look`, and say what the look measured.
@@ -144,7 +177,7 @@ pub fn apply_with_photos(page: &Rgb, look: Look, params: &LookParams, photos: Op
 /// the strength and the paper kept in `prepared` for the next look of the same page (#446). The
 /// pixels are the same as without it. `prepared` must only ever be used with this `page`.
 pub fn apply_prepared(page: &Rgb, look: Look, params: &LookParams, photos: Option<&PhotoMask>, prepared: &Prepared) -> Option<Applied> {
-    let LookParams { strength, threads, dpi, sharpen, denoise, keep_paper, shape, grain_white } = *params;
+    let LookParams { strength, threads, .. } = *params;
     let plain = |pixels| Applied {
         pixels,
         noise: None,
@@ -155,15 +188,13 @@ pub fn apply_prepared(page: &Rgb, look: Look, params: &LookParams, photos: Optio
         detail_reused: false,
         fingers: None,
         markup: None,
+        photo_tone: None,
     };
     let Some(engine) = look.engine() else {
         return Some(match look {
-            Look::BlackWhite => plain(Pixels::Bilevel(black_white(page, &BwParams { strength, dither_photos: true, dpi, threads })?)),
+            Look::BlackWhite => plain(Pixels::Bilevel(black_white(page, &BwParams { strength, dither_photos: true, dpi: params.dpi, threads })?)),
             _ => {
-                let dpi = if dpi.is_finite() { dpi.clamp(1.0, 2400.0) as u16 } else { 300 };
-                let paper = if keep_paper { PaperMode::Keep } else { PaperMode::White };
-                let made =
-                    auto_prepared(page, &AutoParams { strength, paper, threads, sharpen, denoise, dpi, shape, grain_white }, photos, prepared)?;
+                let made = auto_prepared(page, &auto_params(params), photos, prepared)?;
                 let mut rgb = made.rgb.data;
                 let mut stages = made.stages;
                 if look == Look::Whiteboard {
@@ -181,6 +212,7 @@ pub fn apply_prepared(page: &Rgb, look: Look, params: &LookParams, photos: Optio
                     detail_reused: made.detail_reused,
                     fingers: None,
                     markup: None,
+                    photo_tone: None,
                 }
             }
         });

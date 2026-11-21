@@ -13,6 +13,7 @@ use crate::flatten_guard::{Kept, MIN_LINES, Trim, border_trim, guard_with_floor}
 use crate::flatten_lines::{LineFit, fit_page};
 use crate::look::{Applied, Look, LookParams, Pixels, apply_prepared};
 use crate::page_kind::{Curve, Measured, PageKind, PresetChoice, Rules, kind_of, measure};
+use crate::photo_mask::PhotoMask;
 use crate::straightness::{Straightness, line_straightness};
 use crate::upright::{Upright, turned, upright};
 use crate::upright_pages::total_turn;
@@ -171,6 +172,11 @@ pub struct PageRequest<'a> {
     /// by its corners is left so, without the network, its check or the text lines (#549). False
     /// flattens every such page as before.
     pub skip_flat: bool,
+    /// Clean scan gives the photographs the block photo mask finds on a page of print the Photo
+    /// document type's strength inside them (#784), so their shadows and highlights are kept
+    /// while the print around them is cleaned as before. Needs a document type (`preset` not
+    /// off), which is what finds the photographs. False: one curve for the whole page, as before.
+    pub photo_tone: bool,
 }
 
 /// The weakest Clean scan strength at which fingers are looked for (#466): below it the paper is
@@ -221,6 +227,7 @@ impl<'a> PageRequest<'a> {
             auto_encode: false,
             flatten_known: None,
             skip_flat: false,
+            photo_tone: false,
         }
     }
 }
@@ -286,6 +293,9 @@ pub struct PageResult {
     pub fingers: Option<crate::defects::FingerFill>,
     /// What drawing the page's hand-made marks did (#495); `None` when it had none.
     pub markup: Option<crate::markup::Applied>,
+    /// What giving the page's photographs their own tone curve did (#784); `None` when it was not
+    /// asked for or the look is not Clean scan.
+    pub photo_tone: Option<crate::look::PhotoTone>,
     /// How the page was stored (#505); `None` for a camera file kept as it was.
     pub encoded: Option<crate::size::Encoded>,
     /// (stage, milliseconds), in pipeline order.
@@ -439,6 +449,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         kind: None,
         fingers: None,
         markup: None,
+        photo_tone: None,
         encoded: None,
         timings,
     }))
@@ -465,7 +476,7 @@ pub fn process_page_stored(request: &PageRequest<'_>, also: &[crate::size::SizeC
         clock = Instant::now();
     };
     let (applied, kind) = page_look_kind(&base, request)?;
-    let (paper_spread, white_point) = (applied.paper_spread, applied.white_point);
+    let (paper_spread, white_point, photo_tone) = (applied.paper_spread, applied.white_point, applied.photo_tone);
     let (pixels, noise, look_stages, fingers, markup) = (applied.pixels, applied.noise, applied.stages, applied.fingers, applied.markup);
     let PageBase {
         page,
@@ -533,6 +544,7 @@ pub fn process_page_stored(request: &PageRequest<'_>, also: &[crate::size::SizeC
         kind,
         fingers,
         markup,
+        photo_tone,
         encoded: Some(stored.encoded),
         timings,
     };
@@ -571,6 +583,7 @@ fn scan_stage(stage: &'static str) -> &'static str {
         crate::enhance::STAGE_DENOISE => "scan_look_denoise",
         crate::enhance::STAGE_SHARPEN => "scan_look_sharpen",
         crate::enhance::STAGE_TONE => "scan_look_tone",
+        crate::enhance::STAGE_PHOTO_TONE => "scan_look_photo_tone",
         other => other,
     }
 }
@@ -615,6 +628,7 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
         keep_paper: false,
         shape: Shape::default(),
         grain_white: request.grain_white,
+        photo_gentle: request.photo_sharpen,
     };
     if let Some(kind) = &kind {
         if !request.fixed_strength {
@@ -632,7 +646,7 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
     if let Some(keep) = request.keep_paper {
         params.keep_paper = keep;
     }
-    let photos = kind.as_ref().filter(|_| request.photo_sharpen).and_then(|k| k.photos.as_ref());
+    let photos = kind.as_ref().filter(|_| request.photo_sharpen || request.photo_tone).and_then(|k| k.photos.as_ref());
     let fresh;
     let kept = match request.reuse_look {
         true => &base.look_kept,
@@ -645,16 +659,41 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
     if let Some(kind_ms) = kind_ms {
         applied.stages.insert(0, (crate::look::STAGE_KIND, kind_ms));
     }
+    // the photographs get their own tone curve after the finger step (#784), which reads the
+    // look's one curve as before; what that step fills is then known to be a finger
+    let toned = photos.filter(|m| {
+        request.photo_tone
+            && request.look == Look::Auto
+            && !m.whole_page
+            && photo_tone_strength() < params.strength
+            && m.weight.iter().any(|&k| k > 0.0)
+    });
+    let mut before_fingers: Option<Vec<u8>> = None;
     // fingers at the page's edge, found on the look's own output and papered over (#466)
     if request.remove_fingers && request.look == Look::Auto && params.strength >= FINGER_MIN_STRENGTH {
         if let Pixels::Rgb(data) = &mut applied.pixels {
             let clock = Instant::now();
+            if toned.is_some() {
+                before_fingers = Some(data.clone());
+            }
             let mut page = Rgb { width: base.page.width, height: base.page.height, data: std::mem::take(data) };
             applied.fingers = Some(crate::defects::remove_fingers(&mut page));
             *data = page.data;
             applied.stages.push((crate::look::STAGE_FINGERS, ms(clock)));
         }
     }
+    if let (Some(mask), Pixels::Rgb(data)) = (toned, &mut applied.pixels) {
+        let clock = Instant::now();
+        let filled = before_fingers.as_deref().filter(|_| applied.fingers.is_some_and(|f| f.filled > 0));
+        let (weights, fingers_left_out) = photo_weights(mask, filled, data, base.page.width as usize, base.page.height as usize);
+        let done = crate::look::photo_tone(&base.page, &params, mask, &weights, photo_tone_strength(), kept, data);
+        let share = if done { weights.iter().filter(|&&k| k > 0.0).count() as f32 / weights.len().max(1) as f32 } else { 0.0 };
+        applied.photo_tone = Some(crate::look::PhotoTone { share, fingers_left_out, ms: ms(clock) });
+        applied.stages.push((crate::enhance::STAGE_PHOTO_TONE, ms(clock)));
+    } else if request.photo_tone && request.look == Look::Auto {
+        applied.photo_tone = Some(crate::look::PhotoTone::default());
+    }
+    drop(before_fingers);
     // the marks made by hand (#495), over the look and the finger step, turned with the page
     if let Some(markup) = request.markup.filter(|m| !m.is_empty()) {
         let clock = Instant::now();
@@ -662,6 +701,65 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
         applied.stages.push((crate::look::STAGE_MARKUP, ms(clock)));
     }
     Ok((applied, kind))
+}
+
+/// The photo mask's weights for the photographs' own tone curve (#784): `mask`'s, without the
+/// groups of blocks (touching, corners included) in which the finger step changed a pixel
+/// between `before` and `after` (both the `w` × `h` page, RGB8). A finger is skin, which the
+/// mask reads as a photograph; once it is papered over there is nothing there to tone, and the
+/// gentler curve would only grey the paper put in its place. Returns the weights and how many
+/// groups were left out.
+pub(crate) fn photo_weights(mask: &PhotoMask, before: Option<&[u8]>, after: &[u8], w: usize, h: usize) -> (Vec<f32>, u32) {
+    let (cols, rows) = (mask.cols, mask.rows);
+    let mut weights = mask.weight.clone();
+    let Some(before) = before.filter(|b| b.len() == after.len() && after.len() == w * h * 3 && cols > 0 && rows > 0 && weights.len() == cols * rows)
+    else {
+        return (weights, 0);
+    };
+    let changed: Vec<bool> = (0..cols * rows)
+        .map(|i| {
+            let (c, r) = (i % cols, i / cols);
+            let (x0, x1, y0, y1) = (c * w / cols, (c + 1) * w / cols, r * h / rows, (r + 1) * h / rows);
+            weights[i] > 0.0 && (y0..y1).any(|y| before[(y * w + x0) * 3..(y * w + x1) * 3] != after[(y * w + x0) * 3..(y * w + x1) * 3])
+        })
+        .collect();
+    let mut left_out = 0u32;
+    let mut seen = vec![false; cols * rows];
+    for start in 0..cols * rows {
+        if seen[start] || weights[start] <= 0.0 {
+            continue;
+        }
+        // one group of weighted blocks
+        let (mut group, mut stack, mut hit) = (Vec::new(), vec![start], false);
+        seen[start] = true;
+        while let Some(i) = stack.pop() {
+            group.push(i);
+            hit |= changed[i];
+            let (c, r) = (i % cols, i / cols);
+            for rr in r.saturating_sub(1)..(r + 2).min(rows) {
+                for cc in c.saturating_sub(1)..(c + 2).min(cols) {
+                    let j = rr * cols + cc;
+                    if !seen[j] && weights[j] > 0.0 {
+                        seen[j] = true;
+                        stack.push(j);
+                    }
+                }
+            }
+        }
+        if hit {
+            left_out += 1;
+            for i in group {
+                weights[i] = 0.0;
+            }
+        }
+    }
+    (weights, left_out)
+}
+
+/// The strength of Clean scan's tone curve inside a photograph on a page of print (#784): the
+/// Photo document type's own, the one a page that is all photograph gets.
+pub fn photo_tone_strength() -> u8 {
+    crate::preset::params(crate::preset::Preset::Photo).strength
 }
 
 /// A document type's change to the tone curve (#299).

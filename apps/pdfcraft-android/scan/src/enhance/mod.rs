@@ -101,6 +101,9 @@ pub struct AutoParams {
     /// Draw a grainy page's paper white from a lower level (a photo taken in dim light, #466);
     /// false is the curve as it was (a testing choice).
     pub grain_white: bool,
+    /// With the page's photographs given: sharpen them as gently as the objects the look finds
+    /// itself (#299). False sharpens them like print, as without the photographs.
+    pub photo_gentle: bool,
 }
 
 impl Default for AutoParams {
@@ -114,6 +117,7 @@ impl Default for AutoParams {
             dpi: 300,
             shape: Shape::default(),
             grain_white: true,
+            photo_gentle: true,
         }
     }
 }
@@ -278,40 +282,7 @@ pub fn auto_prepared(page: &Rgb, params: &AutoParams, photos: Option<&crate::pho
     let (bg, noise) = (&light.bg, light.noise);
     let strength = params.strength.clamp(BLEND_BELOW, 100);
     // less grain where there is a lot, then crisper print, both before the curve (#299)
-    let key = DetailKey {
-        denoise: params.denoise && noise >= detail::NOISE_FLOOR,
-        sharpen: params.sharpen.min(100),
-        dpi: params.dpi,
-        photos: photos.map(|p| (p.cols, p.rows, p.weight.iter().map(|w| w.to_bits()).collect())),
-    };
-    let kept = {
-        let slot = prepared.detailed.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        slot.as_ref().filter(|(k, _)| *k == key).map(|(_, d)| std::sync::Arc::clone(d))
-    };
-    let detail_reused = kept.is_some();
-    let detailed: Option<std::sync::Arc<Rgb>> = match kept {
-        Some(d) => Some(d),
-        None if !key.denoise && key.sharpen == 0 => None,
-        None => {
-            let mut detailed: Option<Rgb> = None;
-            if key.denoise {
-                detailed = Some(Rgb { width: page.width, height: page.height, data: detail::denoise(page, noise, params.threads) });
-                lap(STAGE_DENOISE, &mut stages);
-            }
-            if key.sharpen > 0 {
-                let k_sharp = f32::from(key.sharpen) / 100.0;
-                let gentle = photos.map_or_else(|| bg.objects.clone(), |p| with_photos(&bg.objects, p));
-                let data = detail::sharpen(detailed.as_ref().unwrap_or(page), k_sharp, noise, f32::from(params.dpi), Some(&gentle), params.threads);
-                detailed = Some(Rgb { width: page.width, height: page.height, data });
-                lap(STAGE_SHARPEN, &mut stages);
-            }
-            let made = detailed.map(std::sync::Arc::new);
-            if let Some(made) = &made {
-                *prepared.detailed.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some((key, std::sync::Arc::clone(made)));
-            }
-            made
-        }
-    };
+    let (detailed, detail_reused) = detailed_page(page, params, photos, prepared, light, &mut |stage| lap(stage, &mut stages));
     let renderer = tone::Renderer::new(
         detailed.as_deref().unwrap_or(page),
         &bg.light,
@@ -338,6 +309,117 @@ pub fn auto_prepared(page: &Rgb, params: &AutoParams, photos: Option<&crate::pho
         light_reused,
         detail_reused,
     })
+}
+
+/// `page` with less grain where there is a lot and crisper print (#299), as the tone curve takes
+/// it: kept in `prepared` for the same settings, made and kept otherwise (`lap` is told each part
+/// made). `None` when neither is asked for and the curve takes the page itself. The second value
+/// says the page was kept from an earlier look.
+fn detailed_page(
+    page: &Rgb,
+    params: &AutoParams,
+    photos: Option<&crate::photo_mask::PhotoMask>,
+    prepared: &Prepared,
+    light: &Light,
+    lap: &mut dyn FnMut(&'static str),
+) -> (Option<std::sync::Arc<Rgb>>, bool) {
+    let (bg, noise) = (&light.bg, light.noise);
+    let photos = photos.filter(|_| params.photo_gentle);
+    let key = DetailKey {
+        denoise: params.denoise && noise >= detail::NOISE_FLOOR,
+        sharpen: params.sharpen.min(100),
+        dpi: params.dpi,
+        photos: photos.map(|p| (p.cols, p.rows, p.weight.iter().map(|w| w.to_bits()).collect())),
+    };
+    let kept = {
+        let slot = prepared.detailed.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        slot.as_ref().filter(|(k, _)| *k == key).map(|(_, d)| std::sync::Arc::clone(d))
+    };
+    match kept {
+        Some(d) => (Some(d), true),
+        None if !key.denoise && key.sharpen == 0 => (None, false),
+        None => {
+            let mut detailed: Option<Rgb> = None;
+            if key.denoise {
+                detailed = Some(Rgb { width: page.width, height: page.height, data: detail::denoise(page, noise, params.threads) });
+                lap(STAGE_DENOISE);
+            }
+            if key.sharpen > 0 {
+                let k_sharp = f32::from(key.sharpen) / 100.0;
+                let gentle = photos.map_or_else(|| bg.objects.clone(), |p| with_photos(&bg.objects, p));
+                let data = detail::sharpen(detailed.as_ref().unwrap_or(page), k_sharp, noise, f32::from(params.dpi), Some(&gentle), params.threads);
+                detailed = Some(Rgb { width: page.width, height: page.height, data });
+                lap(STAGE_SHARPEN);
+            }
+            let made = detailed.map(std::sync::Arc::new);
+            if let Some(made) = &made {
+                *prepared.detailed.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some((key, std::sync::Arc::clone(made)));
+            }
+            (made, false)
+        }
+    }
+}
+
+/// Stage name of [`photo_tone`] in a look's parts (#784).
+pub const STAGE_PHOTO_TONE: &str = "look_photo_tone";
+
+/// Give the photographs on a page their own, gentler tone curve (#784). `data` is `page` in the
+/// Auto look made with `params` and `photos` (RGB8, [`auto_prepared`]'s output, with whatever
+/// was done to it since); `weights` is one weight per block of `photos` (1 inside a photograph,
+/// 0 away from one): where it is over 0, `data` is mixed with the page drawn at `strength`.
+///
+/// The page's own curve takes everything darker than its black point to black and everything
+/// near white to white. That is right for print and loses a photograph's shadows and highlights.
+/// And the light under a photograph is taken from the paper around it: the look's own estimate
+/// takes a photograph's bright parts for paper, which made them white.
+///
+/// Returns false, with `data` untouched, when there is nothing to do: no weight, a `strength`
+/// that is not under the page's own, or buffers that do not fit. `prepared` is the page's.
+pub fn photo_tone(
+    page: &Rgb,
+    params: &AutoParams,
+    photos: &crate::photo_mask::PhotoMask,
+    weights: &[f32],
+    strength: u8,
+    prepared: &Prepared,
+    data: &mut [u8],
+) -> bool {
+    let (w, h) = (page.width as usize, page.height as usize);
+    let fits = w.checked_mul(h).and_then(|n| n.checked_mul(3)).is_some_and(|n| n == page.data.len() && n == data.len());
+    let weights = tone::Weights { cols: photos.cols, rows: photos.rows, weight: weights, width: w, height: h };
+    if !fits || w < MIN_SIDE || h < MIN_SIDE || strength >= params.strength.clamp(BLEND_BELOW, 100) || params.strength < BLEND_BELOW || !weights.any()
+    {
+        return false;
+    }
+    let light = prepared.light.get_or_init(|| {
+        let bg = background::background(page, params.threads > 1);
+        let noise = detail::noise_sigma(page, &bg.light);
+        Light { bg, noise }
+    });
+    let (detailed, _) = detailed_page(page, params, Some(photos), prepared, light, &mut |_| {});
+    let bg = &light.bg;
+    // which cells of the light estimate lie outside every photograph
+    let (lw, lh) = (bg.light[0].w, bg.light[0].h);
+    let at_work = tone::Weights { width: lw, height: lh, ..weights };
+    let mut outside = Mask::new(lw, lh);
+    let mut row = vec![0f32; lw];
+    for y in 0..lh {
+        let any = at_work.row(y, &mut row);
+        for (o, &k) in outside.data[y * lw..(y + 1) * lw].iter_mut().zip(&row) {
+            *o = !any || k <= 0.0;
+        }
+    }
+    let around = background::carried_in(&bg.light, &outside, bg.radius, params.threads > 1);
+    // the same curve family at the photographs' strength, without a kind's shape (a receipt's
+    // extra gamma is for its print) and without the grainy page's lift (that is for paper)
+    let own = tone::Renderer::new(
+        detailed.as_deref().unwrap_or(page),
+        &around,
+        tone::Tone { grain_white: false, ..tone::Tone::at(strength) },
+        params.paper == PaperMode::Keep,
+    );
+    own.blend(data, &weights, params.threads);
+    true
 }
 
 /// The cells of `objects` (at its own size) set, and those where `photos` (a block mask over the
