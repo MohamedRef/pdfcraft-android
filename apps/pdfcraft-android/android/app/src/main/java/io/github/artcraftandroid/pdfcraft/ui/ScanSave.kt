@@ -133,6 +133,8 @@ internal fun scanPageRequest(
     flattenKeepAll = lab.flattenKeepAll,
     // a page already flat is not flattened (#549)
     skipFlat = lab.skipFlat,
+    // flattening that the check could not keep is not run (#785)
+    flattenForesee = lab.flattenForesee,
     sideProportions = !lab.perspective,
     upright = ask.upright,
     turns = ask.turns.toUByte(),

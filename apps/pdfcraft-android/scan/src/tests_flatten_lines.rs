@@ -370,7 +370,8 @@ fn a_previews_flattening_decision_is_taken_over_at_full_size() {
     assert!(fresh.timings.iter().any(|&(stage, _)| stage == crate::page::STAGE_FLATTEN));
     assert_eq!(fresh.flattened, reused.flattened);
 
-    let straight = crate::page::FlattenDecision { grid: None, network: false, bend: 0.0, check: None, line_flatten: None, skipped_flat: false };
+    let straight =
+        crate::page::FlattenDecision { grid: None, network: false, bend: 0.0, check: None, line_flatten: None, skipped_flat: false, foreseen: false };
     let kept_straight = crate::page_base(&crate::PageRequest { flatten_known: Some(&straight), ..ask() }).unwrap();
     let plain = crate::page_base(&crate::PageRequest::new(&bytes, corners)).unwrap();
     assert!(!kept_straight.flattened && kept_straight.flatten_reused);
@@ -420,4 +421,91 @@ fn a_flat_page_skips_flattening_when_asked() {
     assert!(!measured.flatten_skipped_flat && measured.flattened);
     assert_eq!(measured.page, before.page);
     assert_eq!(measured.flatten_check, before.flatten_check);
+}
+
+/// Flattening that the check could not keep is not run (#785): a sheet with no print, one with
+/// two lines, and a flat page with a side found curved are the same page pixel for pixel with
+/// and without the network and the text lines, and a curled page of print goes through both as
+/// before.
+#[test]
+fn flattening_that_could_not_be_kept_is_not_run_and_the_page_is_the_same() {
+    use crate::page::{STAGE_FLATTEN, STAGE_FLATTEN_CHECK, STAGE_FLATTEN_FLAT, STAGE_FLATTEN_LINES};
+    let ran = |base: &crate::page::PageBase, stage: &str| base.timings.iter().filter(|&&(s, _)| s == stage).count();
+    let mut network_runs = (0, 0);
+    // (the scene, its lines of print, sides found curved, the reason known beforehand)
+    let cases = [
+        (curled(0.3, -0.2, [0.3, 0.1, 0.0]), 0, 0, Some("unmeasured")),
+        (curled(0.3, -0.2, [0.3, 0.1, 0.0]), 2, 0, Some("fewlines")),
+        (curled(0.0, 0.0, [0.3, 0.15, 0.0]), 18, 1, Some("straight")),
+        (curled(0.4, -0.1, [0.15, 0.0, 0.0]), 18, 0, None),
+    ];
+    for (scene, lines, curved_sides, why) in cases {
+        let bytes = png_of(&scene.photograph(&text(lines)));
+        let corners = scene.corners().to_shares(scene.photo.0, scene.photo.1);
+        let ask = |flatten_foresee| crate::PageRequest {
+            flatten: true,
+            flatten_check: true,
+            flatten_trim: true,
+            line_flatten: true,
+            skip_flat: true,
+            flatten_foresee,
+            curved_sides,
+            ..crate::PageRequest::new(&bytes, corners)
+        };
+        let (before, after) = (crate::page_base(&ask(false)).unwrap(), crate::page_base(&ask(true)).unwrap());
+        network_runs = (network_runs.0 + ran(&before, STAGE_FLATTEN), network_runs.1 + ran(&after, STAGE_FLATTEN));
+        assert_eq!(before.page, after.page, "{lines} lines, {curved_sides} curved: the page changed");
+        assert_eq!((before.flattened, before.trim, before.turns), (after.flattened, after.trim, after.turns));
+        assert_eq!(after.flatten_foreseen, why.is_some(), "{lines} lines: {:?}", after.flatten_check);
+        assert!(!before.flatten_foreseen);
+        // the plain page is measured once, before anything else is made
+        assert_eq!(ran(&after, STAGE_FLATTEN_FLAT), 1);
+        match why {
+            Some(why) => {
+                // before: the network ran, its page was checked and thrown away for this very reason
+                assert_eq!((ran(&before, STAGE_FLATTEN), ran(&before, STAGE_FLATTEN_CHECK)), (1, 1));
+                assert!(before.flatten_check.is_some_and(|c| !c.kept), "{:?}", before.flatten_check);
+                assert!(before.line_flatten.as_ref().is_none_or(|l| !l.check.is_some_and(|c| c.kept)));
+                // after: neither ran, and the check says why with the plain page's own measure
+                assert_eq!((ran(&after, STAGE_FLATTEN), ran(&after, STAGE_FLATTEN_CHECK), ran(&after, STAGE_FLATTEN_LINES)), (0, 0, 0));
+                let check = after.flatten_check.expect("the reason is recorded");
+                assert_eq!((check.kept, check.why, check.flattened), (false, why, None));
+                assert_eq!(check.straightened, before.flatten_check.and_then(|c| c.straightened));
+                assert!(after.flatten_decision.as_ref().is_some_and(|d| d.foreseen && d.grid.is_none()));
+                // and the decision holds for the page made again from it
+                let known = after.flatten_decision.clone().unwrap();
+                let again = crate::page_base(&crate::PageRequest { flatten_known: Some(&known), ..ask(true) }).unwrap();
+                assert!(again.flatten_foreseen && again.flatten_reused && again.page == after.page);
+            }
+            None => {
+                assert_eq!(ran(&after, STAGE_FLATTEN), 1);
+                assert_eq!(before.flatten_check, after.flatten_check);
+                assert_eq!(before.line_flatten, after.line_flatten);
+                assert_eq!(before.bend, after.bend);
+            }
+        }
+    }
+    println!("flattening network runs on the four drawn pages: {} before, {} after", network_runs.0, network_runs.1);
+    assert_eq!(network_runs, (4, 1));
+}
+
+/// The text lines' check takes the plain page's measure already made instead of measuring it
+/// again (#785): the same decision and the same figures.
+#[test]
+fn the_text_lines_check_reuses_the_plain_pages_measure() {
+    // the network is not asked about a whole photo, so the text lines decide alone
+    let scene = curled(0.3, -0.3, [0.35, 0.2, 0.0]);
+    let bytes = png_of(&scene.photograph(&text(18)));
+    let ask = |flatten_foresee| crate::PageRequest {
+        flatten: true,
+        flatten_check: true,
+        line_flatten: true,
+        flatten_foresee,
+        ..crate::PageRequest::new(&bytes, crate::page::WHOLE_PHOTO)
+    };
+    let (before, after) = (crate::page_base(&ask(false)).unwrap(), crate::page_base(&ask(true)).unwrap());
+    assert!(before.line_flatten.is_some());
+    assert_eq!(before.line_flatten, after.line_flatten);
+    assert_eq!(before.page, after.page);
+    assert_eq!(before.flattened, after.flattened);
 }

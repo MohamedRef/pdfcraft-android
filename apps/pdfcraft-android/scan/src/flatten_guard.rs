@@ -123,6 +123,25 @@ pub fn guard_with_floor(perspective_px: Option<f64>, flattened_px: Option<f64>, 
     decision
 }
 
+/// Whether the guard's answer is known from the perspective page alone (#785): `Some` reason when
+/// [`guard_with_floor`] keeps the perspective page whatever a flattened page would measure, so
+/// that page need not be made; `None` when a flattened page could still be kept.
+///
+/// Three cases, each read off the guard's own rules: the perspective page was not measured
+/// ([`Why::Unmeasured`]); it reads under half a pixel, so a flattened page 10 % straighter is
+/// under half a pixel too and "already straight" ([`Why::AlreadyStraight`]); or, with a floor,
+/// fewer lines were followed on it than even the far-straighter rule accepts ([`Why::FewLines`]).
+pub fn foreknown(perspective_px: Option<f64>, perspective_lines: Option<u32>, min_lines: u32) -> Option<Why> {
+    let Some(p) = measured(perspective_px) else {
+        return Some(Why::Unmeasured);
+    };
+    if p < STRAIGHT_ENOUGH_PX {
+        return Some(Why::AlreadyStraight);
+    }
+    let fewest = FEW_LINES.min(min_lines);
+    (min_lines > 0 && perspective_lines.is_none_or(|n| n < fewest)).then_some(Why::FewLines)
+}
+
 /// The figure when it is a usable number (finite and not negative), otherwise `None`.
 fn measured(value: Option<f64>) -> Option<f64> {
     value.filter(|v| v.is_finite() && *v >= 0.0)

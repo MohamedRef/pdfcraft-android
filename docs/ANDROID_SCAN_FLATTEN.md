@@ -318,6 +318,55 @@ Known limits: the trim moves in steps of 4 pixels of the page (the reduced copy)
 edge is printed to the border (a photo, a dark band) is not trimmed on that side; a strip lighter
 than 40 grey levels from the paper (a white table) is taken for page.
 
+## Flattening that could not be kept is not run (#785)
+
+On the owner's phone on 21 November 2026 the network ran on all 12 pages of a scan and its page
+was thrown away on 7 (`fewlines` 3, `notbetter` 2, `unmeasured` 2), about 0.6 s of network and as
+much again for drawing its page and trying the lines of text, each time.
+
+The check ([`flatten_guard::guard_with_floor`]) decides from four figures: how straight the lines
+read on the page straightened by its corners and on the flattened one, and how many lines were
+followed on each. For three readings of the first page alone the answer is "not kept" whatever the
+second page reads (`flatten_guard::foreknown`; a test tries it against every flattened figure of a
+grid):
+
+- its lines could not be measured (`unmeasured`);
+- it reads under half a pixel: a flattened page 10 % straighter is under half a pixel too, which
+  the check calls already straight (`straight`);
+- with the floor on lines in force, fewer than 4 lines were followed on it, the fewest the
+  "far straighter" rule accepts (`fewlines`).
+
+With "Skip flattening when the page's own lines show it could not be kept" on (`flattenForesee`,
+key `flatten_foresee`, default on) the automatic mode measures the plain page first (it was needed
+for the check anyway) and in those three cases runs neither the network, nor its check, nor the
+lines of text, whose page the same check would refuse for the same reason. The text lines' check
+also takes that measure instead of measuring the plain page a second time.
+
+**The page is the same pixel for pixel.** What differs is the record: `flatten_check` has the
+reason and the plain page's figures but none for a flattened page, `bend` is 0 (no grid was
+predicted) and `line_flatten` is absent. `flatten_foreseen` says it happened, on the page, in the
+decision kept for the page made again (#549), in the log and in the kept page file.
+
+Measured (desktop replay with `scan_first_timing <folder> 4 <out> plain|foresee`, the owner's
+12 photos as previews of 1280 px; counts, not times, are the result):
+
+| | Before | After |
+|---|---|---|
+| Pages the network ran on | 12 | 10 |
+| Network pages thrown away | 7 | 5 |
+| Pages the lines of text were tried on | 7 | 5 |
+| Preview pixels | | all 12 identical |
+| The two pages' time before their look | | about a quarter of what it was (the network, drawing its page and the lines of text gone) |
+
+So 2 of the 7 wasted runs are known beforehand (one page unmeasured, one with 3 lines). The other
+5 (`notbetter`, and `fewlines` where 4 to 8 lines were followed) depend on what the flattened page
+reads and cannot be known without making it. On drawn pages (`tests_flatten_lines`): a sheet with
+no print, one with two lines and a flat page with a curved side are identical with the option on
+and off, the network runs once instead of four times over the four pages, and a curled page of
+print is flattened with the same check as before.
+
+Not measured: the time on a phone, and how often the three cases occur on other scans.
+
 ## Not done
 
 - The automatic mode is on by default since #466 (above); the figures are from the owner's ten

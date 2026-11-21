@@ -54,6 +54,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Keep the preview's flattening decision for the saved page (#549) | On | Off: the page saved at full size runs the flattening network, its check and the lines of text again, as before. On: when its preview (same photo, corners and flattening settings) is still kept, the saved page is drawn from the preview's grid, or straightened by its corners when the preview was, without running them again. The page log's `flatten_reused` and the page file's `result.flatten_reused` say whether it was |
 | Keep every page's flattening decision for the scan (#549) | On | Off: only the last four previews' decisions are kept, and a memory trim drops them, as before. On: the decision of every page made in the scan (preview or full size, up to 64) is kept until the scan ends, so a page made again after its look changed, or after the app was in the background, is not flattened again; a preview takes it too. On the owner's phone on 2026-11-20 a new look on 12 pages flattened 8 of them again, 0.4–1 s each. Log: `flatten_keep_all` on `page`, with `flatten_reused` |
 | Leave pages that are already flat unflattened (#549) | On | Off: in the automatic mode every page goes through the flattening network, its check and the lines of text, as before. On: a page whose four sides were found straight and whose lines of text are already straight (under half a pixel, on at least the guard's floor of lines) on the page straightened by its corners is left so, without the network. The log's `flatten_skipped_flat` and `flatten_flat_ms` and the page file's `result.flatten_skipped_flat` say when |
+| Skip flattening when the page's own lines show it could not be kept (#785) | On | Off: in the automatic mode the flattening network, its check and the lines of text run on every page that is not found flat, and their page is thrown away when the check refuses it, as before. On: the page straightened by its corners is measured first, and when that measure alone settles the check (its lines could not be followed, it reads under half a pixel, or fewer than 4 lines were followed) none of the three runs. The page is the same pixel for pixel either way; only `flatten_check` loses the flattened page's figures, `bend_pct` is 0 and `line_flatten` is null for such a page. The log's `flatten_foreseen` and the page file's `result.flatten_foreseen` say when |
 | Turn pages upright (#339) | On | Off: a page stays as its corners gave it (Rotate still works) |
 | Unsure pages follow their neighbors (#339) | On | Off: in a scan of several pages each page is turned by its own answer only |
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100. With document types on, the type's own sharpening is scaled by this level over 30 (#424): 60 is twice the type's, 100 three and a third times it, at most 100 |
@@ -140,7 +141,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
              "preview_zoom": true, "look_reuse": true, "first_picture": true, "continuous_pages": true,
              "camera_buttons": true, "review_return": true, "capture_guards": true,
-             "photo_tone": true},
+             "photo_tone": true}, "flatten_foresee": true}
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "bright_share": 0.0, "gutter_band": false, "gutter_loose": false, "gutter_cover": 0.0,
@@ -169,7 +170,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
             "quarter_turns": 3,
             "orientation": {"quarter_turns": 3, "confidence": 0.81, "agreement": 1.0, "tiles": 4, "sure": true},
             "noise": 0.33, "flatten_check": null, "flatten_trim": null, "line_flatten": null, "flatten_reused": false, "flatten_skipped_flat": false,
-            "photo_tone_share": 0.0, "photo_tone_fingers": 0}
+            "photo_tone_share": 0.0, "photo_tone_fingers": 0, "flatten_foreseen": false}
 }
 ```
 

@@ -100,6 +100,8 @@ internal fun AppViewModel.requestScanPreview(index: Int, page: ScanPage, flatten
             "flatten_auto" to lab.flattenAuto, *scanFlattenCheckDiag(p?.flattenCheck),
             // a page already flat left unflattened (#549)
             "skip_flat" to lab.skipFlat, "flatten_skipped_flat" to (p?.flattenSkippedFlat ?: false),
+            // flattening that could not be kept not run (#785)
+            "flatten_foresee" to lab.flattenForesee, "flatten_foreseen" to (p?.flattenForeseen ?: false),
             // the automatic look decided the page's flattening (#466)
             "flatten_decided" to autoFlatten,
             // the photographs' own tone curve (#784): the option, the share of the page that took it, fingers left out

@@ -204,6 +204,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_review_return, o.reviewReturn) { lab.update(o.copy(reviewReturn = it)) }
     // the camera knows which page a photo is of, and does not repeat an automatic photo (#781)
     Sw(R.string.scan_lab_capture_guards, o.captureGuards) { lab.update(o.copy(captureGuards = it)) }
+    // flattening that the check could not keep is not run (#785)
+    Sw(R.string.scan_lab_flatten_foresee, o.flattenForesee) { lab.update(o.copy(flattenForesee = it)) }
 
     SettingsHeader(stringResource(R.string.scan_lab_group_reports))
     // the research detectors (#305, #306): a report only, in kept scans, so it changes no page
