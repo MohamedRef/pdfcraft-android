@@ -195,6 +195,13 @@ pub struct ScanPageRequest {
     /// corners without the network, its check or the text lines (#549). False flattens it as before.
     #[uniffi(default = false)]
     pub skip_flat: bool,
+    /// With `flatten_check` (the automatic mode): the page straightened by its corners is measured
+    /// before the flattening network runs, and when that measure alone says the check could keep
+    /// no flattened page (not measured, already straight, or too few lines of text), the network,
+    /// its check and the text lines are not run (#785). The page is the same either way. False
+    /// runs them and throws their page away, as before.
+    #[uniffi(default = false)]
+    pub flatten_foresee: bool,
 }
 
 /// How a page was stored (#505). Short words and numbers only: it goes into the log as it is.
@@ -514,6 +521,8 @@ pub struct ScanPageResult {
     pub flatten_reused: bool,
     /// The page was found flat already and not flattened (#549).
     pub flatten_skipped_flat: bool,
+    /// No flattened page could have been kept, known before the network ran, so it did not (#785).
+    pub flatten_foreseen: bool,
     /// The quarter turns clockwise the page was given to stand upright (#339): 0 when it was not
     /// asked, already upright, or the classifier was not sure.
     pub quarter_turns: u8,
@@ -1179,6 +1188,7 @@ pub(crate) fn page_request<'a>(
         size: pdfcraft_scan::size::SizeChoice::from_id(&request.size).unwrap_or_default(),
         auto_encode: request.auto_encode,
         skip_flat: request.skip_flat,
+        flatten_foresee: request.flatten_foresee,
         ..PageRequest::new(photo, corners)
     }
 }
@@ -1311,6 +1321,8 @@ pub struct ScanPreview {
     pub line_flatten: Option<ScanLineFlatten>,
     /// The page was found flat already and not flattened (#549).
     pub flatten_skipped_flat: bool,
+    /// No flattened page could have been kept, known before the network ran, so it did not (#785).
+    pub flatten_foreseen: bool,
     /// The straightened page was still at hand from an earlier preview: only its look was made.
     pub reused: bool,
     /// Clean scan or Whiteboard found the page's light estimate kept from an earlier look of the
@@ -1344,6 +1356,8 @@ struct PreviewKey {
     line_flatten: bool,
     /// A flat page left unflattened (#549) depends on its sides found straight.
     skip_flat: bool,
+    /// Flattening that could not be kept is not run (#785): the decision's record differs.
+    flatten_foresee: bool,
     curved_sides: u8,
     upright: bool,
     turns: u8,
@@ -1378,6 +1392,7 @@ fn preview_key(photo: PathBuf, request: &ScanPageRequest, corners: [f32; 8], max
         flatten_min_lines: request.flatten_min_lines,
         line_flatten: request.line_flatten,
         skip_flat: request.skip_flat,
+        flatten_foresee: request.flatten_foresee,
         curved_sides: request.curved_sides,
         upright: request.upright,
         turns: request.turns % 4,
@@ -1709,6 +1724,7 @@ pub(crate) fn preview_stoppable(
         trim: base.trim.map(|t| ScanTrim::of(t, before_turn(base.page.width, base.page.height, base.turns))),
         line_flatten: base.line_flatten.as_ref().map(Into::into),
         flatten_skipped_flat: base.flatten_skipped_flat,
+        flatten_foreseen: base.flatten_foreseen,
         reused,
         light_reused: applied.light_reused,
         timings,
@@ -1859,6 +1875,7 @@ fn result_of(page: pdfcraft_scan::page::PageResult, path: String) -> ScanPageRes
         line_flatten: page.line_flatten.as_ref().map(Into::into),
         flatten_reused: page.flatten_reused,
         flatten_skipped_flat: page.flatten_skipped_flat,
+        flatten_foreseen: page.flatten_foreseen,
         quarter_turns: page.quarter_turns,
         orientation: page.orientation.map(orientation_of),
         turns: page.turns,
@@ -2111,6 +2128,7 @@ pub(crate) mod tests {
             flatten_reuse: false,
             flatten_keep_all: false,
             skip_flat: false,
+            flatten_foresee: false,
         }
     }
 
@@ -3161,6 +3179,20 @@ pub(crate) mod tests {
         assert_eq!(level.trim, None);
         let preview = preview_in(&root, &ScanPageRequest { flatten_trim: true, ..ask(&root.join("bowed.png"), "unused") }, 1280).unwrap();
         assert!(preview.trim.is_some());
+        // flattening that could not be kept is not run (#785): the stored page is the same bytes
+        // with and without it, and the result and the preview say when the network was left out
+        for (name, flattened) in [("bowed.png", true), ("level.png", false)] {
+            let off = process_in(&root, &ask(&root.join(name), "foresee-off")).unwrap();
+            let asked = ScanPageRequest { flatten_foresee: true, ..ask(&root.join(name), "foresee-on") };
+            let on = process_in(&root, &asked).unwrap();
+            assert!(std::fs::read(&on.path).unwrap() == std::fs::read(&off.path).unwrap(), "{name}: the stored page changed");
+            let ran = on.timings.iter().any(|t| t.stage == "scan_flatten");
+            println!("{name}: foreseen {}, why {:?}", on.flatten_foreseen, on.flatten_check.as_ref().map(|c| c.why.clone()));
+            assert_eq!((on.flattened, off.flattened, off.flatten_foreseen), (flattened, flattened, false), "{name}");
+            assert_eq!(on.flatten_foreseen, !ran, "{name}: {:?}", on.timings);
+            assert!(!(on.flattened && on.flatten_foreseen));
+            assert_eq!(preview_in(&root, &asked, 1280).unwrap().flatten_foreseen, on.flatten_foreseen, "{name}: the preview");
+        }
         std::fs::remove_dir_all(root).unwrap();
     }
 

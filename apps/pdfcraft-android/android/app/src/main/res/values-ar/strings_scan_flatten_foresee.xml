@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Flattening that the check could not keep is not run (#785) -->
+<resources>
+    <string name="scan_lab_flatten_foresee">تخطّي التسطيح عندما تُظهر سطور الصفحة نفسها أنه لن يُعتمد</string>
+</resources>

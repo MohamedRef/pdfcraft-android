@@ -134,7 +134,9 @@ page arrives. On this scan that is 6 of 12 pages.
   first picture waits for it. The live outline at the shutter (`ScanCapture.previewQuad`) could
   stand in until the search ends, but it was found on only 13 of the 23 shots in the log.
 - **Skipping the flattening network on pages it will not keep** would change which pages are
-  flattened, so it is not a speed-only change.
+  flattened, so it is not a speed-only change. (Done since for the pages where the check's answer
+  is known before the network runs, 2 of these 7, with no page changed:
+  [ANDROID_SCAN_FLATTEN.md](ANDROID_SCAN_FLATTEN.md), "Flattening that could not be kept is not run".)
 - **A made page flying from the viewfinder to the pages button** after a shot. The camera screen
   shows nothing of the kind today. It would touch `ui/scan/ScanCameraScreen.kt` (an overlay over
   the viewfinder, the animation, the button's position), `ScanCameraRouter.kt` (handing the first

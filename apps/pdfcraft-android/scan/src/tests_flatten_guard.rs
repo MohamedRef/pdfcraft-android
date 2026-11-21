@@ -338,3 +338,34 @@ fn the_guard_chooses_between_two_shaded_pages_by_their_lines() {
     let tiny = Rgb { width: 8, height: 8, data: vec![200; 8 * 8 * 3] };
     assert_eq!(crate::page::evened_grey(&tiny).data, vec![200u8; 64]);
 }
+
+/// What the guard can say from the perspective page alone is exactly when it keeps that page
+/// whatever the flattened one measures (#785): tried against every flattened figure and line
+/// count of a wide grid, with and without the floor.
+#[test]
+fn what_is_known_beforehand_is_what_no_flattened_page_can_change() {
+    use crate::flatten_guard::{foreknown, guard_with_floor};
+    let figures =
+        [None, Some(f64::NAN), Some(-1.0), Some(0.0), Some(0.2), Some(0.44), Some(0.45), Some(0.49), Some(0.5), Some(0.6), Some(3.0), Some(40.0)];
+    let counts = [None, Some(0), Some(1), Some(3), Some(4), Some(5), Some(7), Some(8), Some(9), Some(30)];
+    let (mut known, mut open) = (0, 0);
+    for floor in [0, 1, 3, 4, 6, 8, 12] {
+        for p in figures {
+            for p_lines in counts {
+                let ever_kept =
+                    figures.iter().any(|f| counts.iter().any(|f_lines| guard_with_floor(p, *f, (p_lines, *f_lines), floor).kept == Kept::Flattened));
+                let said = foreknown(p, p_lines, floor);
+                assert_eq!(said.is_none(), ever_kept, "perspective {p:?} on {p_lines:?} lines, floor {floor}: {said:?}");
+                known += usize::from(said.is_some());
+                open += usize::from(said.is_none());
+            }
+        }
+    }
+    assert!(known > 100 && open > 100, "{known} known, {open} open");
+    // each reason is the guard's own word for it
+    assert_eq!(foreknown(None, Some(20), 8), Some(Why::Unmeasured));
+    assert_eq!(foreknown(Some(0.3), Some(20), 8), Some(Why::AlreadyStraight));
+    assert_eq!(foreknown(Some(9.0), Some(3), 8), Some(Why::FewLines));
+    assert_eq!(foreknown(Some(9.0), Some(3), 0), None, "no floor: lines do not count");
+    assert_eq!(foreknown(Some(9.0), Some(4), 8), None, "four lines can still be far straighter");
+}
