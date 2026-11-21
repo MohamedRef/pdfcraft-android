@@ -42,8 +42,10 @@ internal fun AppViewModel.answerScanBatchMarks(remove: Boolean) {
 }
 
 private fun AppViewModel.openScanBatch(what: ScanBatchWhat, keys: List<String>, from: String, withMarks: Int): Int? {
-    val pass = ScanBatchPass(what, keys, 0, SystemClock.elapsedRealtime(), shown = setOf(keys[0]), withMarks = withMarks)
+    val pass = ScanBatchPass(what, keys, 0, SystemClock.elapsedRealtime(), shown = setOf(keys[0]), withMarks = withMarks, from = from)
     Diag.event(DiagArea.Scan, "batch_open", *scanBatchOpenDiag(what, keys.size, from, withMarks))
+    // a review of flagged pages (#783): what it is over and where it starts
+    if (pass.review && scanLab.options.reviewBorders) scanReviewOpened(pass)
     return when (what) {
         ScanBatchWhat.Borders -> {
             scanBatch.borders = pass
@@ -59,32 +61,46 @@ private fun AppViewModel.openScanBatch(what: ScanBatchWhat, keys: List<String>, 
 /**
  * The borders pass leaves the page shown towards [dir] (-1, +1, or 0 for the tick), with its
  * corners [q] and what was done on it. The page keeps them; past the last page or with the tick
- * the pass ends.
+ * the pass ends. [back] is Back answered Keep (#783): the page keeps its corners and the pass ends there.
  */
-internal fun AppViewModel.leaveScanBatchPage(dir: Int, q: FloatArray, stats: ScanCropStats) {
+internal fun AppViewModel.leaveScanBatchPage(dir: Int, q: FloatArray, stats: ScanCropStats, back: Boolean = false) {
     val pass = scanBatch.borders ?: return
     val index = scanPages.indexOfFirst { it.key == pass.key }
     var now = pass
     if (index >= 0) {
         val page = scanPages[index]
         val changed = !scanSameCorners(page.corners, q)
+        // what the page was before it was left, for the review's log line (#783)
+        val was = scanPageReview(page, page.file.absolutePath in scanSteps.searched)
         scanCornersChanging(index, q)
         val after = scanPages[index]
         scanPages[index] = after.copy(corners = q, crop = after.crop?.plus(stats) ?: stats)
         if (changed) now = now.copy(changed = now.changed + page.key)
+        if (pass.review && scanLab.options.reviewBorders) {
+            Diag.event(DiagArea.Scan, "review_page", *scanReviewPageDiag(pass.at + 1, pass.keys.size, index + 1, scanPages.size, was, scanReviewOutcome(true, changed, back), stats.ms))
+        }
     }
-    val next = scanBatchStep(now, dir)
+    val next = if (back) null else scanBatchStep(now, dir)
     if (next == null) {
-        endScanBatch(now, "done")
+        endScanBatch(now, if (back) "back_kept" else "done")
         return
     }
     scanBatch.borders = next.copy(shown = next.shown + (next.key ?: ""))
 }
 
-/** The borders pass given up with Back: what was done on the pages already left stays. */
-internal fun AppViewModel.cancelScanBatch() {
+/**
+ * The borders pass given up with Back: what was done on the pages already left stays. [dropped] is
+ * Back answered Discard for corners moved on the page shown (#783); that page stays as it was.
+ */
+internal fun AppViewModel.cancelScanBatch(dropped: Boolean = false) {
     val pass = scanBatch.borders ?: return
-    endScanBatch(pass, "back")
+    val index = scanPages.indexOfFirst { it.key == pass.key }
+    if (index >= 0 && pass.review && scanLab.options.reviewBorders) {
+        val page = scanPages[index]
+        val was = scanPageReview(page, page.file.absolutePath in scanSteps.searched)
+        Diag.event(DiagArea.Scan, "review_page", *scanReviewPageDiag(pass.at + 1, pass.keys.size, index + 1, scanPages.size, was, scanReviewOutcome(false, dropped, true), 0L))
+    }
+    endScanBatch(pass, if (dropped) "back_dropped" else "back")
 }
 
 /** A page of the borders pass is gone (deleted, or the scan changed): the pass ends. */
@@ -97,7 +113,13 @@ private fun AppViewModel.endScanBatch(pass: ScanBatchPass, how: String) {
         ScanBatchWhat.Borders -> scanBatch.borders = null
         ScanBatchWhat.Look -> scanBatch.look = null
     }
-    Diag.event(DiagArea.Scan, "batch_done", *scanBatchDoneDiag(pass, SystemClock.elapsedRealtime() - pass.startedAt, how))
+    val ms = SystemClock.elapsedRealtime() - pass.startedAt
+    Diag.event(DiagArea.Scan, "batch_done", *scanBatchDoneDiag(pass, ms, how))
+    // a review (#783): how many of its pages are still to check when it ends
+    if (pass.review && scanLab.options.reviewBorders) {
+        val left = scanReviewPages().count { it.key in pass.keys }
+        Diag.event(DiagArea.Scan, "review_done", *scanReviewDoneDiag(pass, left, ms, how))
+    }
 }
 
 /** The look pass ends: Enhance was left. */

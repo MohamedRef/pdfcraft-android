@@ -89,7 +89,9 @@ internal class ScanLabController(private val vm: AppViewModel) {
                 // #785: the first picture shown while the page was made
                 firstPicture = vm.pageQueue.firstRecord(page)?.json(),
                 // #786: the document screen's view and what the continuous one showed of this page
-                documentView = vm.scanSteps.docView.json(page.key, lab.continuousPages))
+                documentView = vm.scanSteps.docView.json(page.key, lab.continuousPages),
+                // #783: what was known of the page's borders when it was kept
+                review = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageReview(page, page.file.absolutePath in vm.scanSteps.searched).id)
         }
     }
 

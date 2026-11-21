@@ -1794,7 +1794,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** The scan in progress (or the Add image photo being taken); null when there is none. */
     private fun scanSession(): ScanSession? {
         if (shotFile == null && scanPages.isEmpty()) return null
-        return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten, it.auto, it.marks) })
+        return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten, it.auto, it.marks, review = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageReview(it, it.file.absolutePath in scanSteps.searched).id) })
     }
 
     internal fun restoreScan(text: String, session: ScanSession): kotlinx.coroutines.Job {
@@ -1807,7 +1807,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val pages = withContext(Dispatchers.IO) {
                 // the two halves of a book spread share a photo, so each photo's thumbnail is made once
                 val thumbs = HashMap<String, androidx.compose.ui.graphics.ImageBitmap?>()
-                session.pages.mapNotNull { p -> File(p.path).let { f -> thumbs.getOrPut(p.path) { scanThumb(f) }?.let { ScanPage(f, it, p.corners, p.found, turns = p.turns, preset = p.preset, book = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), flatten = p.flatten ?: true.takeIf { session.flatten }, look = p.look ?: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(), auto = p.auto, marks = p.marks, uncropped = io.github.artcraftandroid.pdfcraft.ui.scan.scanRestoredUncropped(p.corners, p.found, io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(p.path)?.straightened == true)) } } }
+                session.pages.mapNotNull { p -> File(p.path).let { f -> thumbs.getOrPut(p.path) { scanThumb(f) }?.let { ScanPage(f, it, p.corners, p.found, turns = p.turns, preset = p.preset, book = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), flatten = p.flatten ?: true.takeIf { session.flatten }, look = p.look ?: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(), auto = p.auto, marks = p.marks, uncropped = io.github.artcraftandroid.pdfcraft.ui.scan.scanRestoredUncropped(p.corners, p.found, io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(p.path)?.straightened == true),
+                    // what the draft knew of the page's borders (#783); a draft from before it knew nothing
+                    reviewKept = io.github.artcraftandroid.pdfcraft.ui.scan.ScanReviewState.of(p.review) ?: io.github.artcraftandroid.pdfcraft.ui.scan.ScanReviewState.Unknown) } } }
             }
             // the scanner's models before any reopened page is made (#764): after the app starts
             // again only a searched photo prepared them, so a scan opened from Recent scans or the

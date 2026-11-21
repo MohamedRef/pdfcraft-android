@@ -368,6 +368,14 @@ internal data class ScanLab(
      */
     val cameraButtons: Boolean = true,
     /**
+     * The review of pages whose borders need a check (#783), on top of the offer of #758: such a page
+     * is marked on the document screen, the offer comes before the one after an import, Save PDF and
+     * Share ask before they store one as it is, a reopened draft keeps what was known of each page,
+     * a search that answers late leaves corners the person set, the pass says "n of m to check" and
+     * Back asks about corners moved on the page shown. Off: the offer alone, as before.
+     */
+    val reviewBorders: Boolean = true,
+    /**
      * Review pages on the camera opens the scan's pages one under the other on the newest page, with
      * one Back to camera button (and Android's Back) that returns to the camera as it was left
      * (#780). Needs the continuous pages. Off: the newest page in Enhance, where the way back is
@@ -409,6 +417,7 @@ internal data class ScanLab(
         "first_picture" to firstPicture,
         "continuous_pages" to continuousPages,
         "camera_buttons" to cameraButtons,
+        "review_borders" to reviewBorders,
         "review_return" to reviewReturn,
         "capture_guards" to captureGuards,
     )
@@ -424,6 +433,7 @@ internal data class ScanLab(
         .put("first_picture", firstPicture)
         .put("continuous_pages", continuousPages)
         .put("camera_buttons", cameraButtons)
+        .put("review_borders", reviewBorders)
         .put("review_return", reviewReturn)
         .put("capture_guards", captureGuards)
 
@@ -439,6 +449,7 @@ internal data class ScanLab(
         "first_picture" to flag(firstPicture),
         "continuous_pages" to flag(continuousPages),
         "camera_buttons" to flag(cameraButtons),
+        "review_borders" to flag(reviewBorders),
         "review_return" to flag(reviewReturn),
         "capture_guards" to flag(captureGuards),
     ).joinToString(";") { (k, v) -> "$k=$v" }
@@ -549,6 +560,7 @@ internal data class ScanLab(
                 firstPicture = on("first_picture", default.firstPicture),
                 continuousPages = on("continuous_pages", default.continuousPages),
                 cameraButtons = on("camera_buttons", default.cameraButtons),
+                reviewBorders = on("review_borders", default.reviewBorders),
                 reviewReturn = on("review_return", default.reviewReturn),
                 captureGuards = on("capture_guards", default.captureGuards),
             )
@@ -765,6 +777,8 @@ internal fun scanTestPageJson(
     firstPicture: JSONObject? = null,
     /** The document screen's view when the page was kept and what the continuous view showed of it (#786); null with the option off. */
     documentView: JSONObject? = null,
+    /** What was known of the page's borders when it was kept (#783), as [io.github.artcraftandroid.pdfcraft.ui.scan.ScanReviewState.id]; null when not known. */
+    review: String? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -860,6 +874,8 @@ internal fun scanTestPageJson(
         .put("first_picture", firstPicture ?: JSONObject.NULL)
         // #786: the document screen's view, and what this page showed in the continuous one
         .put("document_view", documentView ?: JSONObject.NULL)
+        // #783: what was known of the page's borders when it was kept
+        .put("review", review ?: JSONObject.NULL)
     page.put(
         "result",
         result?.let {
