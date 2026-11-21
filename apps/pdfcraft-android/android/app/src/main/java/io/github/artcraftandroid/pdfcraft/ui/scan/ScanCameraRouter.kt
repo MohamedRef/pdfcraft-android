@@ -60,6 +60,8 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         val v = vm()
         val m = model()
         val forImage = v.editor.imageShot
+        // the camera asked for again while the pages were under review (#780), by Add page: the review is over
+        if (!forImage && !v.scanRetaking) v.scanSteps.endReview("add", v.scanPages.size)
         val choice = if (forImage) ScanCameraChoice.PhoneApp else m.choice
         when (val r = scanCaptureRoute(m.hasCamera, m.granted, refused, choice)) {
             ScanCaptureRoute.PhoneApp -> {
@@ -128,8 +130,9 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         val merging = m.merging
         val pending = m.session.pending
         val undone = m.session.undone
-        m.hide()
         val v = vm()
+        // a retake asked for from Review pages was closed without a photo (#780): the camera it left keeps its photos
+        m.hide(keepSession = scanReviewKeepsSession(v.scanSteps.reviewing, v.scanRetaking))
         val lab = v.scanLab.options
         if (lab.cameraButtons) Diag.event(DiagArea.Scan, "camera_action", *scanCameraActionDiag(action, "ok", ScanCameraBlock.None, v.scanPages.size, pending))
         // closed with pages taken: the document screen shows them (#460)
@@ -142,9 +145,10 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
 
     /**
      * Review pages (#780): the camera steps aside without ending anything, and the scan shows its
-     * newest page in Enhance, where a page is checked, retaken, turned or deleted and the others
-     * are a swipe or one step back. Add page, there or on the pages, brings this camera back; the
-     * photos Undo knows are kept for that.
+     * pages one under the other on the newest (#786), where a tap opens a page to be checked,
+     * retaken, turned or deleted. Back to camera there brings this camera back in one tap; the
+     * photos Undo knows are kept for that. With the testing option "Review pages opens the pages,
+     * with Back to camera" off, the newest page in Enhance, as at first.
      */
     private fun review() {
         val m = model()
@@ -156,8 +160,12 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         }
         Diag.event(DiagArea.Scan, "camera_action", *scanCameraActionDiag("review", "ok", ScanCameraBlock.None, pages, m.session.pending))
         m.hide(keepSession = true)
-        // the camera opened from the pages (Add page): the newest page, not the grid again
-        if (v.scanLab.options.steps && v.scanSteps.document) v.scanSteps.openEnhance(pages, pages)
+        val lab = v.scanLab.options
+        when (scanReviewTarget(lab.reviewReturn, lab.steps, lab.continuousPages)) {
+            ScanReviewTarget.Pages -> v.scanSteps.showReview(ScanDocAnchor(v.scanPages.lastOrNull()?.key, pages - 1), pages)
+            // the camera opened from the pages (Add page): the newest page, not the grid again
+            ScanReviewTarget.Enhance -> if (lab.steps && v.scanSteps.document) v.scanSteps.openEnhance(pages, pages)
+        }
         // the photo not taken is let go of; the pages stay
         v.onScanPhoto(false)
     }
@@ -215,6 +223,8 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         val v = vm()
         // the photo's file, for Undo and for what Done waits for (#780): a retake or the last photo before the camera closes is neither
         val handed = v.shotFile?.takeIf { more && !v.scanRetaking && v.scanLab.options.cameraButtons && v.scanLab.options.cameraBar }
+        // a retake asked for from Review pages (#780): the camera it left keeps the photos Undo knows
+        val keepSession = scanReviewKeepsSession(v.scanSteps.reviewing, v.scanRetaking)
         // One page mode: Adjust borders opens on the page once it is in the scan (#458)
         if (!more) {
             val lab = v.scanLab.options
@@ -227,7 +237,7 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         v.onScanPhoto(true)
         if (handed != null) model().sessionHanded(handed.path, android.os.SystemClock.elapsedRealtime())
         // the camera stays open for the next page, in a file of its own
-        if (more) v.takeScanPhoto() else model().hide()
+        if (more) v.takeScanPhoto() else model().hide(keepSession)
     }
 
     /**
@@ -332,7 +342,9 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         }
         // a retake replaces one page
         val picked = if (v.scanRetaking) uris.take(1) else uris
-        model().hide()
+        // photos imported while the pages were under review (#780): the camera that waited is let go of, as Import on the camera does
+        if (!v.scanRetaking) v.scanSteps.endReview("import", v.scanPages.size)
+        model().hide(scanReviewKeepsSession(v.scanSteps.reviewing, v.scanRetaking))
         activity.lifecycleScope.launch {
             val dir = File(activity.cacheDir, "camera").apply { mkdirs() }
             val files = withContext(Dispatchers.IO) {

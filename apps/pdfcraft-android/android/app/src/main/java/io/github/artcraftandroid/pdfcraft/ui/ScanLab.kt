@@ -375,6 +375,13 @@ internal data class ScanLab(
      * Back asks about corners moved on the page shown. Off: the offer alone, as before.
      */
     val reviewBorders: Boolean = true,
+    /**
+     * Review pages on the camera opens the scan's pages one under the other on the newest page, with
+     * one Back to camera button (and Android's Back) that returns to the camera as it was left
+     * (#780). Needs the continuous pages. Off: the newest page in Enhance, where the way back is
+     * More, then Add page, as at first.
+     */
+    val reviewReturn: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans and reporting what the detectors see change no page). */
     val asDesigned: Boolean get() = copy(keep = false, inspect = false) == ScanLab()
@@ -402,6 +409,7 @@ internal data class ScanLab(
         "continuous_pages" to continuousPages,
         "camera_buttons" to cameraButtons,
         "review_borders" to reviewBorders,
+        "review_return" to reviewReturn,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -416,6 +424,7 @@ internal data class ScanLab(
         .put("continuous_pages", continuousPages)
         .put("camera_buttons", cameraButtons)
         .put("review_borders", reviewBorders)
+        .put("review_return", reviewReturn)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -430,6 +439,7 @@ internal data class ScanLab(
         "continuous_pages" to flag(continuousPages),
         "camera_buttons" to flag(cameraButtons),
         "review_borders" to flag(reviewBorders),
+        "review_return" to flag(reviewReturn),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -539,6 +549,7 @@ internal data class ScanLab(
                 continuousPages = on("continuous_pages", default.continuousPages),
                 cameraButtons = on("camera_buttons", default.cameraButtons),
                 reviewBorders = on("review_borders", default.reviewBorders),
+                reviewReturn = on("review_return", default.reviewReturn),
             )
         }
     }

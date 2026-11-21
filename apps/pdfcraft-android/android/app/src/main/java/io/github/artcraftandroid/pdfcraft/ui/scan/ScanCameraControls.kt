@@ -206,3 +206,34 @@ internal enum class ScanCameraCue {
  */
 internal fun scanCameraActionDiag(action: String, result: String, why: ScanCameraBlock, pages: Int, pending: Int, removed: Int = 0): Array<Pair<String, Any?>> =
     arrayOf("action" to action, "result" to result, "why" to why.id, "pages" to pages, "pending" to pending, "removed" to removed)
+
+/**
+ * Where Review pages on the camera leads (#780): the scan's pages one under the other on the newest
+ * page, with Back to camera, or the newest page in Enhance as at first, where the way back was
+ * More, then Add page.
+ */
+internal enum class ScanReviewTarget(val id: String) {
+    /** The document screen's continuous pages (#786), with Back to camera. */
+    Pages("pages"),
+
+    /** The newest page in Enhance: the testing option off, or no continuous pages to show. */
+    Enhance("enhance"),
+}
+
+/**
+ * Review pages opens the continuous pages when its testing option ([reviewReturn]) is on and they
+ * exist: the scan's screens in steps ([steps]) and the continuous pages ([continuous]) are on.
+ */
+internal fun scanReviewTarget(reviewReturn: Boolean, steps: Boolean, continuous: Boolean): ScanReviewTarget =
+    if (reviewReturn && steps && continuous) ScanReviewTarget.Pages else ScanReviewTarget.Enhance
+
+/**
+ * Whether a camera that closes keeps the photos Undo knows (#780): only the camera of a retake
+ * asked for while the pages are under review, whether it took its photo or was closed without one.
+ * The camera that Review pages left is still the one Back to camera returns to.
+ */
+internal fun scanReviewKeepsSession(reviewing: Boolean, retaking: Boolean): Boolean = reviewing && retaking
+
+/** The log's `camera_review_end` line (#780): how the review ended ([by]: `button`, `back`, `add`, `import`), how long it showed, and the scan's pages. */
+internal fun scanReviewEndDiag(by: String, ms: Long, pages: Int): Array<Pair<String, Any?>> =
+    arrayOf("by" to by, "ms" to ms.coerceAtLeast(0L), "pages" to pages)
