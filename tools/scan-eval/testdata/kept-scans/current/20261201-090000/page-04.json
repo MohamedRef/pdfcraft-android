@@ -1,0 +1,96 @@
+{
+ "corners": [
+  0.0,
+  0.0,
+  1.0,
+  0.0,
+  1.0,
+  1.0,
+  0.0,
+  1.0
+ ],
+ "kind": "other",
+ "paper": "unknown",
+ "curved": false,
+ "notes": "",
+ "checked": false,
+ "app": "0.0.46-beta (46012)",
+ "outcome": "saved",
+ "found": null,
+ "finding": {
+  "source": "none",
+  "confidence": 0.2,
+  "second_look": "kept"
+ },
+ "look": "auto",
+ "strength": 60,
+ "flatten": false,
+ "options": {
+  "finder": "auto",
+  "refine": true,
+  "second_look": true,
+  "flatten_auto": true,
+  "upright": true
+ },
+ "auto_decisions": {
+  "undone": "none",
+  "fingers_ms": 80
+ },
+ "document_type": {
+  "preset": "document"
+ },
+ "turns": {
+  "manual": null,
+  "auto": true,
+  "total": 0,
+  "followed": false,
+  "source": "classifier"
+ },
+ "preview": {
+  "shown": true,
+  "ms": 700
+ },
+ "crop": null,
+ "borders_checked": false,
+ "unsure": true,
+ "capture": {
+  "source": "in_app",
+  "mode": "batch",
+  "width": 4000,
+  "height": 3000,
+  "rotation": 90,
+  "capture_ms": 700,
+  "sharpness_ms": 80,
+  "auto_shot": true,
+  "merge": null
+ },
+ "page_look": {
+  "id": "clean"
+ },
+ "position": 4,
+ "made_full_before_save": true,
+ "from_recent": false,
+ "edited_from_viewer": false,
+ "encoding": {
+  "size_choice": "balanced",
+  "bytes": 400000
+ },
+ "result": {
+  "width": 1000,
+  "height": 1400,
+  "format": "jpeg",
+  "dpi": 200,
+  "paper": "custom",
+  "flattened": false,
+  "flatten_check": {
+   "kept": false,
+   "why": "notbetter"
+  },
+  "line_flatten": null,
+  "flatten_reused": false,
+  "flatten_skipped_flat": false,
+  "orientation": {
+   "sure": true
+  }
+ }
+}

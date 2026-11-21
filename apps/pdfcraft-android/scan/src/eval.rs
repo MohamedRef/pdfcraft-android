@@ -15,14 +15,14 @@
 use std::time::Instant;
 
 use crate::aspect::FRAME_35MM_DIAGONAL;
-use crate::detect::{Finder, detect_with};
+use crate::detect::{Detection, Finder, QuadSource, detect_with, second_look_takes, second_look_wanted};
 use crate::encode::{JPEG_QUALITY, Raster, encode_jpeg, encode_png_bilevel};
 use crate::look::{Look, Pixels};
 use crate::metrics_compare::{psnr, ssim};
 use crate::metrics_geometry::{aspect_err, corner_err, iou, no_touch};
 use crate::metrics_tone::{hue_shift, illum_spread, ink_contrast, paper_white, sharpness};
 use crate::page::{PageRequest, page_base, page_look};
-use crate::refine::{Pyramid, RefineOptions, refine};
+use crate::refine::{Pyramid, RefineOptions, Refined, refine};
 use crate::straightness::line_straightness;
 use crate::synth::{Kind, Scene, label};
 use crate::{Luma, Photo, Quad, Rgb, luma};
@@ -93,6 +93,9 @@ pub struct Measured {
     pub kind: Kind,
     /// The detector returned a page (the whole photo is used otherwise).
     pub detected: bool,
+    /// What the second look did (#290): `not_asked`, `kept` or `taken`, the words the app's log
+    /// and page files use. Always `not_asked` without [`Options::second_look`].
+    pub second_look: &'static str,
     pub values: [f64; METRICS.len()],
     /// (stage, milliseconds), in pipeline order.
     pub timings: Vec<(&'static str, f64)>,
@@ -163,11 +166,16 @@ pub struct Options {
     /// the time of those two stages. The CI gate leaves it out to stay fast: its clean-up
     /// measures come from the page made from the true corners either way.
     pub look_found_page: bool,
+    /// The second look (#290), which the app has on by default (ScanLab's `secondLook`): with
+    /// [`Finder::Auto`] and `refine`, the line detector is asked too when the network found
+    /// nothing or an unsure page with few sides on edges. Off here by default, so the CI gate and
+    /// reports made before #779 measure what they always did; `scan-eval --second-look` turns it on.
+    pub second_look: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { finder: Finder::Auto, refine: true, threads: 4, look_found_page: true }
+        Options { finder: Finder::Auto, refine: true, threads: 4, look_found_page: true, second_look: false }
     }
 }
 
@@ -217,6 +225,7 @@ pub fn measure(entry: &Entry, options: &Options) -> Measured {
         name: entry.name.clone(),
         kind: entry.kind,
         detected: false,
+        second_look: "not_asked",
         values: [f64::NAN; METRICS.len()],
         timings: Vec::new(),
         found: None,
@@ -230,13 +239,37 @@ pub fn measure(entry: &Entry, options: &Options) -> Measured {
     let Ok(photo) = Photo::decode(&entry.photo) else { return m };
     let (w, h) = (photo.width, photo.height);
     lap("decode", &mut m);
-    let found = detect_with(&photo, options.finder);
+    let mut found = detect_with(&photo, options.finder);
     lap("detect", &mut m);
+    // The second look, step for step as the app's `find_in` (apps/pdfcraft-android/src/scan.rs)
+    // makes it: the same two rules decide, and the refined page it settles on is the one used.
+    let mut settled: Option<(Pyramid, Option<Refined>)> = None;
+    if options.second_look && options.refine && options.finder == Finder::Auto && found.source != QuadSource::Lines {
+        let pyramid = Pyramid::new(photo.luma());
+        let on_edges = |r: &Refined| r.sides.iter().filter(|s| s.refined).count();
+        let mut kept = found.quad.map(|q| refine(&pyramid, &q, &RefineOptions::default()));
+        if second_look_wanted(&found, kept.as_ref().map_or(0, on_edges)) {
+            let lines = detect_with(&photo, Finder::Lines);
+            let lines_fit = lines.quad.map(|q| refine(&pyramid, &q, &RefineOptions::default()));
+            if lines.quad.is_some() && second_look_takes(found.quad.is_some(), lines_fit.as_ref().map_or(0, on_edges)) {
+                found = Detection { passes: found.passes, ..lines };
+                kept = lines_fit;
+                m.second_look = "taken";
+            } else {
+                m.second_look = "kept";
+            }
+            lap("second_look", &mut m);
+        }
+        settled = Some((pyramid, kept));
+    }
     m.detected = found.quad.is_some();
     let quad = match found.quad {
         Some(q) if options.refine => {
-            let pyramid = Pyramid::new(photo.luma());
-            let refined = refine(&pyramid, &q, &RefineOptions::default()).quad;
+            let refined = match settled {
+                Some((_, Some(done))) => done.quad,
+                Some((pyramid, None)) => refine(&pyramid, &q, &RefineOptions::default()).quad,
+                None => refine(&Pyramid::new(photo.luma()), &q, &RefineOptions::default()).quad,
+            };
             lap("refine", &mut m);
             refined
         }
