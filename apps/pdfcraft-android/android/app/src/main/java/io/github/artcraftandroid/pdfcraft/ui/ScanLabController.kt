@@ -87,7 +87,9 @@ internal class ScanLabController(private val vm: AppViewModel) {
                 // #759: the scan's own paper and the card rule
                 paperHint = vm.scanPaperHint(page, lab)?.name?.lowercase() ?: "none", cardPaper = vm.scanCardPaper(page, lab),
                 // #785: the first picture shown while the page was made
-                firstPicture = vm.pageQueue.firstRecord(page)?.json())
+                firstPicture = vm.pageQueue.firstRecord(page)?.json(),
+                // #786: the document screen's view and what the continuous one showed of this page
+                documentView = vm.scanSteps.docView.json(page.key, lab.continuousPages))
         }
     }
 

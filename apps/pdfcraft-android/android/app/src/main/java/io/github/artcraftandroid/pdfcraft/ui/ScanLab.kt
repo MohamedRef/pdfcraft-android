@@ -355,6 +355,12 @@ internal data class ScanLab(
      */
     val firstPicture: Boolean = true,
     /**
+     * The document screen opens on the scan's pages one under the other, each as wide as the screen,
+     * with "Page n of m" and Organize pages for the grid (#786). Nothing saved changes. Off: the
+     * grid alone, as before.
+     */
+    val continuousPages: Boolean = true,
+    /**
      * The camera's bottom bar has Review pages, Undo and Done each as a button of its own (#780),
      * with Import: the count is of the pages in the scan, a photo is confirmed under the viewfinder
      * at once, and a button that cannot act says why. Needs the camera's modes and icon bar. Off:
@@ -385,6 +391,7 @@ internal data class ScanLab(
         "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "camera_bar" to cameraBar, "live_turned" to liveTurned, "auto_eased" to autoEased, "steps" to steps, "recent_scans" to recentScans, "edit_from_viewer" to editFromViewer, "snap_while_dragging" to snapWhileDragging, "pull_catch_dp" to pullCatchInUse, "pull_release_dp" to pullReleaseInUse, "gentle_snap" to gentleSnap, "batch_borders" to batchBorders, "check_unsure" to checkUnsure, "tools_in_reach" to toolsInReach, "markup" to markup, "markup_colours" to markupColours, "markup_edge" to markupEdge, "markup_ink" to markupInk, "auto_encode" to autoEncode, "size_override" to (size ?: "none"), "keep" to keep, "inspect" to inspect,
         "sheet_check" to sheetCheck,
         "first_picture" to firstPicture,
+        "continuous_pages" to continuousPages,
         "camera_buttons" to cameraButtons,
     )
 
@@ -397,6 +404,7 @@ internal data class ScanLab(
         .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("camera_bar", cameraBar).put("live_turned", liveTurned).put("auto_eased", autoEased).put("steps", steps).put("recent_scans", recentScans).put("edit_from_viewer", editFromViewer).put("snap_while_dragging", snapWhileDragging).put("pull_catch_dp", pullCatchInUse).put("pull_release_dp", pullReleaseInUse).put("gentle_snap", gentleSnap).put("batch_borders", batchBorders).put("check_unsure", checkUnsure).put("tools_in_reach", toolsInReach).put("markup", markup).put("markup_colours", markupColours).put("markup_edge", markupEdge).put("markup_ink", markupInk).put("auto_encode", autoEncode).put("size_override", size ?: JSONObject.NULL).put("inspect", inspect)
         .put("sheet_check", sheetCheck)
         .put("first_picture", firstPicture)
+        .put("continuous_pages", continuousPages)
         .put("camera_buttons", cameraButtons)
 
     /** One line of text for the app's preferences. */
@@ -409,6 +417,7 @@ internal data class ScanLab(
         "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "camera_bar" to flag(cameraBar), "live_turned" to flag(liveTurned), "auto_eased" to flag(autoEased), "steps" to flag(steps), "recent" to flag(recentScans), "edit_viewer" to flag(editFromViewer), "snap_drag" to flag(snapWhileDragging), "pull_catch" to pullCatchDp.toString(), "pull_release" to pullReleaseDp.toString(), "gentle_snap" to flag(gentleSnap), "batch" to flag(batchBorders), "check_unsure" to flag(checkUnsure), "reach" to flag(toolsInReach), "markup" to flag(markup), "markup_colours" to flag(markupColours), "markup_edge" to flag(markupEdge), "ink" to flag(markupInk), "auto_encode" to flag(autoEncode), "size" to (size ?: ""), "inspect" to flag(inspect),
         "sheet_check" to flag(sheetCheck),
         "first_picture" to flag(firstPicture),
+        "continuous_pages" to flag(continuousPages),
         "camera_buttons" to flag(cameraButtons),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
@@ -516,6 +525,7 @@ internal data class ScanLab(
                 inspect = on("inspect", default.inspect),
                 sheetCheck = on("sheet_check", default.sheetCheck),
                 firstPicture = on("first_picture", default.firstPicture),
+                continuousPages = on("continuous_pages", default.continuousPages),
                 cameraButtons = on("camera_buttons", default.cameraButtons),
             )
         }
@@ -729,6 +739,8 @@ internal fun scanTestPageJson(
     cardPaper: Boolean? = null,
     /** The page's first picture (#785): whether one was made, how long it took and from what; null when none was asked. */
     firstPicture: JSONObject? = null,
+    /** The document screen's view when the page was kept and what the continuous view showed of it (#786); null with the option off. */
+    documentView: JSONObject? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -822,6 +834,8 @@ internal fun scanTestPageJson(
         .put("strength_applied", applied?.let { JSONObject().put("strength", it.strength).put("source", it.source).put("fixed", it.fixed) } ?: JSONObject.NULL)
         // #785: the first picture shown while the page was made; never the page that was saved
         .put("first_picture", firstPicture ?: JSONObject.NULL)
+        // #786: the document screen's view, and what this page showed in the continuous one
+        .put("document_view", documentView ?: JSONObject.NULL)
     page.put(
         "result",
         result?.let {

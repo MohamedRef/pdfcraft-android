@@ -194,6 +194,10 @@ class ScanScreenshotsTest {
             shoot("enhance_$name")
             rule.runOnIdle { vm.scanSteps.showDocument("enhance", pages.size) }
             shoot("document_$name")
+            // #786: the grid behind Organize pages, then back to the pages one under the other
+            rule.runOnIdle { vm.scanSteps.docView.show(ScanDocView.Grid) }
+            shoot("document_grid_$name")
+            rule.runOnIdle { vm.scanSteps.docView.show(ScanDocView.Pages) }
             // #494: pages 1 and 3 as made by the background queue, page 2 still waiting
             if (t == themes.first()) {
                 rule.runOnIdle { madeTiles(vm, pages, listOf(0, 2)) }

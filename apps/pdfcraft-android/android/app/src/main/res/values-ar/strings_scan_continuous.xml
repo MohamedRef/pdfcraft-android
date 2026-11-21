@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The document screen's continuous pages, with the grid one tap away (#786); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_continuous_pages">فتح المسح المكتمل كصفحات متتالية</string>
+    <string name="scan_doc_view_grid">تنظيم الصفحات</string>
+    <string name="scan_doc_view_pages">عرض الصفحات</string>
+    <string name="scan_page_state_working">جارٍ تجهيز هذه الصفحة…</string>
+    <string name="scan_page_state_waiting">في انتظار التجهيز</string>
+    <string name="scan_page_state_failed">تعذّر تجهيز هذه الصفحة</string>
+    <string name="scan_page_state_photo">الصورة كما التُقطت، وليست الصفحة النهائية</string>
+    <string name="scan_page_retry">إعادة المحاولة</string>
+    <string name="scan_page_unsure">قد تكون الحواف غير صحيحة</string>
+</resources>
